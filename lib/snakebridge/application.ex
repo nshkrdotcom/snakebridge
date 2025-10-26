@@ -1,6 +1,4 @@
-defmodule Snakebridge.Application do
-  # See https://hexdocs.pm/elixir/Application.html
-  # for more information on OTP Applications
+defmodule SnakeBridge.Application do
   @moduledoc false
 
   use Application
@@ -8,13 +6,13 @@ defmodule Snakebridge.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Starts a worker by calling: Snakebridge.Worker.start_link(arg)
-      # {Snakebridge.Worker, arg}
+      # Cache for schema descriptors
+      {SnakeBridge.Cache, []}
+      # Session manager (placeholder)
+      # {SnakeBridge.Session.Manager, []}
     ]
 
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: Snakebridge.Supervisor]
+    opts = [strategy: :one_for_one, name: SnakeBridge.Supervisor]
     Supervisor.start_link(children, opts)
   end
 end

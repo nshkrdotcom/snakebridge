@@ -287,7 +287,7 @@ See [Architecture Guide](https://hexdocs.pm/snakebridge/architecture.html) for d
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! Please see [CONTRIBUTING.md](https://github.com/nshkrdotcom/snakebridge/blob/main/CONTRIBUTING.md) for guidelines.
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
@@ -299,7 +299,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/nshkrdotcom/snakebridge/blob/main/LICENSE) file for details.
 
 Copyright (c) 2025 nshkrdotcom
 

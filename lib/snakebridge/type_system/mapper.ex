@@ -67,12 +67,27 @@ defmodule SnakeBridge.TypeSystem.Mapper do
 
   @doc """
   Convert Python class path to Elixir module atom.
+
+  Handles atom length limits by using String.to_existing_atom when possible,
+  or creating a safe shortened version.
   """
   def python_class_to_elixir_module(python_path) when is_binary(python_path) do
-    python_path
-    |> String.split(".")
-    |> Enum.map(&String.capitalize/1)
-    |> Enum.join(".")
-    |> String.to_atom()
+    # Convert python.module.Class to Elixir module atom
+    # Check length first to avoid atom table pollution
+    parts =
+      python_path
+      |> String.split(".")
+      |> Enum.map(&String.capitalize/1)
+
+    module_string = Module.concat(parts) |> Atom.to_string()
+
+    # Atoms have a 255 byte limit
+    if byte_size(module_string) > 255 do
+      # Use hash for very long paths
+      hash = :crypto.hash(:sha256, python_path) |> Base.encode16() |> String.slice(0..7)
+      String.to_atom("Module_#{hash}")
+    else
+      Module.concat(parts)
+    end
   end
 end

@@ -24,14 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [ ] LSP server for config authoring
 - [ ] Auto-generated test suites from schemas
 
-## [0.1.0] - TBD
+## [0.1.0] - 2025-10-25
 
 ### Added
-- First release
-- Core SnakeBridge framework
-- Comprehensive documentation
-- Test suite with 90%+ coverage
-- DSPy integration example
+- Initial release
 
 [Unreleased]: https://github.com/nshkrdotcom/snakebridge/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/nshkrdotcom/snakebridge/releases/tag/v0.1.0

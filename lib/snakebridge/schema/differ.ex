@@ -45,23 +45,24 @@ defmodule SnakeBridge.Schema.Differ do
   # Only recurse into maps that look like containers (not entities)
   # A container has mostly the same keys in old and new
   # An entity replacement has different keys
-  defp should_recurse?(old_val, new_val) do
-    if is_map(old_val) and is_map(new_val) and map_size(old_val) > 0 and
-         map_size(new_val) > 0 do
-      old_keys = MapSet.new(Map.keys(old_val))
-      new_keys = MapSet.new(Map.keys(new_val))
-      common_keys = MapSet.intersection(old_keys, new_keys)
-
-      # If more than 50% of keys are common, treat as container and recurse
-      # Otherwise, treat as entity replacement
-      common_count = MapSet.size(common_keys)
-      total_keys = max(MapSet.size(old_keys), MapSet.size(new_keys))
-
-      common_count / total_keys > 0.5
-    else
-      false
-    end
-  end
+  # Currently unused but kept for future enhancements to diff algorithm
+  # defp should_recurse?(old_val, new_val) do
+  #   if is_map(old_val) and is_map(new_val) and map_size(old_val) > 0 and
+  #        map_size(new_val) > 0 do
+  #     old_keys = MapSet.new(Map.keys(old_val))
+  #     new_keys = MapSet.new(Map.keys(new_val))
+  #     common_keys = MapSet.intersection(old_keys, new_keys)
+  #
+  #     # If more than 50% of keys are common, treat as container and recurse
+  #     # Otherwise, treat as entity replacement
+  #     common_count = MapSet.size(common_keys)
+  #     total_keys = max(MapSet.size(old_keys), MapSet.size(new_keys))
+  #
+  #     common_count / total_keys > 0.5
+  #   else
+  #     false
+  #   end
+  # end
 
   # Convert all keys to strings for consistent path representation
   defp normalize_key(key) when is_atom(key), do: Atom.to_string(key)

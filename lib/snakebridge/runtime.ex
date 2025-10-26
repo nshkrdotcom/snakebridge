@@ -28,7 +28,7 @@ defmodule SnakeBridge.Runtime do
   """
   @spec create_instance(String.t(), map(), String.t() | nil, keyword()) ::
           {:ok, {String.t(), String.t()}} | {:error, term()}
-  def create_instance(python_path, args, session_id, opts \\ []) do
+  def create_instance(python_path, args, session_id, _opts \\ []) do
     session_id = session_id || generate_session_id()
     adapter = snakepit_adapter()
 
@@ -54,7 +54,7 @@ defmodule SnakeBridge.Runtime do
   """
   @spec call_method({String.t(), String.t()}, String.t(), map(), keyword()) ::
           {:ok, term()} | {:error, term()}
-  def call_method({session_id, instance_id}, method_name, args, opts \\ []) do
+  def call_method({session_id, instance_id}, method_name, args, _opts \\ []) do
     adapter = snakepit_adapter()
 
     case adapter.execute_in_session(session_id, "call_dspy", %{

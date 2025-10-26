@@ -1,7 +1,7 @@
 defmodule SnakeBridge.Integration.EndToEndTest do
   use ExUnit.Case
 
-  alias SnakeBridge.{Config, Discovery, Generator, Runtime}
+  alias SnakeBridge.{Config, Discovery, Generator}
   alias SnakeBridge.TestFixtures
 
   @moduletag :integration

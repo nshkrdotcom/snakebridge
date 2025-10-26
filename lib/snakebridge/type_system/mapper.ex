@@ -65,7 +65,7 @@ defmodule SnakeBridge.TypeSystem.Mapper do
 
     if length(keys) > 0 do
       [key | _] = keys
-      [val | _] = vals
+      [_val | _] = vals
 
       # Infer key type - handle atoms by converting to string first
       key_type =

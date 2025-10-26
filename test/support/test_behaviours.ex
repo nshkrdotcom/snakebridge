@@ -1,12 +1,3 @@
-defmodule SnakeBridge.Discovery.IntrospectorBehaviour do
-  @moduledoc """
-  Behaviour for introspection implementations.
-  """
-
-  @callback discover(module_path :: String.t(), opts :: keyword()) ::
-              {:ok, map()} | {:error, term()}
-end
-
 defmodule SnakeBridge.Runtime.ExecutorBehaviour do
   @moduledoc """
   Behaviour for runtime execution.

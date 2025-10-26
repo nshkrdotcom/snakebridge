@@ -61,10 +61,9 @@ defmodule SnakeBridge.GeneratorTest do
 
   describe "optimization passes" do
     test "inlines constants when possible" do
-      descriptor = %{
+      descriptor =
         TestFixtures.sample_class_descriptor()
-        | constant_fields: ["DEFAULT_TEMPERATURE"]
-      }
+        |> Map.put(:constant_fields, ["DEFAULT_TEMPERATURE"])
 
       config = TestFixtures.sample_config()
 

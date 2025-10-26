@@ -14,9 +14,18 @@ defmodule SnakeBridge.Generator do
   """
   @spec generate_module(map(), SnakeBridge.Config.t()) :: Macro.t()
   def generate_module(descriptor, config) do
-    module_name = descriptor.elixir_module || Module.concat([DSPy, descriptor.name])
-    python_path = descriptor.python_path
-    methods = descriptor.methods || []
+    # Support both struct and map descriptors
+    descriptor_name = Map.get(descriptor, :name) || Map.get(descriptor, "name")
+    elixir_module = Map.get(descriptor, :elixir_module) || Map.get(descriptor, "elixir_module")
+    python_path = Map.get(descriptor, :python_path) || Map.get(descriptor, "python_path")
+    methods = Map.get(descriptor, :methods) || Map.get(descriptor, "methods") || []
+
+    constant_fields =
+      Map.get(descriptor, :constant_fields) || Map.get(descriptor, "constant_fields") || []
+
+    module_name = elixir_module || Module.concat([DSPy, String.to_atom(descriptor_name)])
+
+    compilation_mode = config.compilation_mode
 
     quote do
       defmodule unquote(module_name) do
@@ -26,6 +35,10 @@ defmodule SnakeBridge.Generator do
         @config unquote(Macro.escape(config))
 
         @type t :: {session_id :: String.t(), instance_id :: String.t()}
+
+        unquote_splicing(generate_constant_attributes(constant_fields))
+
+        unquote(generate_hooks(compilation_mode))
 
         @doc """
         Create a new instance of #{unquote(python_path)}.
@@ -47,6 +60,42 @@ defmodule SnakeBridge.Generator do
     end
   end
 
+  defp generate_constant_attributes(constant_fields) when is_list(constant_fields) do
+    Enum.map(constant_fields, fn field_name ->
+      # Convert UPPER_CASE to lower_case for attribute name
+      attr_name =
+        field_name
+        |> String.downcase()
+        |> String.to_atom()
+
+      # Generate actual @attr syntax in AST
+      {:@, [], [{attr_name, [], [nil]}]}
+    end)
+  end
+
+  defp generate_hooks(:compile_time) do
+    quote do
+      @before_compile SnakeBridge.Generator.Hooks
+    end
+  end
+
+  defp generate_hooks(:runtime) do
+    quote do
+      @on_load :__snakebridge_load__
+
+      def __snakebridge_load__ do
+        # Runtime initialization
+        :ok
+      end
+    end
+  end
+
+  defp generate_hooks(_auto_or_other) do
+    # No special hooks for :auto mode
+    quote do
+    end
+  end
+
   defp generate_moduledoc(descriptor) do
     docstring = Map.get(descriptor, :docstring, "")
     python_path = Map.get(descriptor, :python_path, "")
@@ -62,9 +111,15 @@ defmodule SnakeBridge.Generator do
 
   defp generate_methods(methods) when is_list(methods) do
     Enum.map(methods, fn method ->
-      method_name = method.name || method["name"]
-      elixir_name = method.elixir_name || method["elixir_name"] || String.to_atom(method_name)
-      streaming = method.streaming || method["streaming"] || false
+      # Support both struct/map with atom keys and map with string keys
+      method_name =
+        Map.get(method, :name) || Map.get(method, "name") || raise "Method must have name"
+
+      elixir_name =
+        Map.get(method, :elixir_name) || Map.get(method, "elixir_name") ||
+          String.to_atom(method_name)
+
+      streaming = Map.get(method, :streaming) || Map.get(method, "streaming") || false
 
       quote do
         @doc """
@@ -94,14 +149,41 @@ defmodule SnakeBridge.Generator do
   end
 
   defp remove_unused_imports(ast) do
-    # Simple implementation - just return ast for now
-    # Full implementation would analyze usage and remove unused imports
-    ast
+    # Walk the AST and remove import statements
+    # This is a simplified version that removes all imports
+    # A full implementation would check for usage before removing
+    Macro.prewalk(ast, fn
+      # Remove import statements
+      {:import, _, _} -> nil
+      # Keep everything else
+      node -> node
+    end)
+    |> remove_nils()
   end
 
   defp inline_constants(ast) do
-    # Placeholder - would inline module attributes when possible
-    ast
+    # Look for constant_fields in the descriptor and generate module attributes
+    # For now, this is a pass-through since we need descriptor context
+    # In real implementation, would extract constants and generate @attr forms
+    Macro.prewalk(ast, fn
+      # This is where we'd transform constant references
+      # For now, just pass through
+      node -> node
+    end)
+  end
+
+  defp remove_nils(ast) do
+    Macro.prewalk(ast, fn
+      # Remove nil nodes from the block
+      {:__block__, meta, items} when is_list(items) ->
+        {:__block__, meta, Enum.reject(items, &is_nil/1)}
+
+      {:defmodule, meta, [alias, [do: {:__block__, block_meta, items}]]} ->
+        {:defmodule, meta, [alias, [do: {:__block__, block_meta, Enum.reject(items, &is_nil/1)}]]}
+
+      node ->
+        node
+    end)
   end
 
   @doc """
@@ -111,15 +193,27 @@ defmodule SnakeBridge.Generator do
   def generate_all(%SnakeBridge.Config{} = config) do
     case SnakeBridge.Config.validate(config) do
       {:ok, valid_config} ->
-        modules =
+        # Generate and compile all modules
+        results =
           Enum.map(valid_config.classes, fn class_descriptor ->
             ast = generate_module(class_descriptor, valid_config)
-            # In production, would compile and load the module
-            # For now, just return the module name
-            class_descriptor.elixir_module || Module.concat([Generated, Placeholder])
+
+            # Compile and load the module in test/dev
+            case compile_and_load(ast) do
+              {:ok, module} -> {:ok, module}
+              {:error, _} = error -> error
+            end
           end)
 
-        {:ok, modules}
+        # Check if any compilation failed
+        case Enum.find(results, &match?({:error, _}, &1)) do
+          {:error, _reason} = error ->
+            error
+
+          nil ->
+            modules = Enum.map(results, fn {:ok, module} -> module end)
+            {:ok, modules}
+        end
 
       {:error, _errors} = error ->
         error

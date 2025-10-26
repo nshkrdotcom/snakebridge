@@ -86,6 +86,52 @@ defmodule SnakeBridge.SnakepitMock do
      }}
   end
 
+  defp describe_library_response(%{"module_path" => "test_library"}) do
+    {:ok,
+     %{
+       "success" => true,
+       "library_version" => "1.0.0",
+       "classes" => %{
+         "TestClass" => %{
+           "name" => "TestClass",
+           "python_path" => "test_library.TestClass",
+           "docstring" => "A test class for integration testing",
+           "constructor" => %{
+             "parameters" => [
+               %{
+                 "name" => "signature",
+                 "type" => %{"kind" => "primitive", "primitive_type" => "str"},
+                 "required" => true
+               }
+             ]
+           },
+           "methods" => [
+             %{
+               "name" => "execute",
+               "docstring" => "Execute test method",
+               "parameters" => [],
+               "supports_streaming" => false,
+               "is_async" => false
+             }
+           ],
+           "properties" => [],
+           "base_classes" => []
+         }
+       },
+       "functions" => %{},
+       "descriptor_hash" => "mock_hash_test_library"
+     }}
+  end
+
+  defp describe_library_response(%{"module_path" => module_path})
+       when module_path in ["nonexistent", "nonexistent_module"] do
+    {:ok,
+     %{
+       "success" => false,
+       "error" => "Module '#{module_path}' not found"
+     }}
+  end
+
   defp describe_library_response(%{"module_path" => module_path}) do
     {:ok,
      %{

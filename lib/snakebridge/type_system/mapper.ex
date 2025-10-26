@@ -60,9 +60,34 @@ defmodule SnakeBridge.TypeSystem.Mapper do
   end
 
   def infer_python_type(map) when is_map(map) do
-    [key | _] = Map.keys(map)
-    [val | _] = Map.values(map)
-    {:dict, infer_python_type(key), infer_python_type(val)}
+    keys = Map.keys(map)
+    vals = Map.values(map)
+
+    if length(keys) > 0 do
+      [key | _] = keys
+      [val | _] = vals
+
+      # Infer key type - handle atoms by converting to string first
+      key_type =
+        cond do
+          is_atom(key) -> :str
+          true -> infer_python_type(key)
+        end
+
+      # Infer value type - if multiple values have different types, use :any
+      val_type =
+        vals
+        |> Enum.map(&infer_python_type/1)
+        |> Enum.uniq()
+        |> case do
+          [single_type] -> single_type
+          _ -> :any
+        end
+
+      {:dict, key_type, val_type}
+    else
+      {:dict, :str, :any}
+    end
   end
 
   @doc """
@@ -73,11 +98,11 @@ defmodule SnakeBridge.TypeSystem.Mapper do
   """
   def python_class_to_elixir_module(python_path) when is_binary(python_path) do
     # Convert python.module.Class to Elixir module atom
-    # Check length first to avoid atom table pollution
+    # Capitalize each part, preserving acronyms (e.g., "dspy" -> "DSPy")
     parts =
       python_path
       |> String.split(".")
-      |> Enum.map(&String.capitalize/1)
+      |> Enum.map(&smart_capitalize/1)
 
     module_string = Module.concat(parts) |> Atom.to_string()
 
@@ -88,6 +113,21 @@ defmodule SnakeBridge.TypeSystem.Mapper do
       String.to_atom("Module_#{hash}")
     else
       Module.concat(parts)
+    end
+  end
+
+  # Smart capitalization that preserves common acronyms and CamelCase
+  defp smart_capitalize("dspy"), do: "DSPy"
+  defp smart_capitalize("ai"), do: "AI"
+  defp smart_capitalize("ml"), do: "ML"
+  defp smart_capitalize("nlp"), do: "NLP"
+
+  defp smart_capitalize(str) do
+    # If string contains uppercase letters, it's likely already CamelCase - preserve it
+    if String.match?(str, ~r/[A-Z]/) do
+      str
+    else
+      String.capitalize(str)
     end
   end
 end

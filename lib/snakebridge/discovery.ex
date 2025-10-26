@@ -43,32 +43,39 @@ defmodule SnakeBridge.Discovery do
 
   defp convert_classes(classes_map) do
     Enum.map(classes_map, fn {_name, descriptor} ->
+      python_path = Map.get(descriptor, :python_path) || Map.get(descriptor, "python_path")
+
       %{
-        python_path: descriptor.python_path || descriptor["python_path"],
-        elixir_module: python_path_to_module(descriptor.python_path || descriptor["python_path"]),
+        python_path: python_path,
+        elixir_module: python_path_to_module(python_path),
         constructor: %{args: %{}, session_aware: true},
-        methods: convert_methods(descriptor.methods || descriptor["methods"] || [])
+        methods:
+          convert_methods(Map.get(descriptor, :methods) || Map.get(descriptor, "methods") || [])
       }
     end)
   end
 
   defp convert_methods(methods) when is_list(methods) do
     Enum.map(methods, fn method ->
-      name = method.name || method["name"]
+      name = Map.get(method, :name) || Map.get(method, "name")
 
       %{
         name: name,
         elixir_name: elixir_name_from_python(name),
-        streaming: method.supports_streaming || method["supports_streaming"] || false
+        streaming:
+          Map.get(method, :supports_streaming) || Map.get(method, "supports_streaming") || false
       }
     end)
   end
 
   defp convert_functions(functions_map) do
     Enum.map(functions_map, fn {_name, descriptor} ->
+      python_path = Map.get(descriptor, :python_path) || Map.get(descriptor, "python_path")
+      name = Map.get(descriptor, :name) || Map.get(descriptor, "name")
+
       %{
-        python_path: descriptor.python_path || descriptor["python_path"],
-        elixir_name: elixir_name_from_python(descriptor.name || descriptor["name"]),
+        python_path: python_path,
+        elixir_name: elixir_name_from_python(name),
         args: %{}
       }
     end)

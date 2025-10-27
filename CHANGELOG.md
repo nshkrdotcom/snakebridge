@@ -8,11 +8,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- [ ] Generator support for module-level functions
 - [ ] gRPC streaming support
 - [ ] Configuration composition (extends, mixins)
 - [ ] LSP server for config authoring
 - [ ] Auto-generated test suites from schemas
+
+## [0.2.1] - 2025-10-26
+
+### Added - Function Generation Support 🎉
+
+**Core Implementation:**
+- ✅ **`generate_function_module/2`** - Generates Elixir modules for Python module-level functions
+- ✅ **`Runtime.call_function/4`** - Executes stateless Python functions (no instance required)
+- ✅ **Function discovery** - Properly handles function descriptors from introspection
+- ✅ **Mixed generation** - Can generate both classes AND functions from same config
+
+**What This Enables:**
+```elixir
+# Call Python functions directly - no instance creation needed!
+{:ok, schema} = SnakeBridge.discover("json")
+config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "json")
+{:ok, [json_module]} = SnakeBridge.generate(config)
+
+{:ok, json_string} = json_module.dumps(%{obj: %{hello: "world"}})
+{:ok, data} = json_module.loads(%{s: json_string})
+```
+
+**Examples Updated:**
+- `examples/json_live.exs` - Now demonstrates full roundtrip: dumps() → loads()
+- `examples/numpy_math.exs` - Shows NumPy function discovery (626 functions!)
+
+**Key Differences from Class Modules:**
+- No `@type t` (functions are stateless)
+- No `create/2` function (direct function calls)
+- Functions take args directly, not instance_ref
+- Call `Runtime.call_function` instead of `Runtime.call_method`
+
+### Added - Tests
+- 8 new unit tests for function generation (`test/unit/function_generation_test.exs`)
+- 7 new integration tests (`test/integration/function_execution_test.exs`)
+- All tests following TDD methodology (RED → GREEN → REFACTOR)
+
+### Changed
+- `Discovery.convert_functions/1` now includes `name` field in function descriptors
+- `SnakepitMock` updated with specific responses for json.dumps/loads
+- `generate_all/1` now generates both class and function modules
+
+### Fixed
+- Function descriptors missing required `name` field
+- SnakepitMock had duplicate `call_python_response` clause (compiler warning)
+
+### Test Results
+- **91 total tests** (up from 88)
+- 8 properties + 83 unit/integration tests
+- **100% pass rate** ✅
+- Zero compilation warnings ✅
+
+### Documentation
+- README updated with function generation examples
+- Configuration examples show both classes and functions
+- DSPy example updated to demonstrate function calls
+
+### Git History
+Six atomic commits following TDD:
+1. Add tests for function module generation (TDD RED phase)
+2. Implement generate_function_module/2 and function generation (TDD GREEN phase)
+3. Add Runtime.call_function/4 for module-level function calls
+4. Update Discovery and SnakepitMock to properly handle functions
+5. Add comprehensive integration tests for function execution
+6. Update examples to demonstrate live function calling
 
 ## [0.2.0] - 2025-10-26
 
@@ -72,6 +136,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic code generation
 - Discovery framework
 
-[Unreleased]: https://github.com/nshkrdotcom/snakebridge/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/snakebridge/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/nshkrdotcom/snakebridge/releases/tag/v0.2.0
 [0.1.0]: https://github.com/nshkrdotcom/snakebridge/releases/tag/v0.1.0

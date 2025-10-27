@@ -34,7 +34,7 @@ SnakeBridge is a metaprogramming framework that automatically generates type-saf
 ```elixir
 def deps do
   [
-    {:snakebridge, "~> 0.2.0"},
+    {:snakebridge, "~> 0.2.1"},
     {:snakepit, "~> 0.6"}  # Required runtime
   ]
 end
@@ -59,7 +59,7 @@ mix deps.get
 ### 4. Verify installation
 
 ```bash
-mix test  # Should show 76/76 tests passing
+mix test  # Should show 91/91 tests passing (8 properties + 83 unit/integration)
 ```
 
 **That's it!** Start using SnakeBridge.
@@ -104,6 +104,58 @@ elixir examples/numpy_math.exs
 
 ---
 
+## What You Can Do
+
+SnakeBridge can generate type-safe Elixir wrappers for:
+
+✅ **Python Classes** - Full OOP support with instance management
+✅ **Module-Level Functions** - Stateless function calls (NEW in v0.2.1!)
+✅ **Mixed Integration** - Classes and functions from the same library
+
+### Function Generation (v0.2.1)
+
+Call any Python function directly from Elixir:
+
+```elixir
+# Discover and generate
+{:ok, schema} = SnakeBridge.discover("json")
+config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "json")
+{:ok, [json_module]} = SnakeBridge.generate(config)
+
+# Call Python functions - no instances needed!
+{:ok, json_string} = json_module.dumps(%{obj: %{hello: "world", value: 42}})
+# => "{\"hello\": \"world\", \"value\": 42}"
+
+{:ok, data} = json_module.loads(%{s: json_string})
+# => %{"hello" => "world", "value" => 42}
+```
+
+**Key Features:**
+- **Stateless** - No instance creation, direct function calls
+- **Type-safe** - Full typespec generation from Python signatures
+- **Zero boilerplate** - Auto-generated from discovery
+- **Works with any library** - json, numpy, requests, etc.
+
+**Example: NumPy Math Functions**
+
+```elixir
+# Discover NumPy (626 functions!)
+{:ok, schema} = SnakeBridge.discover("numpy")
+
+# Generate wrappers for mathematical functions
+config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "numpy")
+{:ok, modules} = SnakeBridge.generate(config)
+
+# Call NumPy functions directly
+numpy_module = Enum.find(modules, &function_exported?(&1, :mean, 2))
+{:ok, result} = numpy_module.mean(%{a: [1, 2, 3, 4, 5]})
+# => 3.0
+```
+
+See `examples/json_live.exs` for a complete working example.
+
+---
+
 ## Using SnakeBridge
 
 ### 1. Discover a Python Library
@@ -124,6 +176,7 @@ config do
     python_module: "dspy",
     version: "2.5.0",
 
+    # Python classes (OOP)
     classes: [
       %{
         python_path: "dspy.Predict",
@@ -132,6 +185,15 @@ config do
         methods: [
           %{name: "__call__", elixir_name: :call, streaming: false}
         ]
+      }
+    ],
+
+    # Module-level functions (NEW in v0.2.1!)
+    functions: [
+      %{
+        name: "configure",
+        python_path: "dspy.settings.configure",
+        elixir_name: :configure
       }
     ]
   }
@@ -142,7 +204,12 @@ end
 
 ```elixir
 # Modules are generated at compile-time (prod) or runtime (dev)
-{:ok, predictor} = DSPy.Predict.create("question -> answer")
+
+# Call module-level functions (stateless)
+DSPy.Settings.configure(%{lm: lm_config})
+
+# Create class instances and call methods
+{:ok, predictor} = DSPy.Predict.create(%{signature: "question -> answer"})
 {:ok, result} = DSPy.Predict.call(predictor, %{question: "What is SnakeBridge?"})
 
 # %{answer: "A configuration-driven Python integration framework..."}
@@ -151,8 +218,9 @@ end
 ## Example: DSPy Integration
 
 ```elixir
-# Configure DSPy language model
-DSPy.configure(lm: DSPy.LM.OpenAI.create(%{model: "gpt-4", api_key: api_key}))
+# Configure DSPy language model (function call - no instance!)
+{:ok, lm} = DSPy.LM.OpenAI.create(%{model: "gpt-4", api_key: api_key})
+DSPy.Settings.configure(%{lm: lm})
 
 # Use Chain of Thought with streaming
 {:ok, cot} = DSPy.ChainOfThought.create("question -> reasoning, answer")

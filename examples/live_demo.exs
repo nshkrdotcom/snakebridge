@@ -42,6 +42,9 @@ IO.puts("\n🐍 SnakeBridge LIVE Demo\n")
 IO.puts(String.duplicate("=", 60))
 IO.puts("\n✓ Python adapter detected - using REAL Python via Snakepit\n")
 
+# Start Snakepit application
+{:ok, _} = Application.ensure_all_started(:snakepit)
+
 # Now run the actual demo
 IO.puts("📡 Discovering Python library (dspy)...")
 

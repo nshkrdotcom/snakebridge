@@ -24,6 +24,26 @@ defmodule SnakeBridge.Runtime do
   end
 
   @doc """
+  Execute a streaming tool via Snakepit.
+
+  The callback function receives each chunk as it arrives.
+
+  ## Example
+
+      SnakeBridge.Runtime.execute_stream(
+        session_id,
+        "generate_text_stream",
+        %{"model" => "gemini-2.0-flash-exp", "prompt" => "Hello"},
+        fn chunk ->
+          IO.write(chunk["chunk"])
+        end
+      )
+  """
+  def execute_stream(session_id, tool_name, args, callback_fn, opts \\ []) do
+    Snakepit.execute_in_session_stream(session_id, tool_name, args, callback_fn, opts)
+  end
+
+  @doc """
   Create a Python instance.
   """
   @spec create_instance(String.t(), map(), String.t() | nil, keyword()) ::

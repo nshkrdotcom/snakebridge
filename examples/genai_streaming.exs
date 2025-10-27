@@ -52,31 +52,44 @@ SnakeBridgeExample.run(fn ->
   """
 
   IO.puts("   (Requesting long-form content to demonstrate streaming...)")
-  IO.puts("\n📡 Calling Gemini API...\n")
+  IO.puts("\n📡 Streaming response from Gemini...\n")
+  IO.puts(String.duplicate("─", 60))
 
-  # Call the GenAI adapter's generate_text tool
+  # Call the GenAI adapter's streaming generate_text_stream tool
   result =
-    SnakeBridge.Runtime.snakepit_adapter().execute_in_session(
+    SnakeBridge.Runtime.execute_stream(
       session_id,
-      "generate_text",
+      "generate_text_stream",
       %{
         "model" => "gemini-2.0-flash-exp",
         "prompt" => prompt
-      }
+      },
+      fn chunk ->
+        # Print each chunk as it arrives (token-by-token streaming!)
+        case chunk do
+          %{"chunk" => text} when is_binary(text) ->
+            IO.write(text)
+
+          %{"success" => true, "done" => true} ->
+            # Final chunk - do nothing, just finish
+            :ok
+
+          %{"success" => false, "error" => error} ->
+            IO.puts("\n\n✗ Streaming error: #{error}")
+
+          other ->
+            IO.inspect(other, label: "Unknown chunk")
+        end
+      end
     )
 
-  case result do
-    {:ok, %{"success" => true, "text" => text}} ->
-      IO.puts("✨ Response from Gemini:")
-      IO.puts(String.duplicate("─", 60))
-      IO.puts(text)
-      IO.puts(String.duplicate("─", 60))
-      IO.puts("\n✅ Success! Called Google Gemini AI from Elixir!")
+  IO.puts("\n" <> String.duplicate("─", 60))
 
-    {:ok, %{"success" => false, "error" => error}} ->
-      IO.puts("✗ API Error: #{error}")
+  case result do
+    :ok ->
+      IO.puts("\n✅ Success! Streamed from Google Gemini AI via SnakeBridge!")
 
     {:error, reason} ->
-      IO.puts("✗ Call failed: #{inspect(reason)}")
+      IO.puts("\n✗ Streaming failed: #{inspect(reason)}")
   end
 end)

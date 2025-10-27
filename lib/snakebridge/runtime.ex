@@ -74,6 +74,42 @@ defmodule SnakeBridge.Runtime do
     end
   end
 
+  @doc """
+  Call a module-level Python function (not a method on an instance).
+
+  This is for stateless function calls like json.dumps(), numpy.mean(), etc.
+  Different from call_method - no instance_id required.
+  """
+  @spec call_function(String.t(), String.t(), map(), keyword()) ::
+          {:ok, term()} | {:error, term()}
+  def call_function(python_path, function_name, args, opts \\ []) do
+    session_id = Keyword.get(opts, :session_id, generate_session_id())
+    adapter = snakepit_adapter()
+
+    # Extract module path from full python_path (e.g., "json.dumps" -> "json")
+    module_path =
+      case String.split(python_path, ".") do
+        [single] -> single
+        parts -> Enum.take(parts, length(parts) - 1) |> Enum.join(".")
+      end
+
+    case adapter.execute_in_session(session_id, "call_python", %{
+           "module_path" => module_path,
+           "function_name" => function_name,
+           "args" => [],
+           "kwargs" => args
+         }) do
+      {:ok, %{"success" => true, "result" => result}} ->
+        {:ok, result}
+
+      {:ok, %{"success" => false, "error" => error}} ->
+        {:error, error}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   defp generate_session_id do
     "snakebridge_session_#{:rand.uniform(100_000)}"
   end

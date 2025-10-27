@@ -32,6 +32,13 @@ snakepit_python = Path.expand("deps/snakepit/priv/python")
 pythonpath = "#{snakebridge_python}:#{snakepit_python}"
 System.put_env("PYTHONPATH", pythonpath)
 
+# Use Snakepit's venv Python (has grpcio, protobuf installed)
+snakepit_venv_python = Path.expand("~/p/g/n/snakepit/.venv/bin/python3")
+
+if File.exists?(snakepit_venv_python) do
+  System.put_env("SNAKEPIT_PYTHON", snakepit_venv_python)
+end
+
 # Install dependencies
 Mix.install([
   {:snakepit, "~> 0.6"},

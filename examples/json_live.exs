@@ -20,13 +20,22 @@ SnakeBridgeExample.run(fn ->
   IO.puts("  Version: #{schema["library_version"]}")
   IO.puts("  Functions: #{Map.keys(schema["functions"]) |> Enum.take(5) |> inspect()}")
 
-  IO.puts("\n🔧 Generating Elixir module for json functions...")
+  IO.puts("\n🔧 Generating Elixir modules for json...")
 
-  # Convert to config and generate module
+  # Convert to config and generate modules (classes + functions)
   config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "json")
-  {:ok, [json_module]} = SnakeBridge.generate(config)
+  {:ok, modules} = SnakeBridge.generate(config)
 
-  IO.puts("✓ Generated module: #{inspect(json_module)}")
+  IO.puts("✓ Generated #{length(modules)} modules: #{inspect(modules)}")
+
+  # Find the module with the dumps/loads functions
+  json_module =
+    Enum.find(modules, fn mod ->
+      function_exported?(mod, :dumps, 0) || function_exported?(mod, :dumps, 1) ||
+        function_exported?(mod, :dumps, 2)
+    end)
+
+  IO.puts("✓ Using function module: #{inspect(json_module)}")
 
   IO.puts("\n🚀 Calling json.dumps()...")
   test_data = %{message: "Hello from Elixir", value: 42, nested: %{key: "value"}}

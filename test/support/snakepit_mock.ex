@@ -19,6 +19,10 @@ defmodule SnakeBridge.SnakepitMock do
     call_dspy_response(args)
   end
 
+  def execute_in_session(_session_id, "call_python", args, _opts) do
+    call_python_response(args)
+  end
+
   def execute_in_session(_session_id, "batch_execute", args, _opts) do
     batch_execute_response(args)
   end
@@ -182,5 +186,63 @@ defmodule SnakeBridge.SnakepitMock do
       end)
 
     {:ok, %{"success" => true, "results" => results}}
+  end
+
+  # New generic call_python responses (replaces call_dspy)
+  defp call_python_response(%{"function_name" => "__init__"} = args) do
+    module_path = Map.get(args, "module_path", "unknown")
+
+    {:ok,
+     %{
+       "success" => true,
+       "instance_id" => "mock_instance_#{:rand.uniform(10000)}",
+       "type" => "constructor",
+       "module" => module_path
+     }}
+  end
+
+  defp call_python_response(
+         %{"function_name" => function_name, "module_path" => module_path} = args
+       )
+       when is_binary(module_path) do
+    cond do
+      String.contains?(module_path, "instance:") ->
+        call_python_instance_method(args)
+
+      true ->
+        call_python_module_function(function_name, module_path)
+    end
+  end
+
+  defp call_python_module_function(function_name, module_path) do
+    {:ok,
+     %{
+       "success" => true,
+       "result" => %{
+         "function" => function_name,
+         "module" => module_path,
+         "mock" => true
+       }
+     }}
+  end
+
+  defp call_python_instance_method(%{
+         "function_name" => method_name,
+         "module_path" => instance_ref
+       }) do
+    {:ok,
+     %{
+       "success" => true,
+       "result" => %{
+         "method" => method_name,
+         "instance" => instance_ref,
+         "answer" => "Mocked answer from Python",
+         "mock" => true
+       }
+     }}
+  end
+
+  defp call_python_response(_args) do
+    {:ok, %{"success" => true, "result" => %{"mock" => true}}}
   end
 end

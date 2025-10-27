@@ -32,7 +32,7 @@ defmodule SnakeBridge.Runtime do
     session_id = session_id || generate_session_id()
     adapter = snakepit_adapter()
 
-    case adapter.execute_in_session(session_id, "call_dspy", %{
+    case adapter.execute_in_session(session_id, "call_python", %{
            "module_path" => python_path,
            "function_name" => "__init__",
            "args" => [],
@@ -57,8 +57,8 @@ defmodule SnakeBridge.Runtime do
   def call_method({session_id, instance_id}, method_name, args, _opts \\ []) do
     adapter = snakepit_adapter()
 
-    case adapter.execute_in_session(session_id, "call_dspy", %{
-           "module_path" => "stored.#{instance_id}",
+    case adapter.execute_in_session(session_id, "call_python", %{
+           "module_path" => "instance:#{instance_id}",
            "function_name" => method_name,
            "args" => [],
            "kwargs" => args

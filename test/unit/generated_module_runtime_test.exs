@@ -87,8 +87,8 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
 
       # Mock should return actual response from SnakepitMock, not placeholder
       assert is_map(result)
-      # SnakepitMock returns this structure for __call__
-      assert result["answer"] == "Mocked answer from DSPy" or Map.has_key?(result, "result")
+      # SnakepitMock's call_python returns result with "answer" key for instance methods
+      assert result["answer"] == "Mocked answer from Python" or result["mock"] == true
     end
 
     test "handles method errors from Runtime" do

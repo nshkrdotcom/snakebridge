@@ -91,6 +91,7 @@ defmodule SnakeBridge.TestFixtures do
       ],
       functions: [
         %{
+          name: "configure",
           python_path: "dspy.settings.configure",
           elixir_name: :configure,
           args: %{lm: {:optional, :any}}
@@ -113,6 +114,38 @@ defmodule SnakeBridge.TestFixtures do
       },
       "descriptor_hash" => :crypto.hash(:sha256, "sample") |> Base.encode16(case: :lower),
       "cache_timestamp" => System.system_time(:second)
+    }
+  end
+
+  @doc """
+  Sample function module descriptor for testing.
+  """
+  def sample_function_module_descriptor do
+    %{
+      name: "JsonFunctions",
+      python_path: "json",
+      docstring: "Python's built-in JSON encoder/decoder",
+      elixir_module: Json,
+      functions: [
+        %{
+          name: "dumps",
+          python_path: "json.dumps",
+          elixir_name: :dumps,
+          docstring: "Serialize object to JSON",
+          parameters: [
+            %{name: "obj", required: true, type: %{kind: "primitive", primitive_type: "any"}}
+          ]
+        },
+        %{
+          name: "loads",
+          python_path: "json.loads",
+          elixir_name: :loads,
+          docstring: "Deserialize JSON to object",
+          parameters: [
+            %{name: "s", required: true, type: %{kind: "primitive", primitive_type: "str"}}
+          ]
+        }
+      ]
     }
   end
 

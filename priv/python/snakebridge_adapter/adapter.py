@@ -47,7 +47,26 @@ class SnakeBridgeAdapter(ThreadSafeAdapter):
         if HAS_SNAKEPIT:
             super().__init__()
         self.instances = {}  # {instance_id: python_object}
+        self.session_context = None
+        self.initialized = False
         logger.info("SnakeBridgeAdapter initialized")
+
+    def set_session_context(self, session_context):
+        """Set the session context for this adapter instance."""
+        self.session_context = session_context
+        if hasattr(session_context, 'session_id'):
+            logger.info(f"Session context set: {session_context.session_id}")
+
+    async def initialize(self):
+        """Initialize the adapter."""
+        self.initialized = True
+        logger.info("Adapter initialized")
+
+    async def cleanup(self):
+        """Clean up adapter resources."""
+        self.initialized = False
+        self.instances = {}
+        logger.info("Adapter cleaned up")
 
     @tool(description="Introspect Python module structure")
     def describe_library(self, module_path: str, discovery_depth: int = 2) -> dict:

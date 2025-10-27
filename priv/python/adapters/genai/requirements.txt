@@ -1,0 +1,4 @@
+# GenAI Adapter Requirements
+# Install with: pip install -r priv/python/adapters/genai/requirements.txt
+
+google-genai==1.46.0

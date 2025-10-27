@@ -26,18 +26,24 @@ cd "$PYTHON_DIR"
 
 # Check if we're in a virtual environment
 if [ -z "$VIRTUAL_ENV" ]; then
-    # Check if Snakepit venv exists (we can reuse it)
+    # Prefer project-local virtualenv
+    PROJECT_VENV="$PYTHON_DIR/.venv"
     SNAKEPIT_VENV="$HOME/p/g/n/snakepit/.venv"
-    if [ -d "$SNAKEPIT_VENV" ]; then
+
+    if [ -d "$PROJECT_VENV" ]; then
+        echo "✅ Found project venv at $PROJECT_VENV"
+        export VIRTUAL_ENV="$PROJECT_VENV"
+        export PATH="$PROJECT_VENV/bin:$PATH"
+    elif [ -d "$SNAKEPIT_VENV" ]; then
         echo "✅ Found Snakepit venv at $SNAKEPIT_VENV"
         echo "💡 Reusing Snakepit's Python environment (already has grpcio, protobuf)"
         export VIRTUAL_ENV="$SNAKEPIT_VENV"
         export PATH="$SNAKEPIT_VENV/bin:$PATH"
     else
-        echo "⚠️  Not in a virtual environment and Snakepit venv not found"
-        echo "💡 Recommended: Create a venv first:"
-        echo "   python3 -m venv .venv"
-        echo "   source .venv/bin/activate"
+        echo "⚠️  No virtual environment detected."
+        echo "💡 Recommended: Create one for the adapter dependencies:"
+        echo "   python3 -m venv $PROJECT_VENV"
+        echo "   source $PROJECT_VENV/bin/activate"
         echo ""
         read -p "Continue with system Python? (y/N) " -n 1 -r
         echo

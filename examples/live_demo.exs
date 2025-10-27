@@ -5,48 +5,19 @@
 # Run with: elixir examples/live_demo.exs
 #
 
-# Configure Snakepit for gRPC with SnakeBridge adapter
-Application.put_env(:snakepit, :adapter_module, Snakepit.Adapters.GRPCPython)
-Application.put_env(:snakepit, :pooling_enabled, true)
+# Shared helper handles Mix.install + environment setup
+Code.require_file("example_helpers.exs", __DIR__)
 
-Application.put_env(:snakepit, :pools, [
-  %{
-    name: :default,
-    worker_profile: :process,
-    pool_size: 2,
-    adapter_module: Snakepit.Adapters.GRPCPython,
-    adapter_args: ["--adapter", "snakebridge_adapter.adapter.SnakeBridgeAdapter"]
-  }
-])
+SnakeBridgeExample.setup(description: "SnakeBridge LIVE Demo")
 
-Application.put_env(:snakepit, :pool_config, %{pool_size: 2})
-Application.put_env(:snakepit, :grpc_port, 50051)
-Application.put_env(:snakepit, :log_level, :warning)
-
-# Set PYTHONPATH for both SnakeBridge and Snakepit
-snakebridge_python = Path.join([File.cwd!(), "priv", "python"])
-snakepit_python = Path.expand("deps/snakepit/priv/python")
-pythonpath = "#{snakebridge_python}:#{snakepit_python}"
-System.put_env("PYTHONPATH", pythonpath)
-
-# Use Snakepit's venv Python (has grpcio, protobuf installed)
-snakepit_venv_python = Path.expand("~/p/g/n/snakepit/.venv/bin/python3")
-
-if File.exists?(snakepit_venv_python) do
-  System.put_env("SNAKEPIT_PYTHON", snakepit_venv_python)
-end
-
-# Install dependencies
-Mix.install([
-  {:snakepit, "~> 0.6"},
-  {:snakebridge, path: "."},
-  {:grpc, "~> 0.10.2"},
-  {:protobuf, "~> 0.14.1"}
-])
+pythonpath = System.get_env("PYTHONPATH", "")
+python_exec = System.get_env("SNAKEPIT_PYTHON", "python3")
 
 # Check if Python adapter is available
 python_ready =
-  case System.cmd("python3", ["-c", "from snakebridge_adapter import SnakeBridgeAdapter"],
+  case System.cmd(
+         python_exec,
+         ["-c", "from snakebridge_adapter import SnakeBridgeAdapter"],
          env: [{"PYTHONPATH", pythonpath}],
          stderr_to_stdout: true
        ) do
@@ -62,15 +33,11 @@ if not python_ready do
   System.halt(1)
 end
 
-# Use LIVE mode (real Python via Snakepit)
-Application.put_env(:snakebridge, :snakepit_adapter, SnakeBridge.SnakepitAdapter)
-
-IO.puts("\n🐍 SnakeBridge LIVE Demo\n")
+# At this point helper already announced the intro, focus on runtime output
 IO.puts(String.duplicate("=", 60))
 IO.puts("\n✓ Python adapter detected - using REAL Python via Snakepit\n")
 
-# Run with Snakepit script wrapper (handles pool startup/cleanup)
-Snakepit.run_as_script(fn ->
+SnakeBridgeExample.run(fn ->
   IO.puts("📡 Discovering Python's built-in json module...")
 
   case SnakeBridge.discover("json") do

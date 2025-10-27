@@ -8,10 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- [ ] gRPC streaming support
 - [ ] Configuration composition (extends, mixins)
 - [ ] LSP server for config authoring
 - [ ] Auto-generated test suites from schemas
+
+## [0.2.2] - 2025-10-26
+
+### Added - Streaming Everything Everywhere 🐍⚡
+- ✅ **End-to-end streaming pipeline** powered by Snakepit v0.6.4 — `SnakeBridge.Runtime.execute_stream/5` now forwards streaming tools with chunk callbacks
+- ✅ **GenAI adapter + example** showing real streaming feeds (`examples/genai_streaming.exs`, `examples/test_streaming_simple.exs`)
+- ✅ **Python bridge enhancements** — new gRPC adapter wiring enables `execute_streaming_tool/4`
+
+### Changed
+- Live demos now share a unified helper that installs deps, configures Snakepit, and locates the correct Python interpreter automatically
+- Updated examples (`live_demo`, `numpy_live`) to run against the published Snakepit package instead of local checkouts
+- README refreshed with new streaming docs, commands, and dependency versions
+
+### Fixed
+- Ensured Mix examples no longer consume stale cached copies of Snakepit by configuring the path after `Mix.install/1`
+- Python setup script now prefers a project-local virtualenv before falling back to the Snakepit repo venv
 
 ## [0.2.1] - 2025-10-26
 
@@ -136,7 +151,8 @@ Six atomic commits following TDD:
 - Basic code generation
 - Discovery framework
 
-[Unreleased]: https://github.com/nshkrdotcom/snakebridge/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/snakebridge/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/nshkrdotcom/snakebridge/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/nshkrdotcom/snakebridge/releases/tag/v0.2.0
 [0.1.0]: https://github.com/nshkrdotcom/snakebridge/releases/tag/v0.1.0

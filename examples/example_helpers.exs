@@ -26,49 +26,63 @@ defmodule SnakeBridgeExample do
     IO.puts("\n🐍 #{description}\n")
     IO.puts(String.duplicate("=", 60))
 
-    # Step 1: Setup environment
-    setup_environment()
-
-    # Step 2: Check and install Python packages
-    if length(packages) > 0 do
-      ensure_python_packages(packages)
-    end
-
-    # Step 3: Configure Snakepit with specified adapter
+    # Step 1: Configure Snakepit before it starts (Mix.install may start it)
     configure_snakepit(adapter)
 
-    # Step 4: Install Elixir dependencies
+    # Step 2: Install Elixir dependencies (makes Snakepit available)
     install_elixir_deps()
 
-    # Step 5: Configure SnakeBridge
+    # Step 3: Setup environment now that Snakepit is loaded
+    python = setup_environment()
+
+    # Step 4: Check and install Python packages
+    if length(packages) > 0 do
+      ensure_python_packages(python, packages)
+    end
+
+    # Step 5: Re-assert Snakepit config (in case install started it early)
+    configure_snakepit(adapter)
+
+    # Step 6: Configure SnakeBridge
     Application.put_env(:snakebridge, :snakepit_adapter, SnakeBridge.SnakepitAdapter)
 
     IO.puts("\n✓ Environment ready\n")
   end
 
   defp setup_environment do
+    project_root = File.cwd!()
+
     # Set PYTHONPATH
-    snakebridge_python = Path.join([File.cwd!(), "priv", "python"])
-    snakepit_python = Path.expand("deps/snakepit/priv/python")
-    pythonpath = "#{snakebridge_python}:#{snakepit_python}"
+    snakebridge_python = Path.join([project_root, "priv", "python"])
+    snakepit_python = Application.app_dir(:snakepit, "priv/python")
+
+    pythonpath =
+      [snakebridge_python, snakepit_python]
+      |> Enum.filter(&File.dir?/1)
+      |> Enum.join(":")
+
     System.put_env("PYTHONPATH", pythonpath)
 
-    # Use Snakepit venv if available
-    snakepit_venv = Path.expand("~/p/g/n/snakepit/.venv/bin/python3")
+    project_venv_python =
+      Path.join([snakebridge_python, ".venv", "bin", "python3"])
 
-    if File.exists?(snakepit_venv) do
-      System.put_env("SNAKEPIT_PYTHON", snakepit_venv)
-      {:ok, snakepit_venv}
-    else
-      # Fall back to system python3
-      System.put_env("SNAKEPIT_PYTHON", "python3")
-      {:ok, "python3"}
-    end
+    snakepit_repo_python =
+      Path.expand("~/p/g/n/snakepit/.venv/bin/python3")
+
+    python =
+      resolve_python(System.get_env("SNAKEPIT_PYTHON")) ||
+        resolve_python(project_venv_python) ||
+        resolve_python(snakepit_repo_python) ||
+        resolve_python("python3") ||
+        "python3"
+
+    System.put_env("SNAKEPIT_PYTHON", python)
+    IO.puts("Using Python executable: #{python}")
+
+    python
   end
 
-  defp ensure_python_packages(packages) do
-    python = System.get_env("SNAKEPIT_PYTHON", "python3")
-
+  defp ensure_python_packages(python, packages) do
     for package <- packages do
       # Check if package is installed
       {_, status} =
@@ -109,13 +123,34 @@ defmodule SnakeBridgeExample do
     Application.put_env(:snakepit, :log_level, :warning)
   end
 
+  defp resolve_python(path) do
+    case path do
+      nil ->
+        nil
+
+      "" ->
+        nil
+
+      value ->
+        expanded = Path.expand(value)
+
+        cond do
+          File.exists?(expanded) -> expanded
+          exec = System.find_executable(value) -> exec
+          true -> nil
+        end
+    end
+  end
+
   defp install_elixir_deps do
     Mix.install([
-      {:snakepit, "~> 0.6"},
+      {:snakepit, "~> 0.6.4", override: true},
       {:snakebridge, path: "."},
       {:grpc, "~> 0.10.2"},
       {:protobuf, "~> 0.14.1"}
     ])
+
+    IO.puts("Snakepit app dir after install: #{Application.app_dir(:snakepit)}")
   end
 
   def run(fun) when is_function(fun, 0) do

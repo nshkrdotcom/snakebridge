@@ -9,66 +9,19 @@
 # - Stateless mathematical functions (perfect for SnakeBridge)
 # - No leaky abstractions
 
-# Configure Snakepit for gRPC
-Application.put_env(:snakepit, :adapter_module, Snakepit.Adapters.GRPCPython)
-Application.put_env(:snakepit, :pooling_enabled, true)
+# Shared helper handles Mix.install + environment setup
+Code.require_file("example_helpers.exs", __DIR__)
 
-Application.put_env(:snakepit, :pools, [
-  %{
-    name: :default,
-    worker_profile: :process,
-    pool_size: 2,
-    adapter_module: Snakepit.Adapters.GRPCPython,
-    adapter_args: ["--adapter", "snakebridge_adapter.adapter.SnakeBridgeAdapter"]
-  }
-])
-
-Application.put_env(:snakepit, :log_level, :warning)
-
-# Set PYTHONPATH
-pythonpath = Path.join([File.cwd!(), "priv", "python"])
-snakepit_python = Path.expand("deps/snakepit/priv/python")
-System.put_env("PYTHONPATH", "#{pythonpath}:#{snakepit_python}")
-
-# Use Snakepit venv
-snakepit_venv = Path.expand("~/p/g/n/snakepit/.venv/bin/python3")
-if File.exists?(snakepit_venv), do: System.put_env("SNAKEPIT_PYTHON", snakepit_venv)
-
-# Install
-Mix.install([
-  {:snakepit, "~> 0.6"},
-  {:snakebridge, path: "."},
-  {:grpc, "~> 0.10.2"},
-  {:protobuf, "~> 0.14.1"}
-])
-
-Application.put_env(:snakebridge, :snakepit_adapter, SnakeBridge.SnakepitAdapter)
+SnakeBridgeExample.setup(
+  description: "SnakeBridge NumPy Example - Real Python with Complex Math",
+  python_packages: ["numpy"]
+)
 
 IO.puts("\n🔢 SnakeBridge + NumPy: Complex Math from Elixir\n")
 IO.puts(String.duplicate("=", 60))
+IO.puts("✓ NumPy detected and ready\n")
 
-# Check NumPy available
-case System.cmd("python3", ["-c", "import numpy"],
-       env: [{"PYTHONPATH", "#{pythonpath}:#{snakepit_python}"}],
-       stderr_to_stdout: true
-     ) do
-  {_, 0} ->
-    IO.puts("✓ NumPy detected\n")
-
-  _ ->
-    IO.puts("⚠️  NumPy not found. Installing...")
-    {output, status} = System.cmd(snakepit_venv, ["-m", "pip", "install", "numpy"])
-
-    if status == 0 do
-      IO.puts("✓ NumPy installed\n")
-    else
-      IO.puts("✗ Failed to install NumPy")
-      IO.puts(output)
-      System.halt(1)
-    end
-end
-
-Snakepit.run_as_script(fn ->
+SnakeBridgeExample.run(fn ->
   IO.puts("📡 Discovering NumPy library...")
 
   case SnakeBridge.discover("numpy") do

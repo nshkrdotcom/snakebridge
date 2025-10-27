@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.2.1"
+  @version "0.2.2"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -53,7 +53,7 @@ defmodule SnakeBridge.MixProject do
     [
       # Core dependencies
       # Optional for now during dev
-      {:snakepit, "~> 0.6", optional: true},
+      {:snakepit, "~> 0.6.4", optional: true},
       # For config schemas
       {:ecto, "~> 3.11"},
       # JSON encoding

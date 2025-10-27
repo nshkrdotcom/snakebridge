@@ -46,3 +46,4 @@ htmlcov/
 
 # SnakeBridge cache
 /priv/snakebridge/cache/
+/snakepit/

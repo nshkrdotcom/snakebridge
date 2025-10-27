@@ -22,6 +22,7 @@ SnakeBridge is a metaprogramming framework that automatically generates type-saf
 ⚡ **Hybrid Compilation** - Runtime in dev (hot reload), compile-time in production (optimized)
 🎯 **Smart Caching** - Git-style schema diffing with incremental regeneration
 🔄 **Bidirectional Tools** - Export Elixir functions to Python seamlessly
+🔁 **Streaming Pipelines** - Real-time gRPC streaming with chunk callbacks
 📊 **Built-in Telemetry** - Comprehensive observability with `:telemetry` events
 🧪 **Property-Based Testing** - Auto-generate test suites from schemas
 🛠️ **LSP Integration** - Config authoring with autocomplete and diagnostics
@@ -34,8 +35,8 @@ SnakeBridge is a metaprogramming framework that automatically generates type-saf
 ```elixir
 def deps do
   [
-    {:snakebridge, "~> 0.2.1"},
-    {:snakepit, "~> 0.6"}  # Required runtime
+    {:snakebridge, "~> 0.2.2"},
+    {:snakepit, "~> 0.6.4"}  # Required runtime
   ]
 end
 ```
@@ -59,7 +60,7 @@ mix deps.get
 ### 4. Verify installation
 
 ```bash
-mix test  # Should show 91/91 tests passing (8 properties + 83 unit/integration)
+mix test  # Should pass all unit + property tests
 ```
 
 **That's it!** Start using SnakeBridge.
@@ -73,8 +74,9 @@ The fastest way to see SnakeBridge:
 mix run examples/api_demo.exs
 
 # Live Python (auto-installs deps)
-elixir examples/json_live.exs       # Built-in json module
-elixir examples/numpy_math.exs      # NumPy scientific computing
+elixir examples/live_demo.exs       # Built-in json module via Snakepit
+elixir examples/numpy_live.exs      # NumPy scientific computing
+elixir examples/genai_streaming.exs # Full streaming tool demo
 ```
 
 Examples self-configure - just run them.
@@ -94,10 +96,13 @@ Shows configuration, code generation, type system - all working immediately.
 
 ```bash
 # JSON (built-in, no install)
-elixir examples/json_live.exs
+elixir examples/live_demo.exs
 
 # NumPy (auto-installs if needed)
-elixir examples/numpy_math.exs
+elixir examples/numpy_live.exs
+
+# Streaming (GenAI adapter)
+elixir examples/genai_streaming.exs
 ```
 
 **These just work** - auto-install dependencies, configure Snakepit, run live Python.
@@ -109,10 +114,35 @@ elixir examples/numpy_math.exs
 SnakeBridge can generate type-safe Elixir wrappers for:
 
 ✅ **Python Classes** - Full OOP support with instance management
-✅ **Module-Level Functions** - Stateless function calls (NEW in v0.2.1!)
+✅ **Module-Level Functions** - Stateless function calls (added in v0.2.1)
+✅ **Streaming Tools** - Bidirectional streaming callbacks (NEW in v0.2.2!)
 ✅ **Mixed Integration** - Classes and functions from the same library
 
-### Function Generation (v0.2.1)
+### Streaming Tools (v0.2.2)
+
+SnakeBridge can now drive Python streams end-to-end with chunk callbacks:
+
+```elixir
+session_id = "demo:#{System.unique_integer([:positive])}"
+
+SnakeBridge.Runtime.execute_stream(
+  session_id,
+  "stream_progress",
+  %{"steps" => 5},
+  fn chunk ->
+    IO.inspect(chunk, label: "Chunk")
+  end
+)
+```
+
+**Highlights:**
+- Powered by Snakepit v0.6.4's fixed streaming executor
+- Works with adapters that expose streaming tools (GenAI, Showcase, custom)
+- Automatic heartbeats + progress metadata included in each chunk
+
+See `examples/genai_streaming.exs` or `examples/test_streaming_simple.exs` for a complete walkthrough.
+
+### Function Generation
 
 Call any Python function directly from Elixir:
 
@@ -152,7 +182,7 @@ numpy_module = Enum.find(modules, &function_exported?(&1, :mean, 2))
 # => 3.0
 ```
 
-See `examples/json_live.exs` for a complete working example.
+See `examples/live_demo.exs` for a complete working example.
 
 ---
 
@@ -188,7 +218,7 @@ config do
       }
     ],
 
-    # Module-level functions (NEW in v0.2.1!)
+    # Module-level functions (available since v0.2.1)
     functions: [
       %{
         name: "configure",

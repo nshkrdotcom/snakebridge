@@ -11,10 +11,25 @@ import uuid
 import logging
 from typing import Any, Dict, List, Optional
 
+# Import Snakepit base adapter
+try:
+    from snakepit_bridge.base_adapter_threaded import ThreadSafeAdapter, tool
+    HAS_SNAKEPIT = True
+except ImportError:
+    # Fallback for standalone testing
+    ThreadSafeAdapter = object
+    HAS_SNAKEPIT = False
+
+    def tool(description="", **kwargs):
+        """Fallback tool decorator for testing"""
+        def decorator(func):
+            return func
+        return decorator
+
 logger = logging.getLogger(__name__)
 
 
-class SnakeBridgeAdapter:
+class SnakeBridgeAdapter(ThreadSafeAdapter):
     """
     Snakepit adapter for dynamic Python library integration.
 
@@ -29,9 +44,12 @@ class SnakeBridgeAdapter:
 
     def __init__(self):
         """Initialize adapter with instance storage."""
+        if HAS_SNAKEPIT:
+            super().__init__()
         self.instances = {}  # {instance_id: python_object}
         logger.info("SnakeBridgeAdapter initialized")
 
+    @tool(description="Introspect Python module structure")
     def describe_library(self, module_path: str, discovery_depth: int = 2) -> dict:
         """
         Introspect a Python module and return its schema.
@@ -82,6 +100,7 @@ class SnakeBridgeAdapter:
                 "error": str(e)
             }
 
+    @tool(description="Execute Python code dynamically")
     def call_python(
         self,
         module_path: str,

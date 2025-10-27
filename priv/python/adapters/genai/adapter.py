@@ -76,7 +76,24 @@ class GenAIAdapter(ThreadSafeAdapter):
 
     def execute_tool(self, tool_name: str, arguments: dict, context) -> dict:
         """Dispatch tool calls."""
-        if tool_name == "generate_text":
+        # Delegate discovery to generic SnakeBridgeAdapter
+        if tool_name == "describe_library":
+            from snakebridge_adapter.adapter import SnakeBridgeAdapter
+            generic = SnakeBridgeAdapter()
+            return generic.describe_library(
+                module_path=arguments.get("module_path"),
+                discovery_depth=arguments.get("discovery_depth", 2)
+            )
+        elif tool_name == "call_python":
+            from snakebridge_adapter.adapter import SnakeBridgeAdapter
+            generic = SnakeBridgeAdapter()
+            return generic.call_python(
+                module_path=arguments.get("module_path"),
+                function_name=arguments.get("function_name"),
+                args=arguments.get("args"),
+                kwargs=arguments.get("kwargs")
+            )
+        elif tool_name == "generate_text":
             return self.generate_text(
                 model=arguments.get("model", "gemini-2.0-flash-exp"),
                 prompt=arguments.get("prompt", "")

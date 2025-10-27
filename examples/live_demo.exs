@@ -15,10 +15,7 @@ Application.put_env(:snakepit, :pools, [
     worker_profile: :process,
     pool_size: 2,
     adapter_module: Snakepit.Adapters.GRPCPython,
-    adapter_config: %{
-      python_module: "snakebridge_adapter.adapter",
-      python_class: "SnakeBridgeAdapter"
-    }
+    adapter_args: ["--adapter", "snakebridge_adapter.adapter.SnakeBridgeAdapter"]
   }
 ])
 

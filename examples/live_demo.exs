@@ -3,19 +3,40 @@
 # SnakeBridge LIVE Demo
 #
 # Run with: elixir examples/live_demo.exs
-# (Use elixir, not mix run, to use Mix.install)
 #
+
+# Configure Snakepit for gRPC with SnakeBridge adapter
+Application.put_env(:snakepit, :adapter_module, Snakepit.Adapters.GRPCPython)
+Application.put_env(:snakepit, :pooling_enabled, true)
+
+Application.put_env(:snakepit, :pools, [
+  %{
+    name: :default,
+    worker_profile: :process,
+    pool_size: 2,
+    adapter_module: Snakepit.Adapters.GRPCPython,
+    adapter_config: %{
+      python_module: "snakebridge_adapter.adapter",
+      python_class: "SnakeBridgeAdapter"
+    }
+  }
+])
+
+Application.put_env(:snakepit, :pool_config, %{pool_size: 2})
+Application.put_env(:snakepit, :grpc_port, 50051)
+Application.put_env(:snakepit, :log_level, :warning)
+
+# Set PYTHONPATH for SnakeBridge adapter
+pythonpath = Path.join([File.cwd!(), "priv", "python"])
+System.put_env("PYTHONPATH", pythonpath)
 
 # Install dependencies
 Mix.install([
   {:snakepit, "~> 0.6"},
-  {:snakebridge, path: "."}
+  {:snakebridge, path: "."},
+  {:grpc, "~> 0.10.2"},
+  {:protobuf, "~> 0.14.1"}
 ])
-
-# Configure environment
-Application.put_env(:snakepit, :log_level, :warning)
-pythonpath = Path.join([File.cwd!(), "priv", "python"])
-System.put_env("PYTHONPATH", pythonpath)
 
 # Check if Python adapter is available
 python_ready =

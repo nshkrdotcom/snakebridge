@@ -74,6 +74,7 @@ defmodule SnakeBridge.Discovery do
       name = Map.get(descriptor, :name) || Map.get(descriptor, "name")
 
       %{
+        name: name,
         python_path: python_path,
         elixir_name: elixir_name_from_python(name),
         args: %{}

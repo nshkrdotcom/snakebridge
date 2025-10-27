@@ -215,15 +215,25 @@ defmodule SnakeBridge.SnakepitMock do
   end
 
   defp call_python_module_function(function_name, module_path) do
-    {:ok,
-     %{
-       "success" => true,
-       "result" => %{
-         "function" => function_name,
-         "module" => module_path,
-         "mock" => true
-       }
-     }}
+    # Handle specific known functions with appropriate mock responses
+    case {module_path, function_name} do
+      {"json", "dumps"} ->
+        {:ok, %{"success" => true, "result" => "{\"mock\": true}"}}
+
+      {"json", "loads"} ->
+        {:ok, %{"success" => true, "result" => %{"mock" => true}}}
+
+      {_module, _func} ->
+        {:ok,
+         %{
+           "success" => true,
+           "result" => %{
+             "function" => function_name,
+             "module" => module_path,
+             "mock" => true
+           }
+         }}
+    end
   end
 
   defp call_python_instance_method(%{
@@ -240,9 +250,5 @@ defmodule SnakeBridge.SnakepitMock do
          "mock" => true
        }
      }}
-  end
-
-  defp call_python_response(_args) do
-    {:ok, %{"success" => true, "result" => %{"mock" => true}}}
   end
 end

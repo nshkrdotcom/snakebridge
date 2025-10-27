@@ -26,8 +26,10 @@ Application.put_env(:snakepit, :pool_config, %{pool_size: 2})
 Application.put_env(:snakepit, :grpc_port, 50051)
 Application.put_env(:snakepit, :log_level, :warning)
 
-# Set PYTHONPATH for SnakeBridge adapter
-pythonpath = Path.join([File.cwd!(), "priv", "python"])
+# Set PYTHONPATH for both SnakeBridge and Snakepit
+snakebridge_python = Path.join([File.cwd!(), "priv", "python"])
+snakepit_python = Path.expand("deps/snakepit/priv/python")
+pythonpath = "#{snakebridge_python}:#{snakepit_python}"
 System.put_env("PYTHONPATH", pythonpath)
 
 # Install dependencies

@@ -7,7 +7,7 @@ defmodule SnakeBridge.Generator do
   """
 
   @doc """
-  Generate module AST from descriptor.
+  Generate module AST from class descriptor.
 
   Takes a class descriptor and configuration, returns quoted Elixir code
   that defines a module with create/execute functions.
@@ -57,6 +57,42 @@ defmodule SnakeBridge.Generator do
         end
 
         unquote_splicing(generate_methods(methods))
+
+        defp generate_session_id do
+          "session_#{:rand.uniform(100_000)}"
+        end
+      end
+    end
+  end
+
+  @doc """
+  Generate module AST for Python module-level functions.
+
+  Different from class modules - no instance creation, direct function calls.
+  Functions are stateless and call Runtime.call_function instead of create_instance.
+  """
+  @spec generate_function_module(map(), SnakeBridge.Config.t()) :: Macro.t()
+  def generate_function_module(descriptor, config) do
+    # Support both struct and map descriptors
+    descriptor_name = Map.get(descriptor, :name) || Map.get(descriptor, "name")
+    elixir_module = Map.get(descriptor, :elixir_module) || Map.get(descriptor, "elixir_module")
+    python_path = Map.get(descriptor, :python_path) || Map.get(descriptor, "python_path")
+    functions = Map.get(descriptor, :functions) || Map.get(descriptor, "functions") || []
+
+    module_name = elixir_module || Module.concat([String.to_atom(descriptor_name)])
+
+    compilation_mode = config.compilation_mode
+
+    quote do
+      defmodule unquote(module_name) do
+        @moduledoc unquote(generate_moduledoc(descriptor))
+
+        @python_path unquote(python_path)
+        @config unquote(Macro.escape(config))
+
+        unquote(generate_hooks(compilation_mode))
+
+        unquote_splicing(generate_functions(functions, python_path))
 
         defp generate_session_id do
           "session_#{:rand.uniform(100_000)}"
@@ -146,6 +182,45 @@ defmodule SnakeBridge.Generator do
     end)
   end
 
+  defp generate_functions(functions, module_python_path) when is_list(functions) do
+    Enum.map(functions, fn function ->
+      # Support both struct/map with atom keys and map with string keys
+      function_name =
+        Map.get(function, :name) || Map.get(function, "name") || raise "Function must have name"
+
+      elixir_name =
+        Map.get(function, :elixir_name) || Map.get(function, "elixir_name") ||
+          String.to_atom(function_name)
+
+      # Use the function's own python_path if available, otherwise derive from module path
+      function_python_path =
+        Map.get(function, :python_path) || Map.get(function, "python_path") ||
+          "#{module_python_path}.#{function_name}"
+
+      docstring = Map.get(function, :docstring) || Map.get(function, "docstring") || ""
+
+      quote do
+        @doc """
+        Call #{unquote(function_name)} Python function.
+
+        #{unquote(docstring)}
+        """
+        @spec unquote(elixir_name)(map(), keyword()) :: {:ok, term()} | {:error, term()}
+        def unquote(elixir_name)(args \\ %{}, opts \\ []) do
+          session_id = Keyword.get(opts, :session_id, generate_session_id())
+
+          # Call Runtime to execute module-level function via Snakepit
+          SnakeBridge.Runtime.call_function(
+            unquote(function_python_path),
+            unquote(function_name),
+            args,
+            Keyword.put(opts, :session_id, session_id)
+          )
+        end
+      end
+    end)
+  end
+
   @doc """
   Optimize generated AST.
 
@@ -203,8 +278,8 @@ defmodule SnakeBridge.Generator do
   def generate_all(%SnakeBridge.Config{} = config) do
     case SnakeBridge.Config.validate(config) do
       {:ok, valid_config} ->
-        # Generate and compile all modules
-        results =
+        # Generate and compile class modules
+        class_results =
           Enum.map(valid_config.classes, fn class_descriptor ->
             ast = generate_module(class_descriptor, valid_config)
 
@@ -215,19 +290,82 @@ defmodule SnakeBridge.Generator do
             end
           end)
 
+        # Generate and compile function modules
+        function_results = generate_function_modules(valid_config.functions, valid_config)
+
+        # Combine all results
+        all_results = class_results ++ function_results
+
         # Check if any compilation failed
-        case Enum.find(results, &match?({:error, _}, &1)) do
+        case Enum.find(all_results, &match?({:error, _}, &1)) do
           {:error, _reason} = error ->
             error
 
           nil ->
-            modules = Enum.map(results, fn {:ok, module} -> module end)
+            modules = Enum.map(all_results, fn {:ok, module} -> module end)
             {:ok, modules}
         end
 
       {:error, _errors} = error ->
         error
     end
+  end
+
+  defp generate_function_modules(functions, config) when is_list(functions) do
+    # Group functions by module (python_path base)
+    grouped_functions = group_functions_by_module(functions)
+
+    Enum.map(grouped_functions, fn {module_info, funcs} ->
+      descriptor = %{
+        name: module_info.name,
+        python_path: module_info.python_path,
+        elixir_module: module_info.elixir_module,
+        functions: funcs
+      }
+
+      ast = generate_function_module(descriptor, config)
+
+      case compile_and_load(ast) do
+        {:ok, module} -> {:ok, module}
+        {:error, _} = error -> error
+      end
+    end)
+  end
+
+  defp group_functions_by_module(functions) do
+    # Group functions by their module (base python_path)
+    functions
+    |> Enum.group_by(fn func ->
+      python_path = Map.get(func, :python_path) || Map.get(func, "python_path") || ""
+      # Extract module path (everything before the last dot)
+      case String.split(python_path, ".") do
+        [single] -> single
+        parts -> Enum.take(parts, length(parts) - 1) |> Enum.join(".")
+      end
+    end)
+    |> Enum.map(fn {module_path, funcs} ->
+      # Create a module descriptor for this group
+      elixir_module =
+        Map.get(List.first(funcs), :elixir_module) ||
+          Map.get(List.first(funcs), "elixir_module") ||
+          module_path_to_elixir_module(module_path)
+
+      module_info = %{
+        name: "#{elixir_module}Functions",
+        python_path: module_path,
+        elixir_module: elixir_module
+      }
+
+      {module_info, funcs}
+    end)
+  end
+
+  defp module_path_to_elixir_module(python_path) when is_binary(python_path) do
+    python_path
+    |> String.split(".")
+    |> Enum.map(&String.capitalize/1)
+    |> Enum.join(".")
+    |> String.to_atom()
   end
 
   @doc """

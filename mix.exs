@@ -69,7 +69,9 @@ defmodule SnakeBridge.MixProject do
       # Mocking
       {:mox, "~> 1.1", only: :test},
       # Runtime mocking
-      {:mimic, "~> 1.7", only: :test}
+      {:mimic, "~> 1.7", only: :test},
+      # OTP testing toolkit
+      {:supertester, "~> 0.2.1", only: :test}
     ]
   end
 

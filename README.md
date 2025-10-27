@@ -34,7 +34,7 @@ SnakeBridge is a metaprogramming framework that automatically generates type-saf
 ```elixir
 def deps do
   [
-    {:snakebridge, "~> 0.1.0"},
+    {:snakebridge, "~> 0.2.0"},
     {:snakepit, "~> 0.6"}  # Required runtime
   ]
 end

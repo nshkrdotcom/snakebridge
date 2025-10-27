@@ -118,8 +118,7 @@ defmodule SnakeBridgeExample do
   end
 
   def run(fun) when is_function(fun, 0) do
-    Snakepit.run_as_script(fn ->
-      fun.()
-    end)
+    # Use apply to defer module resolution to runtime
+    apply(Snakepit, :run_as_script, [fn -> fun.() end])
   end
 end

@@ -64,13 +64,53 @@ mix test  # Should show 76/76 tests passing
 
 **That's it!** Start using SnakeBridge.
 
+### Or Just Run Examples
+
+The fastest way to see SnakeBridge:
+
+```bash
+# Mock demo (no Python needed)
+mix run examples/api_demo.exs
+
+# Live Python (auto-installs deps)
+elixir examples/json_live.exs       # Built-in json module
+elixir examples/numpy_math.exs      # NumPy scientific computing
+```
+
+Examples self-configure - just run them.
+
 ## Quick Start
+
+### Try It Now (Zero Setup)
+
+```bash
+# See SnakeBridge in action
+mix run examples/api_demo.exs
+```
+
+Shows configuration, code generation, type system - all working immediately.
+
+### Live Python Examples
+
+```bash
+# JSON (built-in, no install)
+elixir examples/json_live.exs
+
+# NumPy (auto-installs if needed)
+elixir examples/numpy_math.exs
+```
+
+**These just work** - auto-install dependencies, configure Snakepit, run live Python.
+
+---
+
+## Using SnakeBridge
 
 ### 1. Discover a Python Library
 
 ```bash
 # Auto-generate configuration from introspection
-mix snakebridge.discover dspy --output config/snakebridge/dspy.exs
+mix snakebridge.discover numpy --output config/snakebridge/numpy.exs
 ```
 
 ### 2. Review & Customize Configuration

@@ -42,44 +42,43 @@ IO.puts("\n🐍 SnakeBridge LIVE Demo\n")
 IO.puts(String.duplicate("=", 60))
 IO.puts("\n✓ Python adapter detected - using REAL Python via Snakepit\n")
 
-# Start Snakepit application
-{:ok, _} = Application.ensure_all_started(:snakepit)
+# Run with Snakepit script wrapper (handles pool startup/cleanup)
+Snakepit.run_as_script(fn ->
+  IO.puts("📡 Discovering Python library (dspy)...")
 
-# Now run the actual demo
-IO.puts("📡 Discovering Python library (dspy)...")
+  case SnakeBridge.discover("dspy") do
+    {:ok, schema} ->
+      IO.puts("✓ Discovery successful!")
+      IO.puts("  Version: #{schema["library_version"]}")
+      IO.puts("  Classes: #{Map.keys(schema["classes"]) |> inspect()}")
 
-case SnakeBridge.discover("dspy") do
-  {:ok, schema} ->
-    IO.puts("✓ Discovery successful!")
-    IO.puts("  Version: #{schema["library_version"]}")
-    IO.puts("  Classes: #{Map.keys(schema["classes"]) |> inspect()}")
+      IO.puts("\n⚙️  Generating Elixir modules...")
+      {:ok, modules} = SnakeBridge.integrate("dspy")
 
-    IO.puts("\n⚙️  Generating Elixir modules...")
-    {:ok, modules} = SnakeBridge.integrate("dspy")
+      IO.puts("✓ Generated #{length(modules)} module(s)")
+      Enum.each(modules, fn m -> IO.puts("  • #{inspect(m)}") end)
 
-    IO.puts("✓ Generated #{length(modules)} module(s)")
-    Enum.each(modules, fn m -> IO.puts("  • #{inspect(m)}") end)
+      [predict | _] = modules
 
-    [predict | _] = modules
+      IO.puts("\n🚀 Creating Python instance...")
+      {:ok, instance} = predict.create(%{signature: "question -> answer"})
+      {session, instance_id} = instance
 
-    IO.puts("\n🚀 Creating Python instance...")
-    {:ok, instance} = predict.create(%{signature: "question -> answer"})
-    {session, instance_id} = instance
+      IO.puts("✓ Instance created!")
+      IO.puts("  Session: #{session}")
+      IO.puts("  Instance ID: #{instance_id}")
 
-    IO.puts("✓ Instance created!")
-    IO.puts("  Session: #{session}")
-    IO.puts("  Instance ID: #{instance_id}")
+      IO.puts("\n📞 Calling method on instance...")
+      {:ok, result} = predict.__call__(instance, %{question: "What is SnakeBridge?"})
 
-    IO.puts("\n📞 Calling method on instance...")
-    {:ok, result} = predict.__call__(instance, %{question: "What is SnakeBridge?"})
+      IO.puts("✓ Method executed!")
+      IO.puts("  Result: #{inspect(result, limit: 3)}")
 
-    IO.puts("✓ Method executed!")
-    IO.puts("  Result: #{inspect(result, limit: 3)}")
+      IO.puts("\n✅ Success! SnakeBridge called REAL Python via Snakepit!\n")
 
-    IO.puts("\n✅ Success! SnakeBridge called REAL Python via Snakepit!\n")
+    {:error, reason} ->
+      IO.puts("✗ Discovery failed: #{inspect(reason)}")
+  end
 
-  {:error, reason} ->
-    IO.puts("✗ Discovery failed: #{inspect(reason)}")
-end
-
-IO.puts(String.duplicate("=", 60) <> "\n")
+  IO.puts(String.duplicate("=", 60) <> "\n")
+end)

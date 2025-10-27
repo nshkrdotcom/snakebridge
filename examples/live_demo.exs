@@ -94,18 +94,6 @@ Snakepit.run_as_script(fn ->
 
       IO.puts("\n✅ Success! SnakeBridge discovered REAL Python library via Snakepit!\n")
 
-      IO.puts("✓ Encoding successful!")
-      IO.puts("  Input: #{inspect(test_data)}")
-      IO.puts("  JSON: #{json_string}")
-
-      IO.puts("\n📞 Calling json.loads to decode...")
-      {:ok, decoded} = json_module.loads(%{s: json_string})
-
-      IO.puts("✓ Decoding successful!")
-      IO.puts("  Result: #{inspect(decoded)}")
-
-      IO.puts("\n✅ Success! SnakeBridge called REAL Python via Snakepit!\n")
-
     {:error, reason} ->
       IO.puts("✗ Discovery failed: #{inspect(reason)}")
   end

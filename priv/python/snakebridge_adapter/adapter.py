@@ -68,6 +68,30 @@ class SnakeBridgeAdapter(ThreadSafeAdapter):
         self.instances = {}
         logger.info("Adapter cleaned up")
 
+    def execute_tool(self, tool_name: str, arguments: dict, context) -> dict:
+        """
+        Dispatch tool execution to appropriate @tool methods.
+
+        This is the entry point called by Snakepit's gRPC server.
+        """
+        if tool_name == "describe_library":
+            return self.describe_library(
+                module_path=arguments.get("module_path"),
+                discovery_depth=arguments.get("discovery_depth", 2)
+            )
+        elif tool_name == "call_python":
+            return self.call_python(
+                module_path=arguments.get("module_path"),
+                function_name=arguments.get("function_name"),
+                args=arguments.get("args"),
+                kwargs=arguments.get("kwargs")
+            )
+        else:
+            return {
+                "success": False,
+                "error": f"Unknown tool: {tool_name}"
+            }
+
     @tool(description="Introspect Python module structure")
     def describe_library(self, module_path: str, discovery_depth: int = 2) -> dict:
         """

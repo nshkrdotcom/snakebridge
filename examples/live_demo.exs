@@ -1,11 +1,19 @@
 #!/usr/bin/env elixir
 #
-# SnakeBridge LIVE Demo - Auto-detects and uses real Python when available
+# SnakeBridge LIVE Demo
 #
-# Run with: mix run examples/live_demo.exs
+# Run with: elixir examples/live_demo.exs
+# (Use elixir, not mix run, to use Mix.install)
 #
 
-# Add SnakeBridge priv/python to PYTHONPATH for adapter detection
+# Install dependencies
+Mix.install([
+  {:snakepit, "~> 0.6"},
+  {:snakebridge, path: "."}
+])
+
+# Configure environment
+Application.put_env(:snakepit, :log_level, :warning)
 pythonpath = Path.join([File.cwd!(), "priv", "python"])
 System.put_env("PYTHONPATH", pythonpath)
 

@@ -21,6 +21,7 @@ defmodule SnakeBridgeExample do
   def setup(opts \\ []) do
     packages = Keyword.get(opts, :python_packages, [])
     description = Keyword.get(opts, :description, "SnakeBridge Example")
+    adapter = Keyword.get(opts, :adapter, "snakebridge_adapter.adapter.SnakeBridgeAdapter")
 
     IO.puts("\n🐍 #{description}\n")
     IO.puts(String.duplicate("=", 60))
@@ -33,8 +34,8 @@ defmodule SnakeBridgeExample do
       ensure_python_packages(packages)
     end
 
-    # Step 3: Configure Snakepit
-    configure_snakepit()
+    # Step 3: Configure Snakepit with specified adapter
+    configure_snakepit(adapter)
 
     # Step 4: Install Elixir dependencies
     install_elixir_deps()
@@ -89,7 +90,7 @@ defmodule SnakeBridgeExample do
     end
   end
 
-  defp configure_snakepit do
+  defp configure_snakepit(adapter_spec) do
     Application.put_env(:snakepit, :adapter_module, Snakepit.Adapters.GRPCPython)
     Application.put_env(:snakepit, :pooling_enabled, true)
 
@@ -99,7 +100,7 @@ defmodule SnakeBridgeExample do
         worker_profile: :process,
         pool_size: 2,
         adapter_module: Snakepit.Adapters.GRPCPython,
-        adapter_args: ["--adapter", "snakebridge_adapter.adapter.SnakeBridgeAdapter"]
+        adapter_args: ["--adapter", adapter_spec]
       }
     ])
 

@@ -5,9 +5,14 @@
 # Run with: mix run examples/live_demo.exs
 #
 
+# Add SnakeBridge priv/python to PYTHONPATH for adapter detection
+pythonpath = Path.join([File.cwd!(), "priv", "python"])
+System.put_env("PYTHONPATH", pythonpath)
+
 # Check if Python adapter is available
 python_ready =
   case System.cmd("python3", ["-c", "from snakebridge_adapter import SnakeBridgeAdapter"],
+         env: [{"PYTHONPATH", pythonpath}],
          stderr_to_stdout: true
        ) do
     {_, 0} -> true

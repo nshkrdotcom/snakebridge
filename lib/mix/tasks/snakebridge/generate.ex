@@ -23,7 +23,7 @@ defmodule Mix.Tasks.Snakebridge.Generate do
 
   use Mix.Task
 
-  alias SnakeBridge.{Config, Generator}
+  alias SnakeBridge.Generator
 
   @requirements ["app.start"]
 

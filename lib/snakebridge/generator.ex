@@ -47,8 +47,13 @@ defmodule SnakeBridge.Generator do
         def create(args \\ %{}, opts \\ []) do
           session_id = Keyword.get(opts, :session_id, generate_session_id())
 
-          # Placeholder for actual Snakepit integration
-          {:ok, {session_id, "instance_#{:rand.uniform(1000)}"}}
+          # Call Runtime to create Python instance via Snakepit
+          SnakeBridge.Runtime.create_instance(
+            unquote(python_path),
+            args,
+            session_id,
+            opts
+          )
         end
 
         unquote_splicing(generate_methods(methods))
@@ -129,8 +134,13 @@ defmodule SnakeBridge.Generator do
         """
         @spec unquote(elixir_name)(t(), map(), keyword()) :: {:ok, term()} | {:error, term()}
         def unquote(elixir_name)(instance_ref, args \\ %{}, opts \\ []) do
-          # Placeholder for actual execution
-          {:ok, %{"result" => "placeholder"}}
+          # Call Runtime to execute method on Python instance via Snakepit
+          SnakeBridge.Runtime.call_method(
+            instance_ref,
+            unquote(method_name),
+            args,
+            opts
+          )
         end
       end
     end)

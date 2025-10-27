@@ -31,15 +31,27 @@ SnakeBridgeExample.run(fn ->
 
   IO.puts("\n🚀 Calling Gemini API...")
 
-  api_key = System.get_env("GEMINI_API_KEY")
+  _api_key = System.get_env("GEMINI_API_KEY")
   session_id = "genai_demo_#{:rand.uniform(10000)}"
 
   IO.puts("\n💬 Generating text with gemini-2.0-flash-exp...")
 
-  IO.puts(
-    "   Prompt: 'Explain how Elixir and Python complement each other in 5 short paragraphs'"
-  )
+  prompt = """
+  Write a detailed technical explanation of how Elixir and Python complement each other in software engineering.
+  Cover these topics with at least 2-3 sentences each:
+  1. Elixir's concurrency vs Python's data science libraries
+  2. Use cases for combining them
+  3. Architecture patterns (Elixir as orchestrator, Python as worker)
+  4. Real-world integration examples
+  5. Performance considerations
+  6. Developer experience benefits
+  7. Deployment strategies
+  8. Testing approaches
 
+  Write in a clear, technical style. Make it comprehensive - at least 15-20 sentences total.
+  """
+
+  IO.puts("   (Requesting long-form content to demonstrate streaming...)")
   IO.puts("\n📡 Calling Gemini API...\n")
 
   # Call the GenAI adapter's generate_text tool
@@ -49,8 +61,7 @@ SnakeBridgeExample.run(fn ->
       "generate_text",
       %{
         "model" => "gemini-2.0-flash-exp",
-        "prompt" =>
-          "Explain how Elixir and Python complement each other. Write exactly 5 short paragraphs."
+        "prompt" => prompt
       }
     )
 

@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: snakebridge-adapter
+Version: 0.1.0
+Summary: SnakeBridge Python adapter for Snakepit
+Author: nshkrdotcom
+Requires-Python: >=3.8
+Requires-Dist: grpcio>=1.59.0
+Requires-Dist: protobuf>=4.25.0
+Dynamic: author
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

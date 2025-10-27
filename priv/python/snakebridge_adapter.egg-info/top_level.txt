@@ -1,0 +1,1 @@
+snakebridge_adapter

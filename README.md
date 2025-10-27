@@ -29,7 +29,7 @@ SnakeBridge is a metaprogramming framework that automatically generates type-saf
 
 ## Installation
 
-Add `snakebridge` to your list of dependencies in `mix.exs`:
+### 1. Add to mix.exs
 
 ```elixir
 def deps do
@@ -39,6 +39,30 @@ def deps do
   ]
 end
 ```
+
+### 2. Install Elixir dependencies
+
+```bash
+mix deps.get
+```
+
+### 3. Install Python dependencies (ONE command)
+
+```bash
+# Installs SnakeBridge Python adapter
+# Auto-detects uv (fast) or pip (fallback)
+./deps/snakebridge/scripts/setup_python.sh
+```
+
+**Note**: This reuses Snakepit's Python environment if available, or installs to system/venv.
+
+### 4. Verify installation
+
+```bash
+mix test  # Should show 76/76 tests passing
+```
+
+**That's it!** Start using SnakeBridge.
 
 ## Quick Start
 

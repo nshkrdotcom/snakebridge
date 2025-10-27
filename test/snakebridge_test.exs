@@ -1,8 +1,6 @@
-defmodule SnakebridgeTest do
+defmodule SnakeBridgeTest do
   use ExUnit.Case
-  doctest Snakebridge
+  doctest SnakeBridge
 
-  test "greets the world" do
-    assert Snakebridge.hello() == :world
-  end
+  # Basic module tests are in snakebridge_api_test.exs
 end

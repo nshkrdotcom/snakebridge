@@ -1,5 +1,5 @@
 defmodule SnakeBridge.FunctionGenerationTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias SnakeBridge.{Generator, TestFixtures}
 
@@ -101,12 +101,14 @@ defmodule SnakeBridge.FunctionGenerationTest do
 
   describe "generate_all/1 with functions" do
     test "generates both class and function modules" do
+      suffix = TestFixtures.unique_module_suffix()
+
       config = %{
-        TestFixtures.sample_config()
+        TestFixtures.sample_config(suffix)
         | classes: [
             %{
-              python_path: "dspy.Predict",
-              elixir_module: TestApp.Predict,
+              python_path: "dspy.Predict_#{suffix}",
+              elixir_module: String.to_atom("Elixir.TestApp.Predict#{suffix}"),
               constructor: %{args: %{}, session_aware: true},
               methods: [%{name: "__call__", elixir_name: :call, streaming: false}]
             }
@@ -148,12 +150,14 @@ defmodule SnakeBridge.FunctionGenerationTest do
     end
 
     test "handles config with only classes (no functions)" do
+      suffix = TestFixtures.unique_module_suffix()
+
       config = %{
-        TestFixtures.sample_config()
+        TestFixtures.sample_config(suffix)
         | classes: [
             %{
-              python_path: "dspy.Predict",
-              elixir_module: TestApp.Predict,
+              python_path: "dspy.Predict_#{suffix}",
+              elixir_module: String.to_atom("Elixir.TestApp.Predict#{suffix}"),
               constructor: %{args: %{}, session_aware: true},
               methods: [%{name: "__call__", elixir_name: :call, streaming: false}]
             }

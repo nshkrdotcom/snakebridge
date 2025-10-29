@@ -1,12 +1,13 @@
 defmodule SnakeBridge.GeneratedModuleRuntimeTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias SnakeBridge.{Generator, TestFixtures}
 
   describe "generated module create/2 function" do
     test "calls Runtime.create_instance with correct arguments" do
-      descriptor = TestFixtures.sample_class_descriptor()
-      config = TestFixtures.sample_config()
+      suffix = TestFixtures.unique_module_suffix()
+      descriptor = TestFixtures.sample_class_descriptor(suffix)
+      config = TestFixtures.sample_config(suffix)
 
       # Generate and compile the module
       ast = Generator.generate_module(descriptor, config)
@@ -32,8 +33,9 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
     end
 
     test "passes session_id option to Runtime" do
-      descriptor = TestFixtures.sample_class_descriptor()
-      config = TestFixtures.sample_config()
+      suffix = TestFixtures.unique_module_suffix()
+      descriptor = TestFixtures.sample_class_descriptor(suffix)
+      config = TestFixtures.sample_config(suffix)
 
       ast = Generator.generate_module(descriptor, config)
       {:ok, module} = Generator.compile_and_load(ast)
@@ -47,8 +49,9 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
     end
 
     test "generates unique session_id when not provided" do
-      descriptor = TestFixtures.sample_class_descriptor()
-      config = TestFixtures.sample_config()
+      suffix = TestFixtures.unique_module_suffix()
+      descriptor = TestFixtures.sample_class_descriptor(suffix)
+      config = TestFixtures.sample_config(suffix)
 
       ast = Generator.generate_module(descriptor, config)
       {:ok, module} = Generator.compile_and_load(ast)
@@ -66,8 +69,9 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
 
   describe "generated module method functions" do
     test "calls Runtime.call_method with instance ref and args" do
-      descriptor = TestFixtures.sample_class_descriptor()
-      config = TestFixtures.sample_config()
+      suffix = TestFixtures.unique_module_suffix()
+      descriptor = TestFixtures.sample_class_descriptor(suffix)
+      config = TestFixtures.sample_config(suffix)
 
       ast = Generator.generate_module(descriptor, config)
       code = Macro.to_string(ast)
@@ -92,8 +96,9 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
     end
 
     test "handles method errors from Runtime" do
-      descriptor = TestFixtures.sample_class_descriptor()
-      config = TestFixtures.sample_config()
+      suffix = TestFixtures.unique_module_suffix()
+      descriptor = TestFixtures.sample_class_descriptor(suffix)
+      config = TestFixtures.sample_config(suffix)
 
       ast = Generator.generate_module(descriptor, config)
       {:ok, module} = Generator.compile_and_load(ast)
@@ -112,8 +117,9 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
 
   describe "integration with Runtime adapter" do
     test "generated modules work end-to-end with mock adapter" do
-      descriptor = TestFixtures.sample_class_descriptor()
-      config = TestFixtures.sample_config()
+      suffix = TestFixtures.unique_module_suffix()
+      descriptor = TestFixtures.sample_class_descriptor(suffix)
+      config = TestFixtures.sample_config(suffix)
 
       # Generate module
       ast = Generator.generate_module(descriptor, config)

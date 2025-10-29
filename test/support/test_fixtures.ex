@@ -4,12 +4,25 @@ defmodule SnakeBridge.TestFixtures do
   """
 
   @doc """
-  Sample Python class descriptor for testing.
+  Generate a unique module suffix for tests to avoid module redefinition warnings.
+  Uses a combination of microseconds and random number.
   """
-  def sample_class_descriptor do
+  def unique_module_suffix do
+    timestamp = System.system_time(:microsecond)
+    random = :rand.uniform(999)
+    "T#{timestamp}_#{random}"
+  end
+
+  @doc """
+  Sample Python class descriptor for testing.
+  Accepts optional module_suffix to create unique module names.
+  """
+  def sample_class_descriptor(module_suffix \\ nil) do
+    suffix = if module_suffix, do: "_#{module_suffix}", else: ""
+
     %{
-      name: "Predict",
-      python_path: "dspy.Predict",
+      name: "Predict#{suffix}",
+      python_path: "dspy.Predict#{suffix}",
       docstring: "Basic prediction module without intermediate reasoning.",
       constructor: %{
         parameters: [
@@ -65,8 +78,18 @@ defmodule SnakeBridge.TestFixtures do
 
   @doc """
   Sample SnakeBridge configuration for testing.
+  Accepts optional module_suffix to create unique module names (e.g., "Test1" -> TestApp.PredictTest1).
   """
-  def sample_config do
+  def sample_config(module_suffix \\ nil) do
+    elixir_module =
+      if module_suffix do
+        String.to_atom("Elixir.TestApp.Predict#{module_suffix}")
+      else
+        TestApp.Predict
+      end
+
+    python_path_suffix = if module_suffix, do: "_#{module_suffix}", else: ""
+
     %SnakeBridge.Config{
       python_module: "dspy",
       version: "2.5.0",
@@ -78,8 +101,8 @@ defmodule SnakeBridge.TestFixtures do
       },
       classes: [
         %{
-          python_path: "dspy.Predict",
-          elixir_module: TestApp.Predict,
+          python_path: "dspy.Predict#{python_path_suffix}",
+          elixir_module: elixir_module,
           constructor: %{
             args: %{signature: {:required, :string}},
             session_aware: true
@@ -102,12 +125,15 @@ defmodule SnakeBridge.TestFixtures do
 
   @doc """
   Sample introspection response from Python worker.
+  Accepts optional module_suffix to create unique module names.
   """
-  def sample_introspection_response do
+  def sample_introspection_response(module_suffix \\ nil) do
+    descriptor = sample_class_descriptor(module_suffix)
+
     %{
       "library_version" => "2.5.0",
       "classes" => %{
-        "Predict" => sample_class_descriptor()
+        descriptor.name => descriptor
       },
       "functions" => %{
         "configure" => sample_function_descriptor()

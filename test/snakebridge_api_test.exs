@@ -1,5 +1,5 @@
 defmodule SnakeBridgeAPITest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias SnakeBridge
 
@@ -17,7 +17,8 @@ defmodule SnakeBridgeAPITest do
 
   describe "generate/1" do
     test "generates modules from config" do
-      config = SnakeBridge.TestFixtures.sample_config()
+      suffix = SnakeBridge.TestFixtures.unique_module_suffix()
+      config = SnakeBridge.TestFixtures.sample_config(suffix)
       assert {:ok, modules} = SnakeBridge.generate(config)
       assert is_list(modules)
       assert length(modules) > 0
@@ -26,16 +27,40 @@ defmodule SnakeBridgeAPITest do
 
   describe "integrate/2" do
     test "discovers and generates in one step" do
+      # Cleanup any existing modules before and after test
+      purge_module(:"Dspy.Predict")
+      purge_module(:"Dspy.Settings")
+
+      on_exit(fn ->
+        purge_module(:"Dspy.Predict")
+        purge_module(:"Dspy.Settings")
+      end)
+
       assert {:ok, modules} = SnakeBridge.integrate("dspy")
       assert is_list(modules)
     end
 
     test "returns config along with modules" do
+      # Cleanup any existing modules before and after test
+      purge_module(:"Dspy.Predict")
+      purge_module(:"Dspy.Settings")
+
+      on_exit(fn ->
+        purge_module(:"Dspy.Predict")
+        purge_module(:"Dspy.Settings")
+      end)
+
       assert {:ok, %{config: config, modules: modules}} =
                SnakeBridge.integrate("dspy", return: :full)
 
       assert %SnakeBridge.Config{} = config
       assert is_list(modules)
     end
+  end
+
+  # Helper to purge modules created during tests
+  defp purge_module(module) do
+    :code.purge(module)
+    :code.delete(module)
   end
 end

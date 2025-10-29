@@ -36,7 +36,7 @@ SnakeBridge is a metaprogramming framework that automatically generates type-saf
 def deps do
   [
     {:snakebridge, "~> 0.2.2"},
-    {:snakepit, "~> 0.6.4"}  # Required runtime
+    {:snakepit, "~> 0.6.7"}  # Required runtime
   ]
 end
 ```
@@ -47,39 +47,98 @@ end
 mix deps.get
 ```
 
-### 3. Install Python dependencies (ONE command)
+### 3. ⚠️ Python Environment Setup (REQUIRED for real Python execution)
+
+**IMPORTANT**: SnakeBridge tests use mocks by default (no Python needed). For real Python execution, you **MUST** set up a Python virtual environment.
+
+**Why venv?** Modern systems (Ubuntu 24.04+, Debian 12+) prevent system-wide pip installs (PEP 668). Virtual environments are now mandatory, not optional.
+
+#### Quick Setup (Recommended)
 
 ```bash
-# Installs SnakeBridge Python adapter
-# Auto-detects uv (fast) or pip (fallback)
-./deps/snakebridge/scripts/setup_python.sh
+# From project root - creates venv and installs all dependencies
+./scripts/setup_python.sh
 ```
 
-**Note**: This reuses Snakepit's Python environment if available, or installs to system/venv.
+This automatically:
+- Creates `.venv/` if it doesn't exist
+- Installs dependencies: `grpcio`, `protobuf`, `numpy`
+- Detects and uses existing Snakepit venv if available
+
+#### Manual Setup
+
+```bash
+# Create virtual environment
+python3 -m venv .venv
+
+# Install Snakepit dependencies
+.venv/bin/pip install -r deps/snakepit/priv/python/requirements.txt
+
+# Install SnakeBridge adapter
+cd priv/python
+../../.venv/bin/pip install -e .
+cd ../..
+
+# Configure Snakepit to use venv Python
+export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
+```
+
+#### For Users (Installing SnakeBridge as a dependency)
+
+```bash
+# Run setup script from your project
+./deps/snakebridge/scripts/setup_python.sh
+
+# Or manually:
+cd deps/snakebridge/priv/python
+python3 -m venv .venv
+.venv/bin/pip install -e .
+export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
+```
+
+#### Verify Python Setup
+
+```bash
+# Check dependencies
+.venv/bin/python3 -c "import grpc; print('✓ gRPC installed')"
+.venv/bin/python3 -c "from snakebridge_adapter.adapter import SnakeBridgeAdapter; print('✓ Adapter ready')"
+```
 
 ### 4. Verify installation
 
 ```bash
-mix test  # Should pass all unit + property tests
+# Mock tests (no Python needed)
+mix test
+
+# Real Python integration tests
+export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
+mix test --only real_python
 ```
 
 **That's it!** Start using SnakeBridge.
+
+> 📘 **Documentation Links**:
+> - **Detailed Python setup guide**: [docs/PYTHON_SETUP.md](docs/PYTHON_SETUP.md)
+> - **Example quick start**: [examples/QUICKSTART.md](examples/QUICKSTART.md)
+> - **Test environment setup**: [test/integration/README.md](test/integration/README.md)
+> - **Snakepit documentation**: See `deps/snakepit/README.md` after running `mix deps.get`
 
 ### Or Just Run Examples
 
 The fastest way to see SnakeBridge:
 
 ```bash
-# Mock demo (no Python needed)
+# Mock demo (no Python needed - works immediately)
 mix run examples/api_demo.exs
 
-# Live Python (auto-installs deps)
+# Live Python examples (requires SNAKEPIT_PYTHON set)
+export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
 elixir examples/live_demo.exs       # Built-in json module via Snakepit
 elixir examples/numpy_live.exs      # NumPy scientific computing
 elixir examples/genai_streaming.exs # Full streaming tool demo
 ```
 
-Examples self-configure - just run them.
+Examples using `Mix.install` (like `live_demo.exs`) auto-configure Python via `example_helpers.exs`.
 
 ## Quick Start
 

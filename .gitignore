@@ -44,6 +44,10 @@ env/
 .coverage
 htmlcov/
 
+# Python environment
+.env
+.envrc
+
 # SnakeBridge cache
 /priv/snakebridge/cache/
 /snakepit/

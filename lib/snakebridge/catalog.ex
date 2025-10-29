@@ -34,7 +34,7 @@ defmodule SnakeBridge.Catalog do
           category: atom(),
 
           # Python package info
-          pypi_package: String.t(),
+          pypi_package: String.t() | nil,
           import_name: String.t(),
           version: String.t(),
           python_requires: String.t(),

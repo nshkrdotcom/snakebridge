@@ -12,6 +12,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [ ] LSP server for config authoring
 - [ ] Auto-generated test suites from schemas
 
+## [0.2.3] - 2025-10-29
+
+### Added
+- Real Python integration status & roadmap (`docs/20251027/REAL_PYTHON_INTEGRATION_STATUS_AND_ROADMAP.md`) outlining milestones and blockers
+- Comprehensive Python environment setup guide (`docs/PYTHON_SETUP.md`) and `.env.example` bootstrap for local runs
+- Real Python integration test harness with documentation (`test/integration/README.md`, `test/integration/real_python_test.exs`)
+- Deep dive research notes for Claude and Gemini tooling (`docs/20251027/*.md`) to inform future adapters
+
+### Changed
+- Quickstart instructions refreshed with real Python workflow updates (`examples/QUICKSTART.md`)
+- Upgraded bundled Snakepit dependency to v0.6.7 to match new integration pipeline
+- README highlights refined streaming tooling section and dependency guidance
+
+### Fixed
+- Eliminated Elixir test module redefinition warnings caused by upgraded Snakepit fixtures
+
 ## [0.2.2] - 2025-10-26
 
 ### Added - Streaming Everything Everywhere 🐍⚡
@@ -151,7 +167,8 @@ Six atomic commits following TDD:
 - Basic code generation
 - Discovery framework
 
-[Unreleased]: https://github.com/nshkrdotcom/snakebridge/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/snakebridge/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/nshkrdotcom/snakebridge/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/nshkrdotcom/snakebridge/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/nshkrdotcom/snakebridge/releases/tag/v0.2.0

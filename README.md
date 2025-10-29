@@ -35,7 +35,7 @@ SnakeBridge is a metaprogramming framework that automatically generates type-saf
 ```elixir
 def deps do
   [
-    {:snakebridge, "~> 0.2.2"},
+    {:snakebridge, "~> 0.2.3"},
     {:snakepit, "~> 0.6.7"}  # Required runtime
   ]
 end
@@ -174,10 +174,10 @@ SnakeBridge can generate type-safe Elixir wrappers for:
 
 ✅ **Python Classes** - Full OOP support with instance management
 ✅ **Module-Level Functions** - Stateless function calls (added in v0.2.1)
-✅ **Streaming Tools** - Bidirectional streaming callbacks (NEW in v0.2.2!)
+✅ **Streaming Tools** - Bidirectional streaming callbacks (refined in v0.2.3!)
 ✅ **Mixed Integration** - Classes and functions from the same library
 
-### Streaming Tools (v0.2.2)
+### Streaming Tools (v0.2.3)
 
 SnakeBridge can now drive Python streams end-to-end with chunk callbacks:
 

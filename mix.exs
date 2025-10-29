@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.2.2"
+  @version "0.2.3"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -86,10 +86,16 @@ defmodule SnakeBridge.MixProject do
       logo: "assets/snakebridge.svg",
       extras: [
         "README.md",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "docs/PYTHON_SETUP.md",
+        "examples/QUICKSTART.md"
       ],
       groups_for_extras: [
-        Guides: ["README.md"],
+        Guides: [
+          "README.md",
+          "docs/PYTHON_SETUP.md",
+          "examples/QUICKSTART.md"
+        ],
         "Release Notes": ["CHANGELOG.md"]
       ],
       groups_for_modules: [

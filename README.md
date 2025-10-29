@@ -4,7 +4,6 @@
 
 # SnakeBridge
 
-[![CI](https://github.com/nshkrdotcom/snakebridge/actions/workflows/elixir.yaml/badge.svg)](https://github.com/nshkrdotcom/snakebridge/actions/workflows/elixir.yaml)
 [![Elixir](https://img.shields.io/badge/elixir-1.14+-purple.svg)](https://elixir-lang.org)
 [![OTP](https://img.shields.io/badge/otp-25+-blue.svg)](https://www.erlang.org)
 [![Hex.pm](https://img.shields.io/hexpm/v/snakebridge.svg)](https://hex.pm/packages/snakebridge)

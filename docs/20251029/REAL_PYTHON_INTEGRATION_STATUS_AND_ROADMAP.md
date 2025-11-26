@@ -32,6 +32,13 @@ Available functions: ["detect_encoding", "dump", "dumps", "load", "loads"]
 
 **The infrastructure is solid.** The gap was purely environmental (missing venv setup), not architectural. With proper Python environment, SnakeBridge successfully bridges Elixir ↔ Python.
 
+## Verified Real-Python Examples (Updated)
+
+- `json` module: `json.dumps/1` and `json.loads/1` now execute end-to-end through `SnakeBridge.Runtime.call_function/4` after normalizing keyword arguments before hitting the Python adapter.
+- Custom module `test_modules.simple_class`: real tests create `Greeter` instances, call `greet/2`, and invoke `repeat_phrase/2`, proving class instantiation + method calls behave against live Python.
+
+Both scenarios run via `mix test --only real_python` once `SNAKEPIT_PYTHON` and `PYTHONPATH` point at the provided `.venv` and `priv/python` folder (see `test/integration/README.md`).
+
 ---
 
 ## Current State Assessment

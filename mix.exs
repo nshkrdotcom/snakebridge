@@ -53,7 +53,7 @@ defmodule SnakeBridge.MixProject do
     [
       # Core dependencies
       # Optional for now during dev
-      {:snakepit, "~> 0.6.7"},
+      {:snakepit, "~> 0.6.10"},
       # For config schemas
       {:ecto, "~> 3.11"},
       # JSON encoding

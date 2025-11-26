@@ -56,7 +56,7 @@ defmodule SnakeBridge.Runtime do
            "module_path" => python_path,
            "function_name" => "__init__",
            "args" => [],
-           "kwargs" => args
+           "kwargs" => normalize_args(args)
          }) do
       {:ok, %{"success" => true, "instance_id" => instance_id}} ->
         {:ok, {session_id, instance_id}}
@@ -81,7 +81,7 @@ defmodule SnakeBridge.Runtime do
            "module_path" => "instance:#{instance_id}",
            "function_name" => method_name,
            "args" => [],
-           "kwargs" => args
+           "kwargs" => normalize_args(args)
          }) do
       {:ok, %{"success" => true, "result" => result}} ->
         {:ok, result}
@@ -117,7 +117,7 @@ defmodule SnakeBridge.Runtime do
            "module_path" => module_path,
            "function_name" => function_name,
            "args" => [],
-           "kwargs" => args
+           "kwargs" => normalize_args(args)
          }) do
       {:ok, %{"success" => true, "result" => result}} ->
         {:ok, result}
@@ -133,4 +133,25 @@ defmodule SnakeBridge.Runtime do
   defp generate_session_id do
     "snakebridge_session_#{:rand.uniform(100_000)}"
   end
+
+  defp normalize_args(map) when is_map(map) do
+    cond do
+      Map.has_key?(map, :__struct__) ->
+        map
+
+      true ->
+        map
+        |> Enum.map(fn {key, value} -> {normalize_key(key), normalize_args(value)} end)
+        |> Enum.into(%{})
+    end
+  end
+
+  defp normalize_args(list) when is_list(list) do
+    Enum.map(list, &normalize_args/1)
+  end
+
+  defp normalize_args(value), do: value
+
+  defp normalize_key(key) when is_atom(key), do: Atom.to_string(key)
+  defp normalize_key(key), do: key
 end

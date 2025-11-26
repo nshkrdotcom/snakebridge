@@ -265,6 +265,31 @@ defmodule SnakeBridge.Integration.RealPythonTest do
     end
   end
 
+  describe "class generation with real Python" do
+    @tag timeout: 10_000
+    test "creates and uses test_modules.simple_class.Greeter" do
+      module_path = "test_modules.simple_class"
+      {:ok, schema} = Discovery.discover(module_path, [])
+      config = Discovery.schema_to_config(schema, python_module: module_path)
+      {:ok, modules} = SnakeBridge.generate(config)
+
+      greeter_module =
+        Enum.find(modules, fn mod ->
+          Atom.to_string(mod) =~ "Greeter" and function_exported?(mod, :greet, 2)
+        end)
+
+      assert greeter_module, "Greeter module was not generated from test_modules.simple_class"
+
+      {:ok, instance} = greeter_module.create(%{name: "SnakeBridge"})
+      assert {:ok, "Hello from SnakeBridge"} = greeter_module.greet(instance, %{})
+
+      {:ok, repeated} =
+        greeter_module.repeat_phrase(instance, %{phrase: "Hi", times: 2})
+
+      assert repeated == "Hi Hi"
+    end
+  end
+
   describe "diagnostic information" do
     test "prints Python environment info" do
       IO.puts("\n" <> String.duplicate("=", 60))

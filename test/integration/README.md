@@ -68,10 +68,8 @@ mix test
 ### Integration Tests (Real Python)
 
 ```bash
-# Configure Python first
-export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
-
-# Run integration tests
+# Python config is automatic: tests pick SNAKEPIT_PYTHON if set, else ./.venv/bin/python3, else system python3
+# Run integration tests (auto-starts a Snakepit pool via SnakeBridge.SnakepitTestHelper)
 mix test --only integration
 
 # Or run specific test file

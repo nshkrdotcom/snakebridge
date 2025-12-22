@@ -6,4 +6,6 @@ snakebridge_adapter.egg-info/SOURCES.txt
 snakebridge_adapter.egg-info/dependency_links.txt
 snakebridge_adapter.egg-info/requires.txt
 snakebridge_adapter.egg-info/top_level.txt
+test_modules/__init__.py
+test_modules/simple_class.py
 tests/test_snakebridge_adapter.py

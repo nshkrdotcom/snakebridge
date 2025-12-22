@@ -1,19 +1,17 @@
 # SnakeBridge Implementation Status
 
-**Last Updated**: 2025-10-26
-**Test Results**: 70 tests, 0 failures, 70 passing (100% pass rate) ✅
+**Last Updated**: 2025-12-07  
+**Test Results**: Default suite passing; real Python tests run when `--only real_python` with Snakepit + Python available.
 
 ---
 
 ## Executive Summary
 
-**Status**: v0.1.0 MVP COMPLETE ✅
-
-- **All core modules implemented** - 100% functional
-- **All tests passing** - 70/70 (100%)
-- **User-facing tools complete** - Mix tasks + Public API
-- **Zero compiler warnings** - Clean build
-- **Ready for**: DSPy integration example and documentation
+**Status**: v0.1.x hardening  
+- Core modules and mix tasks ship and remain green under the default suite.  
+- Real Python integration now boots a real Snakepit pool in-test (no skips); requires `SNAKEPIT_PYTHON` and the SnakeBridge adapter on `PYTHONPATH`.  
+- Added guardrails to fail fast when Snakepit is not running instead of crashing with `no process`.  
+- Docs are being refreshed to reflect real-python requirements and the new setup helper.
 
 ---
 

@@ -15,11 +15,13 @@ import os
 import logging
 from typing import Optional, Iterator
 
+# Import base adapter
+from snakebridge_adapter.adapter import SnakeBridgeAdapter
+
 try:
-    from snakepit_bridge.base_adapter_threaded import ThreadSafeAdapter, tool
+    from snakepit_bridge.base_adapter_threaded import tool
     HAS_SNAKEPIT = True
 except ImportError:
-    ThreadSafeAdapter = object
     HAS_SNAKEPIT = False
 
     def tool(description="", **kwargs):
@@ -30,29 +32,68 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-class GenAIAdapter(ThreadSafeAdapter):
+class GenAIAdapter(SnakeBridgeAdapter):
     """
     Specialized adapter for Google GenAI library.
 
-    Provides optimized integration with proper:
-    - Client management
-    - Streaming support
-    - Error handling
+    Inherits from SnakeBridgeAdapter for describe_library and call_python,
+    and adds specialized tools for text generation.
+
+    This fixes the previous issue of instantiating a fresh generic adapter
+    per call - now we properly inherit and reuse the parent's capabilities.
     """
 
-    def __init__(self):
-        if HAS_SNAKEPIT:
-            super().__init__()
-        self.client = None
-        self.initialized = False
-        logger.info("GenAIAdapter initialized")
-
-    def set_session_context(self, session_context):
-        """Set session context."""
-        self.session_context = session_context
+    def __init__(self, ttl_seconds: int = 3600, max_instances: int = 1000):
+        """Initialize GenAI adapter with parent capabilities."""
+        super().__init__(ttl_seconds=ttl_seconds, max_instances=max_instances)
+        self.genai_client = None
+        self._genai_initialized = False
+        logger.info("GenAIAdapter initialized (inheriting from SnakeBridgeAdapter)")
 
     async def initialize(self):
-        """Initialize GenAI client."""
+        """Initialize both parent and GenAI client."""
+        await super().initialize()
+        try:
+            self._init_genai_client()
+        except Exception as e:
+            logger.warning(f"GenAI client initialization deferred: {e}")
+
+    async def cleanup(self):
+        """Cleanup resources."""
+        self.genai_client = None
+        self._genai_initialized = False
+        await super().cleanup()
+        logger.info("GenAI adapter cleaned up")
+
+    def execute_tool(self, tool_name: str, arguments: dict, context):
+        """
+        Dispatch tool calls.
+
+        GenAI-specific tools are handled here, all others fall through
+        to the parent SnakeBridgeAdapter.
+        """
+        logger.debug(f"GenAIAdapter.execute_tool: {tool_name}")
+
+        # Handle GenAI-specific tools
+        if tool_name == "generate_text":
+            return self.generate_text(
+                model=arguments.get("model", "gemini-2.0-flash-exp"),
+                prompt=arguments.get("prompt", "")
+            )
+        elif tool_name == "generate_text_stream":
+            return self.generate_text_stream(
+                model=arguments.get("model", "gemini-2.0-flash-exp"),
+                prompt=arguments.get("prompt", "")
+            )
+
+        # Delegate to parent for describe_library, call_python, etc.
+        return super().execute_tool(tool_name, arguments, context)
+
+    def _init_genai_client(self):
+        """Initialize the GenAI client lazily."""
+        if self._genai_initialized:
+            return
+
         try:
             import google.genai as genai
 
@@ -60,72 +101,21 @@ class GenAIAdapter(ThreadSafeAdapter):
             if not api_key:
                 raise ValueError("GEMINI_API_KEY environment variable not set")
 
-            self.client = genai.Client(api_key=api_key)
-            self.initialized = True
+            self.genai_client = genai.Client(api_key=api_key)
+            self._genai_initialized = True
             logger.info("GenAI client initialized")
 
+        except ImportError as e:
+            logger.error(f"google-genai not installed: {e}")
+            raise
         except Exception as e:
             logger.error(f"Failed to initialize GenAI: {e}")
             raise
 
-    async def cleanup(self):
-        """Cleanup resources."""
-        self.client = None
-        self.initialized = False
-        logger.info("GenAI adapter cleaned up")
-
-    def execute_tool(self, tool_name: str, arguments: dict, context):
-        """Dispatch tool calls."""
-        logger.info(f"!!! execute_tool CALLED: tool={tool_name}")
-
-        # Delegate discovery to generic SnakeBridgeAdapter
-        if tool_name == "describe_library":
-            from snakebridge_adapter.adapter import SnakeBridgeAdapter
-            generic = SnakeBridgeAdapter()
-            return generic.describe_library(
-                module_path=arguments.get("module_path"),
-                discovery_depth=arguments.get("discovery_depth", 2)
-            )
-        elif tool_name == "call_python":
-            from snakebridge_adapter.adapter import SnakeBridgeAdapter
-            generic = SnakeBridgeAdapter()
-            return generic.call_python(
-                module_path=arguments.get("module_path"),
-                function_name=arguments.get("function_name"),
-                args=arguments.get("args"),
-                kwargs=arguments.get("kwargs")
-            )
-        elif tool_name == "generate_text":
-            return self.generate_text(
-                model=arguments.get("model", "gemini-2.0-flash-exp"),
-                prompt=arguments.get("prompt", "")
-            )
-        elif tool_name == "generate_text_stream":
-            logger.info("!!! About to call generate_text_stream")
-            result = self.generate_text_stream(
-                model=arguments.get("model", "gemini-2.0-flash-exp"),
-                prompt=arguments.get("prompt", "")
-            )
-            logger.info(f"!!! generate_text_stream returned: {type(result)}")
-            return result
-        else:
-            return {"success": False, "error": f"Unknown tool: {tool_name}"}
-
-    def _ensure_initialized(self):
-        """Lazy initialization of GenAI client."""
-        if not self.initialized:
-            import asyncio
-            try:
-                asyncio.run(self.initialize())
-            except RuntimeError:
-                # Already in event loop, try sync init
-                import google.genai as genai
-                api_key = os.getenv("GEMINI_API_KEY")
-                if not api_key:
-                    raise ValueError("GEMINI_API_KEY environment variable not set")
-                self.client = genai.Client(api_key=api_key)
-                self.initialized = True
-                logger.info("GenAI client initialized (sync)")
+    def _ensure_genai_initialized(self):
+        """Ensure GenAI client is ready."""
+        if not self._genai_initialized:
+            self._init_genai_client()
 
     @tool(description="Generate text with Gemini (non-streaming)")
     def generate_text(self, model: str, prompt: str) -> dict:
@@ -140,12 +130,12 @@ class GenAIAdapter(ThreadSafeAdapter):
             {"success": true, "text": "generated text..."}
         """
         try:
-            self._ensure_initialized()
+            self._ensure_genai_initialized()
         except Exception as e:
             return {"success": False, "error": f"Failed to initialize: {str(e)}"}
 
         try:
-            response = self.client.models.generate_content(
+            response = self.genai_client.models.generate_content(
                 model=model,
                 contents=prompt
             )
@@ -177,21 +167,15 @@ class GenAIAdapter(ThreadSafeAdapter):
         """
         import asyncio
 
-        logger.info("!!! generate_text_stream CALLED")
+        logger.debug("generate_text_stream called")
 
         try:
-            logger.info("!!! About to initialize")
-            self._ensure_initialized()
-            logger.info("!!! Initialized successfully")
+            self._ensure_genai_initialized()
         except Exception as e:
-            logger.error(f"!!! Init failed: {e}")
             yield {"success": False, "error": f"Failed to initialize: {str(e)}"}
             return
 
         try:
-            # The GenAI library's generate_content_stream returns an async generator
-            # We need to consume it in an event loop and yield synchronously
-
             # Get or create event loop
             try:
                 loop = asyncio.get_event_loop()
@@ -200,16 +184,12 @@ class GenAIAdapter(ThreadSafeAdapter):
                 asyncio.set_event_loop(loop)
 
             # Create the async generator
-            async_response = self.client.models.generate_content_stream(
+            async_response = self.genai_client.models.generate_content_stream(
                 model=model,
                 contents=prompt
             )
 
-            logger.info(f"DEBUG: async_response type: {type(async_response)}")
-            logger.info(f"DEBUG: has __aiter__: {hasattr(async_response, '__aiter__')}")
-            logger.info(f"DEBUG: has __iter__: {hasattr(async_response, '__iter__')}")
-
-            # Consume it synchronously using run_until_complete
+            # Consume it synchronously
             while True:
                 try:
                     chunk = loop.run_until_complete(async_response.__anext__())

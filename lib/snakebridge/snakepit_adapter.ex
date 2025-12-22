@@ -7,19 +7,49 @@ defmodule SnakeBridge.SnakepitAdapter do
   """
 
   @behaviour SnakeBridge.SnakepitBehaviour
+  alias SnakeBridge.Error
 
   @impl true
   def execute_in_session(session_id, tool_name, args) do
-    Snakepit.execute_in_session(session_id, tool_name, args)
+    with :ok <- ensure_snakepit_running() do
+      Snakepit.execute_in_session(session_id, tool_name, args)
+    end
   end
 
   @impl true
   def execute_in_session(session_id, tool_name, args, opts) do
-    Snakepit.execute_in_session(session_id, tool_name, args, opts)
+    with :ok <- ensure_snakepit_running() do
+      Snakepit.execute_in_session(session_id, tool_name, args, opts)
+    end
   end
 
   @impl true
   def get_stats do
-    Snakepit.get_stats()
+    with :ok <- ensure_snakepit_running() do
+      Snakepit.get_stats()
+    end
+  end
+
+  @impl true
+  def execute_in_session_stream(session_id, tool_name, args, callback_fn, opts \\ []) do
+    with :ok <- ensure_snakepit_running() do
+      Snakepit.execute_in_session_stream(session_id, tool_name, args, callback_fn, opts)
+    end
+  end
+
+  defp ensure_snakepit_running do
+    case Process.whereis(Snakepit.Pool) do
+      nil ->
+        {:error,
+         %Error{
+           type: :snakepit_unavailable,
+           message: "Snakepit is not running (Snakepit.Pool not found)",
+           python_traceback: nil,
+           details: %{}
+         }}
+
+      _pid ->
+        :ok
+    end
   end
 end

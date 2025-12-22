@@ -41,6 +41,22 @@ defmodule SnakeBridge.SnakepitMock do
     }
   end
 
+  @impl true
+  def execute_in_session_stream(_session_id, _tool_name, _args, callback_fn, _opts \\ []) do
+    # Simulate streaming by sending a few mock chunks
+    chunks = [
+      %{"chunk" => "Hello ", "done" => false},
+      %{"chunk" => "from ", "done" => false},
+      %{"chunk" => "mock!", "done" => true}
+    ]
+
+    Enum.each(chunks, fn chunk ->
+      callback_fn.(chunk)
+    end)
+
+    :ok
+  end
+
   # Private response generators
 
   defp describe_library_response(%{"module_path" => "dspy"}) do

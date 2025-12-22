@@ -110,8 +110,10 @@ export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
 mix test
 
 # Real Python integration tests
-export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
+# SNAKEPIT_PYTHON optional: tests auto-fall back to ./.venv/bin/python3 or system python3
 mix test --only real_python
+
+# Real Python tests start a Snakepit pool automatically; they will fail fast if no Python is available.
 ```
 
 **That's it!** Start using SnakeBridge.
@@ -239,6 +241,8 @@ numpy_module = Enum.find(modules, &function_exported?(&1, :mean, 2))
 {:ok, result} = numpy_module.mean(%{a: [1, 2, 3, 4, 5]})
 # => 3.0
 ```
+
+Complex dtypes (`complex64` / `complex128`) are serialized as `%{real: float, imag: float}` per element in the returned `data` structure.
 
 See `examples/live_demo.exs` for a complete working example.
 

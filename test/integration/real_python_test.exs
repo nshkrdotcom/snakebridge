@@ -18,57 +18,13 @@ defmodule SnakeBridge.Integration.RealPythonTest do
   alias SnakeBridge.{Discovery, Runtime}
 
   setup_all do
-    # Check if SNAKEPIT_PYTHON is set
-    python_exe = System.get_env("SNAKEPIT_PYTHON")
-
-    unless python_exe do
-      {:skip,
-       """
-       SNAKEPIT_PYTHON environment variable not set.
-
-       To run real Python tests:
-         export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
-         mix test --only real_python
-
-       See test/integration/README.md for setup instructions.
-       """}
-    end
-
-    # Configure for real Python execution
     adapter_spec = "snakebridge_adapter.adapter.SnakeBridgeAdapter"
 
-    # Set PYTHONPATH
-    project_root = File.cwd!()
-    snakebridge_python = Path.join([project_root, "priv", "python"])
-    snakepit_python = Application.app_dir(:snakepit, "priv/python")
+    {python_exe, pythonpath, pool_config} =
+      SnakeBridge.SnakepitTestHelper.prepare_python_env!(adapter_spec)
 
-    pythonpath =
-      [snakebridge_python, snakepit_python]
-      |> Enum.filter(&File.dir?/1)
-      |> Enum.join(":")
-
-    System.put_env("PYTHONPATH", pythonpath)
-
-    # Switch from mock to real Snakepit adapter
     original_adapter = Application.get_env(:snakebridge, :snakepit_adapter)
     Application.put_env(:snakebridge, :snakepit_adapter, SnakeBridge.SnakepitAdapter)
-
-    # Configure Snakepit for real Python
-    Application.put_env(:snakepit, :pooling_enabled, true)
-    Application.put_env(:snakepit, :adapter_module, Snakepit.Adapters.GRPCPython)
-    Application.put_env(:snakepit, :pool_config, %{pool_size: 1})
-    Application.put_env(:snakepit, :log_level, :info)
-    Application.put_env(:snakepit, :grpc_port, 50051)
-
-    Application.put_env(:snakepit, :pools, [
-      %{
-        name: :default,
-        worker_profile: :process,
-        pool_size: 1,
-        adapter_module: Snakepit.Adapters.GRPCPython,
-        adapter_args: ["--adapter", adapter_spec]
-      }
-    ])
 
     IO.puts("\n" <> String.duplicate("=", 60))
     IO.puts("REAL PYTHON TEST ENVIRONMENT")
@@ -79,24 +35,14 @@ defmodule SnakeBridge.Integration.RealPythonTest do
     IO.puts("Pooling: enabled")
     IO.puts(String.duplicate("=", 60) <> "\n")
 
-    # Check if Snakepit is available
-    unless Code.ensure_loaded?(Snakepit) do
-      {:skip, "Snakepit not available"}
-    end
-
-    # Start Snakepit application
-    case Application.ensure_all_started(:snakepit) do
-      {:ok, _apps} ->
-        IO.puts("✓ Snakepit started successfully\n")
-        # Give pool time to initialize
-        Process.sleep(2000)
-
-      {:error, reason} ->
-        {:skip, "Could not start Snakepit: #{inspect(reason)}"}
-    end
+    restore_env =
+      SnakeBridge.SnakepitTestHelper.start_snakepit!(
+        pool_config: pool_config,
+        python_executable: python_exe
+      )
 
     on_exit(fn ->
-      Application.stop(:snakepit)
+      restore_env.()
       Application.put_env(:snakebridge, :snakepit_adapter, original_adapter)
     end)
 
@@ -158,12 +104,13 @@ defmodule SnakeBridge.Integration.RealPythonTest do
       # Try to call json.dumps
       # This is the critical test - does call_python actually work?
       data = %{"test" => "data", "number" => 42}
+      args = %{obj: data}
 
       result =
         if function_exported?(json_module, :dumps, 1) do
-          json_module.dumps(data)
+          json_module.dumps(args)
         else
-          json_module.dumps(data, [])
+          json_module.dumps(args, [])
         end
 
       case result do
@@ -243,10 +190,10 @@ defmodule SnakeBridge.Integration.RealPythonTest do
       # Try calling json.dumps directly through Runtime
       result =
         Runtime.call_function(
-          session_id,
-          "json.dumps",
+          "json",
+          "dumps",
           %{"obj" => %{"test" => "data"}},
-          []
+          session_id: session_id
         )
 
       case result do

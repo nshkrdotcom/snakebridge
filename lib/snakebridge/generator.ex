@@ -3,8 +3,12 @@ defmodule SnakeBridge.Generator do
   Code generation engine for SnakeBridge.
 
   Generates Elixir modules from Python library descriptors using
-  metaprogramming and AST manipulation.
+  metaprogramming and AST manipulation. Now uses TypeMapper for
+  proper typespec emission.
   """
+
+  alias SnakeBridge.Generator.Helpers
+  alias SnakeBridge.TypeSystem.Mapper
 
   @doc """
   Generate module AST from class descriptor.
@@ -15,21 +19,19 @@ defmodule SnakeBridge.Generator do
   @spec generate_module(map(), SnakeBridge.Config.t()) :: Macro.t()
   def generate_module(descriptor, config) do
     # Support both struct and map descriptors
-    descriptor_name = Map.get(descriptor, :name) || Map.get(descriptor, "name")
-    elixir_module = Map.get(descriptor, :elixir_module) || Map.get(descriptor, "elixir_module")
-    python_path = Map.get(descriptor, :python_path) || Map.get(descriptor, "python_path")
-    methods = Map.get(descriptor, :methods) || Map.get(descriptor, "methods") || []
-
-    constant_fields =
-      Map.get(descriptor, :constant_fields) || Map.get(descriptor, "constant_fields") || []
+    descriptor_name = Helpers.get_field(descriptor, :name, "Unknown")
+    elixir_module = Helpers.get_field(descriptor, :elixir_module)
+    python_path = Helpers.get_field(descriptor, :python_path, "")
+    methods = Helpers.get_field(descriptor, :methods, [])
+    constant_fields = Helpers.get_field(descriptor, :constant_fields, [])
+    constructor = Helpers.get_field(descriptor, :constructor, %{})
 
     module_name = elixir_module || Module.concat([DSPy, String.to_atom(descriptor_name)])
-
     compilation_mode = config.compilation_mode
 
     quote do
       defmodule unquote(module_name) do
-        @moduledoc unquote(generate_moduledoc(descriptor))
+        @moduledoc unquote(Helpers.build_moduledoc(descriptor))
 
         @python_path unquote(python_path)
         @config unquote(Macro.escape(config))
@@ -40,21 +42,7 @@ defmodule SnakeBridge.Generator do
 
         unquote(generate_hooks(compilation_mode))
 
-        @doc """
-        Create a new instance of #{unquote(python_path)}.
-        """
-        @spec create(map(), keyword()) :: {:ok, t()} | {:error, term()}
-        def create(args \\ %{}, opts \\ []) do
-          session_id = Keyword.get(opts, :session_id, generate_session_id())
-
-          # Call Runtime to create Python instance via Snakepit
-          SnakeBridge.Runtime.create_instance(
-            unquote(python_path),
-            args,
-            session_id,
-            opts
-          )
-        end
+        unquote(generate_create_function(python_path, constructor))
 
         unquote_splicing(generate_methods(methods))
 
@@ -74,18 +62,17 @@ defmodule SnakeBridge.Generator do
   @spec generate_function_module(map(), SnakeBridge.Config.t()) :: Macro.t()
   def generate_function_module(descriptor, config) do
     # Support both struct and map descriptors
-    descriptor_name = Map.get(descriptor, :name) || Map.get(descriptor, "name")
-    elixir_module = Map.get(descriptor, :elixir_module) || Map.get(descriptor, "elixir_module")
-    python_path = Map.get(descriptor, :python_path) || Map.get(descriptor, "python_path")
-    functions = Map.get(descriptor, :functions) || Map.get(descriptor, "functions") || []
+    descriptor_name = Helpers.get_field(descriptor, :name, "Unknown")
+    elixir_module = Helpers.get_field(descriptor, :elixir_module)
+    python_path = Helpers.get_field(descriptor, :python_path, "")
+    functions = Helpers.get_field(descriptor, :functions, [])
 
     module_name = elixir_module || Module.concat([String.to_atom(descriptor_name)])
-
     compilation_mode = config.compilation_mode
 
     quote do
       defmodule unquote(module_name) do
-        @moduledoc unquote(generate_moduledoc(descriptor))
+        @moduledoc unquote(Helpers.build_moduledoc(descriptor))
 
         @python_path unquote(python_path)
         @config unquote(Macro.escape(config))
@@ -101,15 +88,37 @@ defmodule SnakeBridge.Generator do
     end
   end
 
+  # Generate create function with proper typespec
+  defp generate_create_function(python_path, _constructor) do
+    # Note: params and return_type from constructor can be used for enhanced typespecs in future
+
+    quote do
+      @doc """
+      Create a new instance of #{unquote(python_path)}.
+
+      Returns `{:ok, {session_id, instance_id}}` on success.
+      """
+      @spec create(map(), keyword()) :: {:ok, t()} | {:error, term()}
+      def create(args \\ %{}, opts \\ []) do
+        session_id = Keyword.get(opts, :session_id, generate_session_id())
+
+        SnakeBridge.Runtime.create_instance(
+          unquote(python_path),
+          args,
+          session_id,
+          opts
+        )
+      end
+    end
+  end
+
   defp generate_constant_attributes(constant_fields) when is_list(constant_fields) do
     Enum.map(constant_fields, fn field_name ->
-      # Convert UPPER_CASE to lower_case for attribute name
       attr_name =
         field_name
         |> String.downcase()
         |> String.to_atom()
 
-      # Generate actual @attr syntax in AST
       {:@, [], [{attr_name, [], [nil]}]}
     end)
   end
@@ -125,52 +134,36 @@ defmodule SnakeBridge.Generator do
       @on_load :__snakebridge_load__
 
       def __snakebridge_load__ do
-        # Runtime initialization
         :ok
       end
     end
   end
 
   defp generate_hooks(_auto_or_other) do
-    # No special hooks for :auto mode
     quote do
     end
   end
 
-  defp generate_moduledoc(descriptor) do
-    docstring = Map.get(descriptor, :docstring, "")
-    python_path = Map.get(descriptor, :python_path, "")
-
-    """
-    Elixir wrapper for #{python_path}.
-
-    #{docstring}
-
-    This module was automatically generated by SnakeBridge.
-    """
-  end
-
   defp generate_methods(methods) when is_list(methods) do
     Enum.map(methods, fn method ->
-      # Support both struct/map with atom keys and map with string keys
-      method_name =
-        Map.get(method, :name) || Map.get(method, "name") || raise "Method must have name"
+      method_name = Helpers.get_field(method, :name) || raise "Method must have name"
 
       elixir_name =
-        Map.get(method, :elixir_name) || Map.get(method, "elixir_name") ||
-          String.to_atom(method_name)
+        Helpers.get_field(method, :elixir_name) ||
+          Helpers.normalize_function_name(method_name, nil)
 
-      streaming = Map.get(method, :streaming) || Map.get(method, "streaming") || false
+      _streaming = Helpers.get_field(method, :streaming, false)
+      _params = Helpers.get_field(method, :parameters, [])
+      return_type = Helpers.get_field(method, :return_type)
+
+      # Generate typespec using TypeMapper
+      return_spec = Helpers.build_return_spec(return_type)
 
       quote do
-        @doc """
-        Call #{unquote(method_name)} on the Python instance.
-
-        Streaming: #{unquote(streaming)}
-        """
-        @spec unquote(elixir_name)(t(), map(), keyword()) :: {:ok, term()} | {:error, term()}
+        @doc unquote(Helpers.build_function_doc(method))
+        @spec unquote(elixir_name)(t(), map(), keyword()) ::
+                {:ok, unquote(return_spec)} | {:error, term()}
         def unquote(elixir_name)(instance_ref, args \\ %{}, opts \\ []) do
-          # Call Runtime to execute method on Python instance via Snakepit
           SnakeBridge.Runtime.call_method(
             instance_ref,
             unquote(method_name),
@@ -184,20 +177,22 @@ defmodule SnakeBridge.Generator do
 
   defp generate_functions(functions, module_python_path) when is_list(functions) do
     Enum.map(functions, fn function ->
-      # Support both struct/map with atom keys and map with string keys
-      function_name =
-        Map.get(function, :name) || Map.get(function, "name") || raise "Function must have name"
+      function_name = Helpers.get_field(function, :name) || raise "Function must have name"
 
       elixir_name =
-        Map.get(function, :elixir_name) || Map.get(function, "elixir_name") ||
-          String.to_atom(function_name)
+        Helpers.get_field(function, :elixir_name) ||
+          Helpers.normalize_function_name(function_name, nil)
 
-      # Use the function's own python_path if available, otherwise derive from module path
+      docstring = Helpers.get_field(function, :docstring, "")
+      _params = Helpers.get_field(function, :parameters, [])
+      return_type = Helpers.get_field(function, :return_type)
+
       function_python_path =
-        Map.get(function, :python_path) || Map.get(function, "python_path") ||
+        Helpers.get_field(function, :python_path) ||
           "#{module_python_path}.#{function_name}"
 
-      docstring = Map.get(function, :docstring) || Map.get(function, "docstring") || ""
+      # Generate typespec using TypeMapper
+      return_spec = Helpers.build_return_spec(return_type)
 
       quote do
         @doc """
@@ -205,11 +200,11 @@ defmodule SnakeBridge.Generator do
 
         #{unquote(docstring)}
         """
-        @spec unquote(elixir_name)(map(), keyword()) :: {:ok, term()} | {:error, term()}
+        @spec unquote(elixir_name)(map(), keyword()) ::
+                {:ok, unquote(return_spec)} | {:error, term()}
         def unquote(elixir_name)(args \\ %{}, opts \\ []) do
           session_id = Keyword.get(opts, :session_id, generate_session_id())
 
-          # Call Runtime to execute module-level function via Snakepit
           SnakeBridge.Runtime.call_function(
             unquote(function_python_path),
             unquote(function_name),
@@ -234,32 +229,21 @@ defmodule SnakeBridge.Generator do
   end
 
   defp remove_unused_imports(ast) do
-    # Walk the AST and remove import statements
-    # This is a simplified version that removes all imports
-    # A full implementation would check for usage before removing
     Macro.prewalk(ast, fn
-      # Remove import statements
       {:import, _, _} -> nil
-      # Keep everything else
       node -> node
     end)
     |> remove_nils()
   end
 
   defp inline_constants(ast) do
-    # Look for constant_fields in the descriptor and generate module attributes
-    # For now, this is a pass-through since we need descriptor context
-    # In real implementation, would extract constants and generate @attr forms
     Macro.prewalk(ast, fn
-      # This is where we'd transform constant references
-      # For now, just pass through
       node -> node
     end)
   end
 
   defp remove_nils(ast) do
     Macro.prewalk(ast, fn
-      # Remove nil nodes from the block
       {:__block__, meta, items} when is_list(items) ->
         {:__block__, meta, Enum.reject(items, &is_nil/1)}
 
@@ -278,25 +262,19 @@ defmodule SnakeBridge.Generator do
   def generate_all(%SnakeBridge.Config{} = config) do
     case SnakeBridge.Config.validate(config) do
       {:ok, valid_config} ->
-        # Generate and compile class modules
         class_results =
           Enum.map(valid_config.classes, fn class_descriptor ->
             ast = generate_module(class_descriptor, valid_config)
 
-            # Compile and load the module in test/dev
             case compile_and_load(ast) do
               {:ok, module} -> {:ok, module}
               {:error, _} = error -> error
             end
           end)
 
-        # Generate and compile function modules
         function_results = generate_function_modules(valid_config.functions, valid_config)
-
-        # Combine all results
         all_results = class_results ++ function_results
 
-        # Check if any compilation failed
         case Enum.find(all_results, &match?({:error, _}, &1)) do
           {:error, _reason} = error ->
             error
@@ -312,7 +290,6 @@ defmodule SnakeBridge.Generator do
   end
 
   defp generate_function_modules(functions, config) when is_list(functions) do
-    # Group functions by module (python_path base)
     grouped_functions = group_functions_by_module(functions)
 
     Enum.map(grouped_functions, fn {module_info, funcs} ->
@@ -333,21 +310,18 @@ defmodule SnakeBridge.Generator do
   end
 
   defp group_functions_by_module(functions) do
-    # Group functions by their module (base python_path)
     functions
     |> Enum.group_by(fn func ->
-      python_path = Map.get(func, :python_path) || Map.get(func, "python_path") || ""
-      # Extract module path (everything before the last dot)
+      python_path = Helpers.get_field(func, :python_path, "")
+
       case String.split(python_path, ".") do
         [single] -> single
         parts -> Enum.take(parts, length(parts) - 1) |> Enum.join(".")
       end
     end)
     |> Enum.map(fn {module_path, funcs} ->
-      # Create a module descriptor for this group
       elixir_module =
-        Map.get(List.first(funcs), :elixir_module) ||
-          Map.get(List.first(funcs), "elixir_module") ||
+        Helpers.get_field(List.first(funcs), :elixir_module) ||
           module_path_to_elixir_module(module_path)
 
       module_info = %{
@@ -361,11 +335,7 @@ defmodule SnakeBridge.Generator do
   end
 
   defp module_path_to_elixir_module(python_path) when is_binary(python_path) do
-    python_path
-    |> String.split(".")
-    |> Enum.map(&String.capitalize/1)
-    |> Enum.join(".")
-    |> String.to_atom()
+    Mapper.python_class_to_elixir_module(python_path)
   end
 
   @doc """
@@ -373,7 +343,6 @@ defmodule SnakeBridge.Generator do
   """
   @spec generate_incremental(list(), [module()]) :: {:ok, [module()]} | {:error, term()}
   def generate_incremental(diff, existing_modules) do
-    # Filter diff for only modifications that affect code generation
     changed_modules =
       diff
       |> Enum.filter(&match?({:modified, _, _, _}, &1))

@@ -32,8 +32,8 @@ defmodule SnakeBridge.GeneratorTest do
       ast = Generator.generate_module(descriptor, config)
       code = Macro.to_string(ast)
 
-      assert String.contains?(code, "def __call__(")
-      # Or transformed name if specified in config
+      # Methods are named by their elixir_name (call) not Python name (__call__)
+      assert String.contains?(code, "def call(")
     end
 
     test "includes module documentation" do

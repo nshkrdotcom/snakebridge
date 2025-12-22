@@ -18,7 +18,7 @@ The critical review is largely correct. We over-engineered abstractions before p
 | "14 weeks realistic" | GPU/ML stacks alone are quarters of work | **Optimistic** |
 | "Streaming infra solid" | No Elixir wrappers, no backpressure, no cleanup | **Not implemented** |
 
-**Accepted Direction:** Fundamentals first. One working adapter (NumPy → Unsloth) end-to-end with correct error handling, real Snakepit integration, and actual type emission before any registry/chain/strategy abstractions.
+**Accepted Direction:** Fundamentals first. NumPy first, then Unsloth, end-to-end with correct error handling, real Snakepit integration, and actual type emission before any registry/chain/strategy abstractions. LLM adapters are out of Phase 1 (covered elsewhere).
 
 ---
 
@@ -47,6 +47,7 @@ def to_elixir_spec(%{"type" => "Tensor"}), do: quote(do: list(number()))
 ```
 
 **Defer:** MapperBehaviour/chain until we have 3+ custom type requests from real usage.
+**Note:** Normalize descriptor shapes first (e.g., `"kind"/"primitive_type"` vs `"type"`) so mapper inputs are consistent with generator expectations.
 
 ---
 
@@ -130,6 +131,8 @@ defp classify_error(%{"error" => msg, "traceback" => tb}) do
     python_traceback: tb
   }
 end
+```
+Require adapters to return traceback for errors so classification has data.
 
 # Add telemetry
 :telemetry.execute([:snakebridge, :call, :stop], %{duration: duration}, metadata)
@@ -172,6 +175,7 @@ class GenAIAdapter(SnakeBridgeAdapter):  # Inherit, don't wrap
 - Add instance cleanup with TTL (`self.instance_manager` with expiry)
 - Add recursion depth limit to introspection
 - Handle async generators in `call_python`
+- Ensure cleanup thread stops on adapter cleanup/shutdown.
 
 **Defer:** Handler chain pattern until we have 5+ specialized adapters colliding.
 
@@ -428,7 +432,7 @@ class InstanceManager:
 - [ ] Hex package prep
 - [ ] v0.3.0 release
 
-**Total: 14 weeks** (same duration, different allocation)
+**Total: 14 weeks** (same duration, padded for real integration/GPU variability).
 
 ---
 
@@ -443,7 +447,7 @@ class InstanceManager:
 | Python Handler Chain | Inheritance sufficient | 5+ specialized adapters |
 | Arrow/Nx/Explorer | Premature optimization | Benchmarks prove need (v1.5) |
 | Distributed Snakepit | Out of scope for v1 | Spring 2026 |
-| pandas Adapter | Focus on NumPy first | After NumPy stable |
+| pandas Adapter | Focus on NumPy first | After NumPy stable (likely next) |
 | DSPy Adapter | Unsloth is priority | After Unsloth stable |
 | Transformers Adapter | Unsloth covers fine-tuning | User demand |
 
@@ -532,11 +536,11 @@ The critical review was correct: we were building castles on sand. The revised p
 
 1. **Fundamentals first:** Error handling, timeouts, telemetry, real integration tests
 2. **Type emission:** Actually use the mapper in generation
-3. **One adapter done right:** NumPy → Unsloth, end-to-end
+3. **Adapters done right:** NumPy first, then Unsloth, end-to-end
 4. **Defer abstractions:** Registries, chains, strategies wait for real demand
 5. **Defer Arrow:** Benchmark first, implement in v1.5 if proven
 
-Same 14-week timeline, different (realistic) allocation. Smaller scope, higher quality.
+Same 14-week timeline, different (realistic) allocation. Smaller scope, higher quality. Non-goals for v1: Arrow/Nx/Explorer, LLM adapters, distributed Snakepit.
 
 ---
 

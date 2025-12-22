@@ -86,8 +86,8 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
       {:ok, instance_ref} = module.create(%{signature: "test -> output"})
 
       # Call the method (should call Runtime.call_method)
-      # The method name in fixture is "__call__", should be transformed to :__call__
-      assert {:ok, result} = module.__call__(instance_ref, %{test: "input"})
+      # The method name in fixture is "__call__", mapped to elixir_name :call
+      assert {:ok, result} = module.call(instance_ref, %{test: "input"})
 
       # Mock should return actual response from SnakepitMock, not placeholder
       assert is_map(result)
@@ -108,7 +108,7 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
 
       # Should propagate error from Runtime
       # Note: Mock might not fail, but real Snakepit would
-      result = module.__call__(invalid_ref, %{})
+      result = module.call(invalid_ref, %{})
 
       # Should be {:ok, ...} or {:error, ...}, not crash
       assert match?({:ok, _}, result) or match?({:error, _}, result)
@@ -127,7 +127,7 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
 
       # Full workflow: create instance, call method
       {:ok, instance} = module.create(%{signature: "question -> answer"})
-      {:ok, result} = module.__call__(instance, %{question: "test"})
+      {:ok, result} = module.call(instance, %{question: "test"})
 
       # Mock returns this structure
       assert is_map(result)

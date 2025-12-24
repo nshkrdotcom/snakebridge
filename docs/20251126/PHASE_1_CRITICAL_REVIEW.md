@@ -32,7 +32,7 @@ Biggest concerns: (1) Over-engineering via registries/strategy chains before fix
 - “Generic adapter works with ANY Python library”: Current introspection fails on dynamic attributes, C-extensions without inspectable signatures, metaclasses, or modules requiring side-effectful imports. No handling of async generators or descriptors; instance storage lacks TTL. This is optimistic.
 - “Arrow provides 20-100x speedup”: Only in shared-memory columnar contexts. Across gRPC you copy into IPC buffers and back into BEAM terms; expect marginal gains unless batch sizes are huge and conversion dominates.
 - “Type Mapper Chain is highest impact”: The mapper isn’t used in generation today; adding 10 concrete mappings (tuple, bytes/bitstring, datetime, numpy ndarray as list) plus emitting specs would deliver immediate value.
-- “14 weeks is realistic”: Phases 2-3 include heavy GPU/ML stacks (Unsloth, Transformers, DSPy) plus Arrow/Nx/Explorer plus generalized streaming—easily quarters of work for 2-3 engineers given install/CI headaches.
+- “14 weeks is realistic”: Phases 2-3 include heavy GPU/ML stacks (Unsloth, Transformers, Demo) plus Arrow/Nx/Explorer plus generalized streaming—easily quarters of work for 2-3 engineers given install/CI headaches.
 - “Streaming infra already solid”: No Elixir-side stream wrappers, backpressure, or cleanup; Python adapter doesn’t support async generators or flow control.
 
 ## Priority Recommendations

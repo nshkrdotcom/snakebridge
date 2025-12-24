@@ -15,7 +15,7 @@ Question: *Can we deliver a pure, uniform interface that works for any Python li
 3. **Async and streaming semantics**
    - Some APIs return awaitables, some yield generators, some push callbacks/events, others rely on websockets. SnakeBridge currently models just sync + simple streaming.
 4. **Side-channel dependencies**
-   - Environment variables, file descriptors, GPU handles, open sockets, global singletons (e.g., `dspy.settings.configure`) leak into user code unless we model them explicitly.
+   - Environment variables, file descriptors, GPU handles, open sockets, global singletons (e.g., `demo.settings.configure`) leak into user code unless we model them explicitly.
 5. **Domain-specific protocols**
    - Tool registries, LangGraph edges, AutoGen planning loops, RLHF trainers all encode contracts that cannot be inferred only from function signatures.
 
@@ -73,7 +73,7 @@ Question: *Can we deliver a pure, uniform interface that works for any Python li
    - VSCode/LSP hints for new config fields
    - Mix tasks to lint capability completeness and simulate runtime bridging
 6. **Canonical Adapter Catalog**
-   - Ship curated configs (LangChain, LangGraph, DSPy, AutoGen, LlamaIndex, SentenceTransformers, LangSmith evaluators) maintained in-repo, exercising the full schema
+   - Ship curated configs (LangChain, LangGraph, Demo, AutoGen, LlamaIndex, SentenceTransformers, LangSmith evaluators) maintained in-repo, exercising the full schema
 
 ## 6. Risks & Mitigations
 | Risk | Impact | Mitigation |

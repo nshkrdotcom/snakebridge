@@ -109,37 +109,48 @@ defmodule SnakeBridge.TypeSystem.Mapper do
   defp atomize_value(v), do: v
 
   defp normalize_type_string(type_str, original) do
+    cond do
+      normalize_primitive_type(type_str) ->
+        normalize_primitive_type(type_str)
+
+      normalize_collection_type(type_str, original) ->
+        normalize_collection_type(type_str, original)
+
+      normalize_numpy_ml_type(type_str, original) ->
+        normalize_numpy_ml_type(type_str, original)
+
+      normalize_datetime_type(type_str) ->
+        normalize_datetime_type(type_str)
+
+      normalize_callable_type(type_str) ->
+        normalize_callable_type(type_str)
+
+      normalize_union_type(type_str, original) ->
+        normalize_union_type(type_str, original)
+
+      true ->
+        normalize_class_or_any(type_str)
+    end
+  end
+
+  defp normalize_primitive_type(type_str) do
     case type_str do
-      # Primitives
-      t when t in ["int", "integer"] ->
-        %{kind: "primitive", primitive_type: "int"}
+      t when t in ["int", "integer"] -> %{kind: "primitive", primitive_type: "int"}
+      t when t in ["str", "string"] -> %{kind: "primitive", primitive_type: "str"}
+      "float" -> %{kind: "primitive", primitive_type: "float"}
+      t when t in ["bool", "boolean"] -> %{kind: "primitive", primitive_type: "bool"}
+      "bytes" -> %{kind: "primitive", primitive_type: "bytes"}
+      t when t in ["none", "None", "NoneType"] -> %{kind: "primitive", primitive_type: "none"}
+      "any" -> %{kind: "primitive", primitive_type: "any"}
+      _ -> nil
+    end
+  end
 
-      t when t in ["str", "string"] ->
-        %{kind: "primitive", primitive_type: "str"}
-
-      "float" ->
-        %{kind: "primitive", primitive_type: "float"}
-
-      t when t in ["bool", "boolean"] ->
-        %{kind: "primitive", primitive_type: "bool"}
-
-      "bytes" ->
-        %{kind: "primitive", primitive_type: "bytes"}
-
-      t when t in ["none", "None", "NoneType"] ->
-        %{kind: "primitive", primitive_type: "none"}
-
-      "any" ->
-        %{kind: "primitive", primitive_type: "any"}
-
-      # Collections
+  defp normalize_collection_type(type_str, original) do
+    case type_str do
       "list" ->
         element = Map.get(original, :element_type)
-
-        %{
-          kind: "list",
-          element_type: normalize_descriptor(element)
-        }
+        %{kind: "list", element_type: normalize_descriptor(element)}
 
       "dict" ->
         key = Map.get(original, :key_type)
@@ -153,94 +164,88 @@ defmodule SnakeBridge.TypeSystem.Mapper do
 
       "tuple" ->
         elements = Map.get(original, :element_types, [])
-
-        %{
-          kind: "tuple",
-          element_types: Enum.map(elements, &normalize_descriptor/1)
-        }
+        %{kind: "tuple", element_types: Enum.map(elements, &normalize_descriptor/1)}
 
       "set" ->
         element = Map.get(original, :element_type)
+        %{kind: "set", element_type: normalize_descriptor(element)}
 
-        %{
-          kind: "set",
-          element_type: normalize_descriptor(element)
-        }
+      _ ->
+        nil
+    end
+  end
 
-      # NumPy/ML types
-      "ndarray" ->
-        %{
-          kind: "ndarray",
-          dtype: Map.get(original, :dtype)
-        }
+  defp normalize_numpy_ml_type(type_str, original) do
+    case type_str do
+      "ndarray" -> %{kind: "ndarray", dtype: Map.get(original, :dtype)}
+      "DataFrame" -> %{kind: "dataframe"}
+      "Tensor" -> %{kind: "tensor", dtype: Map.get(original, :dtype)}
+      "Series" -> %{kind: "series"}
+      _ -> nil
+    end
+  end
 
-      "DataFrame" ->
-        %{kind: "dataframe"}
+  defp normalize_datetime_type(type_str) do
+    case type_str do
+      "datetime" -> %{kind: "datetime"}
+      "date" -> %{kind: "date"}
+      "time" -> %{kind: "time"}
+      "timedelta" -> %{kind: "timedelta"}
+      _ -> nil
+    end
+  end
 
-      "Tensor" ->
-        %{
-          kind: "tensor",
-          dtype: Map.get(original, :dtype)
-        }
+  defp normalize_callable_type(type_str) do
+    case type_str do
+      "callable" -> %{kind: "callable"}
+      "generator" -> %{kind: "generator"}
+      "async_generator" -> %{kind: "async_generator"}
+      _ -> nil
+    end
+  end
 
-      "Series" ->
-        %{kind: "series"}
-
-      # Datetime types
-      "datetime" ->
-        %{kind: "datetime"}
-
-      "date" ->
-        %{kind: "date"}
-
-      "time" ->
-        %{kind: "time"}
-
-      "timedelta" ->
-        %{kind: "timedelta"}
-
-      # Callable types
-      "callable" ->
-        %{kind: "callable"}
-
-      "generator" ->
-        %{kind: "generator"}
-
-      "async_generator" ->
-        %{kind: "async_generator"}
-
-      # Union handled separately
+  defp normalize_union_type(type_str, original) do
+    case type_str do
       "union" ->
         types = Map.get(original, :union_types, [])
+        %{kind: "union", union_types: Enum.map(types, &normalize_descriptor/1)}
 
-        %{
-          kind: "union",
-          union_types: Enum.map(types, &normalize_descriptor/1)
-        }
-
-      # Class type
       _ ->
-        if String.contains?(type_str, ".") or String.match?(type_str, ~r/^[A-Z]/) do
-          %{kind: "class", class_path: type_str}
-        else
-          %{kind: "primitive", primitive_type: "any"}
-        end
+        nil
+    end
+  end
+
+  defp normalize_class_or_any(type_str) do
+    if String.contains?(type_str, ".") or String.match?(type_str, ~r/^[A-Z]/) do
+      %{kind: "class", class_path: type_str}
+    else
+      %{kind: "primitive", primitive_type: "any"}
     end
   end
 
   defp normalize_by_kind(kind, original) do
+    normalize_by_kind_primitive(kind, original) ||
+      normalize_by_kind_collection(kind, original) ||
+      normalize_by_kind_numpy_ml(kind, original) ||
+      normalize_by_kind_datetime(kind) ||
+      normalize_by_kind_callable(kind) ||
+      %{kind: "primitive", primitive_type: "any"}
+  end
+
+  defp normalize_by_kind_primitive(kind, original) do
     case kind do
       "primitive" ->
-        %{
-          kind: "primitive",
-          primitive_type: Map.get(original, :primitive_type, "any")
-        }
+        %{kind: "primitive", primitive_type: Map.get(original, :primitive_type, "any")}
 
+      _ ->
+        nil
+    end
+  end
+
+  defp normalize_by_kind_collection(kind, original) do
+    case kind do
       "list" ->
-        %{
-          kind: "list",
-          element_type: normalize_descriptor(Map.get(original, :element_type))
-        }
+        %{kind: "list", element_type: normalize_descriptor(Map.get(original, :element_type))}
 
       "dict" ->
         %{
@@ -256,10 +261,7 @@ defmodule SnakeBridge.TypeSystem.Mapper do
         }
 
       "set" ->
-        %{
-          kind: "set",
-          element_type: normalize_descriptor(Map.get(original, :element_type))
-        }
+        %{kind: "set", element_type: normalize_descriptor(Map.get(original, :element_type))}
 
       "union" ->
         %{
@@ -268,52 +270,39 @@ defmodule SnakeBridge.TypeSystem.Mapper do
         }
 
       "class" ->
-        %{
-          kind: "class",
-          class_path: Map.get(original, :class_path, "object")
-        }
-
-      "ndarray" ->
-        %{
-          kind: "ndarray",
-          dtype: Map.get(original, :dtype)
-        }
-
-      "dataframe" ->
-        %{kind: "dataframe"}
-
-      "tensor" ->
-        %{
-          kind: "tensor",
-          dtype: Map.get(original, :dtype)
-        }
-
-      "series" ->
-        %{kind: "series"}
-
-      "datetime" ->
-        %{kind: "datetime"}
-
-      "date" ->
-        %{kind: "date"}
-
-      "time" ->
-        %{kind: "time"}
-
-      "timedelta" ->
-        %{kind: "timedelta"}
-
-      "callable" ->
-        %{kind: "callable"}
-
-      "generator" ->
-        %{kind: "generator"}
-
-      "async_generator" ->
-        %{kind: "async_generator"}
+        %{kind: "class", class_path: Map.get(original, :class_path, "object")}
 
       _ ->
-        %{kind: "primitive", primitive_type: "any"}
+        nil
+    end
+  end
+
+  defp normalize_by_kind_numpy_ml(kind, original) do
+    case kind do
+      "ndarray" -> %{kind: "ndarray", dtype: Map.get(original, :dtype)}
+      "dataframe" -> %{kind: "dataframe"}
+      "tensor" -> %{kind: "tensor", dtype: Map.get(original, :dtype)}
+      "series" -> %{kind: "series"}
+      _ -> nil
+    end
+  end
+
+  defp normalize_by_kind_datetime(kind) do
+    case kind do
+      "datetime" -> %{kind: "datetime"}
+      "date" -> %{kind: "date"}
+      "time" -> %{kind: "time"}
+      "timedelta" -> %{kind: "timedelta"}
+      _ -> nil
+    end
+  end
+
+  defp normalize_by_kind_callable(kind) do
+    case kind do
+      "callable" -> %{kind: "callable"}
+      "generator" -> %{kind: "generator"}
+      "async_generator" -> %{kind: "async_generator"}
+      _ -> nil
     end
   end
 
@@ -478,9 +467,10 @@ defmodule SnakeBridge.TypeSystem.Mapper do
 
       # Infer key type - handle atoms by converting to string first
       key_type =
-        cond do
-          is_atom(key) -> :str
-          true -> infer_python_type(key)
+        if is_atom(key) do
+          :str
+        else
+          infer_python_type(key)
         end
 
       # Infer value type - if multiple values have different types, use :any
@@ -507,7 +497,7 @@ defmodule SnakeBridge.TypeSystem.Mapper do
   """
   def python_class_to_elixir_module(python_path) when is_binary(python_path) do
     # Convert python.module.Class to Elixir module atom
-    # Capitalize each part, preserving acronyms (e.g., "dspy" -> "DSPy")
+    # Capitalize each part, preserving acronyms (e.g., "ai" -> "AI")
     parts =
       python_path
       |> String.split(".")
@@ -526,7 +516,6 @@ defmodule SnakeBridge.TypeSystem.Mapper do
   end
 
   # Smart capitalization that preserves common acronyms and CamelCase
-  defp smart_capitalize("dspy"), do: "DSPy"
   defp smart_capitalize("ai"), do: "AI"
   defp smart_capitalize("ml"), do: "ML"
   defp smart_capitalize("nlp"), do: "NLP"

@@ -16,7 +16,7 @@ defmodule Mix.Tasks.Snakebridge.Generate do
       mix snakebridge.generate
 
       # Generate from specific configs
-      mix snakebridge.generate config/snakebridge/dspy.exs config/snakebridge/langchain.exs
+      mix snakebridge.generate config/snakebridge/sympy.exs config/snakebridge/pylatexenc.exs
   """
 
   @shortdoc "Generate Elixir modules from SnakeBridge configs"

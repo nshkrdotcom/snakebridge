@@ -17,11 +17,11 @@ mix snakebridge.inspect <module_or_config>
 
 ### Example
 ```
-mix snakebridge.inspect DSPy.Predict --sample 3 --format human
+mix snakebridge.inspect Demo.Predict --sample 3 --format human
 ```
 Output snippet:
 ```
-[DSPy.Predict.call]
+[Demo.Predict.call]
   Declared profile :function
   Observed         :stream (generator yields 5 chunks)
   Action           Suggest updating config: execution_mode: :stream

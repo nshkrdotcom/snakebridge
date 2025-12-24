@@ -16,7 +16,7 @@ defmodule Mix.Tasks.Snakebridge.Validate do
       mix snakebridge.validate
 
       # Validate specific config
-      mix snakebridge.validate config/snakebridge/dspy.exs
+      mix snakebridge.validate config/snakebridge/sympy.exs
   """
 
   @shortdoc "Validate SnakeBridge configuration files"

@@ -15,16 +15,16 @@ defmodule SnakeBridge.SnakepitMock do
     describe_library_response(args)
   end
 
-  def execute_in_session(_session_id, "call_dspy", args, _opts) do
-    call_dspy_response(args)
-  end
-
   def execute_in_session(_session_id, "call_python", args, _opts) do
     call_python_response(args)
   end
 
   def execute_in_session(_session_id, "batch_execute", args, _opts) do
     batch_execute_response(args)
+  end
+
+  def execute_in_session(_session_id, "release_instance", %{"instance_id" => instance_id}, _opts) do
+    {:ok, %{"success" => true, "instance_id" => instance_id, "released" => true}}
   end
 
   def execute_in_session(_session_id, tool_name, _args, _opts) do
@@ -45,9 +45,10 @@ defmodule SnakeBridge.SnakepitMock do
   def execute_in_session_stream(_session_id, _tool_name, _args, callback_fn, _opts \\ []) do
     # Simulate streaming by sending a few mock chunks
     chunks = [
-      %{"chunk" => "Hello ", "done" => false},
-      %{"chunk" => "from ", "done" => false},
-      %{"chunk" => "mock!", "done" => true}
+      %{"success" => true, "data" => "Hello "},
+      %{"success" => true, "data" => "from "},
+      %{"success" => true, "data" => "mock!"},
+      %{"success" => true, "done" => true}
     ]
 
     Enum.each(chunks, fn chunk ->
@@ -59,16 +60,16 @@ defmodule SnakeBridge.SnakepitMock do
 
   # Private response generators
 
-  defp describe_library_response(%{"module_path" => "dspy"}) do
+  defp describe_library_response(%{"module_path" => "demo"}) do
     {:ok,
      %{
        "success" => true,
-       "library_version" => "2.5.0",
+       "library_version" => "1.0.0",
        "classes" => %{
          "Predict" => %{
            "name" => "Predict",
-           "python_path" => "dspy.Predict",
-           "docstring" => "Basic prediction module without intermediate reasoning.",
+           "python_path" => "demo.Predict",
+           "docstring" => "Example prediction module for tests.",
            "constructor" => %{
              "parameters" => [
                %{
@@ -94,8 +95,8 @@ defmodule SnakeBridge.SnakepitMock do
        "functions" => %{
          "configure" => %{
            "name" => "configure",
-           "python_path" => "dspy.settings.configure",
-           "docstring" => "Configure global DSPy settings",
+           "python_path" => "demo.settings.configure",
+           "docstring" => "Configure global demo settings",
            "parameters" => [
              %{"name" => "lm", "required" => false}
            ]
@@ -163,38 +164,6 @@ defmodule SnakeBridge.SnakepitMock do
      }}
   end
 
-  defp call_dspy_response(%{"function_name" => "__init__", "module_path" => module_path}) do
-    {:ok,
-     %{
-       "success" => true,
-       "instance_id" => "mock_instance_#{:rand.uniform(10000)}",
-       "type" => "constructor",
-       "module" => module_path
-     }}
-  end
-
-  defp call_dspy_response(%{"function_name" => "__call__"}) do
-    {:ok,
-     %{
-       "success" => true,
-       "result" => %{
-         "answer" => "Mocked answer from DSPy",
-         "reasoning" => "Mocked reasoning chain"
-       }
-     }}
-  end
-
-  defp call_dspy_response(%{"function_name" => method_name}) do
-    {:ok,
-     %{
-       "success" => true,
-       "result" => %{
-         "method" => method_name,
-         "mock" => true
-       }
-     }}
-  end
-
   defp batch_execute_response(%{"operations" => operations}) do
     results =
       Enum.map(operations, fn _op ->
@@ -204,7 +173,7 @@ defmodule SnakeBridge.SnakepitMock do
     {:ok, %{"success" => true, "results" => results}}
   end
 
-  # New generic call_python responses (replaces call_dspy)
+  # Generic call_python responses (legacy tests used a library-specific tool)
   defp call_python_response(%{"function_name" => "__init__"} = args) do
     module_path = Map.get(args, "module_path", "unknown")
 
@@ -221,12 +190,10 @@ defmodule SnakeBridge.SnakepitMock do
          %{"function_name" => function_name, "module_path" => module_path} = args
        )
        when is_binary(module_path) do
-    cond do
-      String.contains?(module_path, "instance:") ->
-        call_python_instance_method(args)
-
-      true ->
-        call_python_module_function(function_name, module_path)
+    if String.contains?(module_path, "instance:") do
+      call_python_instance_method(args)
+    else
+      call_python_module_function(function_name, module_path)
     end
   end
 

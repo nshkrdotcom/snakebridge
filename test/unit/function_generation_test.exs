@@ -2,6 +2,12 @@ defmodule SnakeBridge.FunctionGenerationTest do
   use ExUnit.Case, async: false
 
   alias SnakeBridge.{Generator, TestFixtures}
+  alias SnakeBridge.TestHelpers
+
+  setup do
+    TestHelpers.purge_modules([Json, DemoFunctions])
+    :ok
+  end
 
   describe "generate_function_module/2" do
     test "generates module for Python functions" do
@@ -107,7 +113,7 @@ defmodule SnakeBridge.FunctionGenerationTest do
         TestFixtures.sample_config(suffix)
         | classes: [
             %{
-              python_path: "dspy.Predict_#{suffix}",
+              python_path: "demo.Predict_#{suffix}",
               elixir_module: String.to_atom("Elixir.TestApp.Predict#{suffix}"),
               constructor: %{args: %{}, session_aware: true},
               methods: [%{name: "__call__", elixir_name: :call, streaming: false}]
@@ -116,9 +122,9 @@ defmodule SnakeBridge.FunctionGenerationTest do
           functions: [
             %{
               name: "configure",
-              python_path: "dspy.configure",
+              python_path: "demo.configure",
               elixir_name: :configure,
-              elixir_module: DspyFunctions
+              elixir_module: DemoFunctions
             }
           ]
       }
@@ -156,7 +162,7 @@ defmodule SnakeBridge.FunctionGenerationTest do
         TestFixtures.sample_config(suffix)
         | classes: [
             %{
-              python_path: "dspy.Predict_#{suffix}",
+              python_path: "demo.Predict_#{suffix}",
               elixir_module: String.to_atom("Elixir.TestApp.Predict#{suffix}"),
               constructor: %{args: %{}, session_aware: true},
               methods: [%{name: "__call__", elixir_name: :call, streaming: false}]

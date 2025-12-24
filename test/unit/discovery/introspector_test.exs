@@ -11,7 +11,7 @@ defmodule SnakeBridge.Discovery.IntrospectorTest do
 
   describe "discover/2" do
     test "successfully discovers library schema" do
-      module_path = "dspy"
+      module_path = "demo"
       expected_response = TestFixtures.sample_introspection_response()
 
       IntrospectorMock
@@ -20,7 +20,7 @@ defmodule SnakeBridge.Discovery.IntrospectorTest do
       end)
 
       assert {:ok, schema} = Introspector.discover(IntrospectorMock, module_path, [])
-      assert schema["library_version"] == "2.5.0"
+      assert schema["library_version"] == "1.0.0"
       assert is_map(schema["classes"])
       assert Map.has_key?(schema["classes"], "Predict")
     end
@@ -42,7 +42,7 @@ defmodule SnakeBridge.Discovery.IntrospectorTest do
         {:ok, TestFixtures.sample_introspection_response()}
       end)
 
-      Introspector.discover(IntrospectorMock, "dspy", depth: 3)
+      Introspector.discover(IntrospectorMock, "demo", depth: 3)
     end
 
     test "uses cache when config_hash matches" do
@@ -54,7 +54,7 @@ defmodule SnakeBridge.Discovery.IntrospectorTest do
         {:ok, %{cached: true}}
       end)
 
-      Introspector.discover(IntrospectorMock, "dspy", config_hash: cached_hash)
+      Introspector.discover(IntrospectorMock, "demo", config_hash: cached_hash)
     end
   end
 
@@ -64,7 +64,7 @@ defmodule SnakeBridge.Discovery.IntrospectorTest do
 
       normalized = Introspector.parse_descriptor(python_descriptor)
 
-      assert normalized.python_path == "dspy.Predict"
+      assert normalized.python_path == "demo.Predict"
       assert is_list(normalized.methods)
       assert length(normalized.methods) > 0
     end

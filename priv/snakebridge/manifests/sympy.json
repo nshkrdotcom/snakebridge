@@ -1,0 +1,123 @@
+{
+  "name": "sympy",
+  "python_module": "sympy",
+  "python_path_prefix": "snakebridge_adapter.sympy_bridge",
+  "version": "~> 1.13",
+  "category": "math",
+  "elixir_module": "SnakeBridge.SymPy",
+  "types": {
+    "names": "string",
+    "expr": "string",
+    "symbol": "string",
+    "lhs": "string",
+    "rhs": "string",
+    "precision": "integer",
+    "mapping": "map"
+  },
+  "functions": [
+    {
+      "name": "symbols",
+      "args": ["names"],
+      "returns": {"type": "list", "element_type": "string"}
+    },
+    {
+      "name": "sympify",
+      "args": ["expr"],
+      "returns": "string"
+    },
+    {
+      "name": "eq",
+      "args": ["lhs", "rhs"],
+      "returns": "string"
+    },
+    {
+      "name": "solve",
+      "args": ["expr", "symbol"],
+      "returns": {
+        "type": "union",
+        "union_types": [
+          {"type": "list", "element_type": "string"},
+          "map"
+        ]
+      }
+    },
+    {
+      "name": "simplify",
+      "args": ["expr"],
+      "returns": "string"
+    },
+    {
+      "name": "expand",
+      "args": ["expr"],
+      "returns": "string"
+    },
+    {
+      "name": "factor",
+      "args": ["expr"],
+      "returns": "string"
+    },
+    {
+      "name": "diff",
+      "args": ["expr", "symbol"],
+      "returns": "string"
+    },
+    {
+      "name": "integrate",
+      "args": ["expr", "symbol"],
+      "returns": "string"
+    },
+    {
+      "name": "latex",
+      "args": ["expr"],
+      "returns": "string"
+    },
+    {
+      "name": "n",
+      "args": ["expr", "precision"],
+      "returns": {
+        "type": "union",
+        "union_types": ["string", "float"]
+      }
+    },
+    {
+      "name": "subs",
+      "args": ["expr", "mapping"],
+      "returns": "string"
+    },
+    {
+      "name": "free_symbols",
+      "args": ["expr"],
+      "returns": {"type": "list", "element_type": "string"}
+    },
+    {
+      "name": "sqrt",
+      "args": ["expr"],
+      "returns": "string"
+    },
+    {
+      "name": "sin",
+      "args": ["expr"],
+      "returns": "string"
+    },
+    {
+      "name": "cos",
+      "args": ["expr"],
+      "returns": "string"
+    },
+    {
+      "name": "tan",
+      "args": ["expr"],
+      "returns": "string"
+    },
+    {
+      "name": "log",
+      "args": ["expr"],
+      "returns": "string"
+    },
+    {
+      "name": "exp",
+      "args": ["expr"],
+      "returns": "string"
+    }
+  ]
+}

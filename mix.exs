@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.2.4"
+  @version "0.3.0"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -53,7 +53,7 @@ defmodule SnakeBridge.MixProject do
     [
       # Core dependencies
       # Optional for now during dev
-      {:snakepit, "~> 0.6.10"},
+      {:snakepit, "~> 0.7.0"},
       # For config schemas
       {:ecto, "~> 3.11"},
       # JSON encoding
@@ -71,7 +71,7 @@ defmodule SnakeBridge.MixProject do
       # Runtime mocking
       {:mimic, "~> 1.7", only: :test},
       # OTP testing toolkit
-      {:supertester, "~> 0.2.1", only: :test}
+      {:supertester, "~> 0.3.1", only: :test}
     ]
   end
 

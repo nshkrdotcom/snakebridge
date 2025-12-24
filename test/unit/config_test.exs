@@ -9,8 +9,8 @@ defmodule SnakeBridge.ConfigTest do
       config = TestFixtures.sample_config()
 
       assert {:ok, validated} = Config.validate(config)
-      assert validated.python_module == "dspy"
-      assert validated.version == "2.5.0"
+      assert validated.python_module == "demo"
+      assert validated.version == "1.0.0"
     end
 
     test "requires python_module field" do
@@ -136,14 +136,14 @@ defmodule SnakeBridge.ConfigTest do
       config = %Config{
         python_module: "test",
         mixins: [mixin],
-        telemetry: %{tags: %{family: "dspy"}}
+        telemetry: %{tags: %{family: "demo"}}
       }
 
       composed = Config.compose(config)
 
       assert composed.telemetry.enabled == true
       assert composed.telemetry.tags.domain == "ml"
-      assert composed.telemetry.tags.family == "dspy"
+      assert composed.telemetry.tags.family == "demo"
     end
   end
 
@@ -155,7 +155,7 @@ defmodule SnakeBridge.ConfigTest do
 
       assert is_binary(code)
       assert String.contains?(code, "%SnakeBridge.Config{")
-      assert String.contains?(code, ~s(python_module: "dspy"))
+      assert String.contains?(code, ~s(python_module: "demo"))
     end
 
     test "pretty prints configuration" do
@@ -165,7 +165,7 @@ defmodule SnakeBridge.ConfigTest do
 
       assert String.contains?(formatted, "python_module:")
       assert String.contains?(formatted, "classes:")
-      assert String.contains?(formatted, "- dspy.Predict")
+      assert String.contains?(formatted, "- demo.Predict")
     end
   end
 

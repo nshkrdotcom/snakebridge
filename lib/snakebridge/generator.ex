@@ -26,7 +26,18 @@ defmodule SnakeBridge.Generator do
     constant_fields = Helpers.get_field(descriptor, :constant_fields, [])
     constructor = Helpers.get_field(descriptor, :constructor, %{})
 
-    module_name = elixir_module || Module.concat([DSPy, String.to_atom(descriptor_name)])
+    module_name =
+      cond do
+        elixir_module ->
+          elixir_module
+
+        python_path != "" ->
+          Helpers.module_name(python_path)
+
+        true ->
+          Module.concat([String.to_atom(descriptor_name)])
+      end
+
     compilation_mode = config.compilation_mode
 
     quote do
@@ -47,7 +58,7 @@ defmodule SnakeBridge.Generator do
         unquote_splicing(generate_methods(methods))
 
         defp generate_session_id do
-          "session_#{:rand.uniform(100_000)}"
+          SnakeBridge.SessionId.generate("session")
         end
       end
     end
@@ -67,7 +78,18 @@ defmodule SnakeBridge.Generator do
     python_path = Helpers.get_field(descriptor, :python_path, "")
     functions = Helpers.get_field(descriptor, :functions, [])
 
-    module_name = elixir_module || Module.concat([String.to_atom(descriptor_name)])
+    module_name =
+      cond do
+        elixir_module ->
+          elixir_module
+
+        python_path != "" ->
+          Helpers.module_name(python_path)
+
+        true ->
+          Module.concat([String.to_atom(descriptor_name)])
+      end
+
     compilation_mode = config.compilation_mode
 
     quote do
@@ -82,7 +104,7 @@ defmodule SnakeBridge.Generator do
         unquote_splicing(generate_functions(functions, python_path))
 
         defp generate_session_id do
-          "session_#{:rand.uniform(100_000)}"
+          SnakeBridge.SessionId.generate("session")
         end
       end
     end
@@ -186,6 +208,8 @@ defmodule SnakeBridge.Generator do
       docstring = Helpers.get_field(function, :docstring, "")
       _params = Helpers.get_field(function, :parameters, [])
       return_type = Helpers.get_field(function, :return_type)
+      streaming = Helpers.get_field(function, :streaming, false)
+      streaming_tool = Helpers.get_field(function, :streaming_tool)
 
       function_python_path =
         Helpers.get_field(function, :python_path) ||
@@ -193,6 +217,15 @@ defmodule SnakeBridge.Generator do
 
       # Generate typespec using TypeMapper
       return_spec = Helpers.build_return_spec(return_type)
+
+      stream_function =
+        generate_stream_function_if_needed(
+          streaming,
+          elixir_name,
+          function_name,
+          function_python_path,
+          streaming_tool
+        )
 
       quote do
         @doc """
@@ -212,6 +245,8 @@ defmodule SnakeBridge.Generator do
             Keyword.put(opts, :session_id, session_id)
           )
         end
+
+        unquote(stream_function)
       end
     end)
   end
@@ -262,31 +297,30 @@ defmodule SnakeBridge.Generator do
   def generate_all(%SnakeBridge.Config{} = config) do
     case SnakeBridge.Config.validate(config) do
       {:ok, valid_config} ->
-        class_results =
-          Enum.map(valid_config.classes, fn class_descriptor ->
-            ast = generate_module(class_descriptor, valid_config)
-
-            case compile_and_load(ast) do
-              {:ok, module} -> {:ok, module}
-              {:error, _} = error -> error
-            end
-          end)
-
+        class_results = compile_class_modules(valid_config.classes, valid_config)
         function_results = generate_function_modules(valid_config.functions, valid_config)
         all_results = class_results ++ function_results
 
-        case Enum.find(all_results, &match?({:error, _}, &1)) do
-          {:error, _reason} = error ->
-            error
-
-          nil ->
-            modules = Enum.map(all_results, fn {:ok, module} -> module end)
-            {:ok, modules}
-        end
+        collect_results(all_results)
 
       {:error, _errors} = error ->
         error
     end
+  end
+
+  @doc """
+  Generate all module ASTs for an integration (no compilation).
+  """
+  @spec generate_all_ast(SnakeBridge.Config.t()) :: [Macro.t()]
+  def generate_all_ast(%SnakeBridge.Config{} = config) do
+    class_asts =
+      Enum.map(config.classes, fn class_descriptor ->
+        generate_module(class_descriptor, config)
+      end)
+
+    function_asts = generate_function_module_asts(config.functions, config)
+
+    class_asts ++ function_asts
   end
 
   defp generate_function_modules(functions, config) when is_list(functions) do
@@ -297,6 +331,7 @@ defmodule SnakeBridge.Generator do
         name: module_info.name,
         python_path: module_info.python_path,
         elixir_module: module_info.elixir_module,
+        docstring: config.description || "",
         functions: funcs
       }
 
@@ -306,6 +341,22 @@ defmodule SnakeBridge.Generator do
         {:ok, module} -> {:ok, module}
         {:error, _} = error -> error
       end
+    end)
+  end
+
+  defp generate_function_module_asts(functions, config) when is_list(functions) do
+    grouped_functions = group_functions_by_module(functions)
+
+    Enum.map(grouped_functions, fn {module_info, funcs} ->
+      descriptor = %{
+        name: module_info.name,
+        python_path: module_info.python_path,
+        elixir_module: module_info.elixir_module,
+        docstring: config.description || "",
+        functions: funcs
+      }
+
+      generate_function_module(descriptor, config)
     end)
   end
 
@@ -338,6 +389,90 @@ defmodule SnakeBridge.Generator do
     Mapper.python_class_to_elixir_module(python_path)
   end
 
+  # Compile class modules from descriptors
+  defp compile_class_modules(class_descriptors, config) do
+    Enum.map(class_descriptors, fn class_descriptor ->
+      ast = generate_module(class_descriptor, config)
+
+      case compile_and_load(ast) do
+        {:ok, module} -> {:ok, module}
+        {:error, _} = error -> error
+      end
+    end)
+  end
+
+  # Collect results from module generation, returning first error or all successful modules
+  defp collect_results(all_results) do
+    case Enum.find(all_results, &match?({:error, _}, &1)) do
+      {:error, _reason} = error ->
+        error
+
+      nil ->
+        modules = Enum.map(all_results, fn {:ok, module} -> module end)
+        {:ok, modules}
+    end
+  end
+
+  # Generate stream function if streaming is enabled
+  defp generate_stream_function_if_needed(
+         false,
+         _elixir_name,
+         _function_name,
+         _function_python_path,
+         _streaming_tool
+       ) do
+    nil
+  end
+
+  defp generate_stream_function_if_needed(
+         true,
+         elixir_name,
+         function_name,
+         function_python_path,
+         streaming_tool
+       ) do
+    stream_name = :"#{elixir_name}_stream"
+
+    quote do
+      @doc """
+      Stream #{unquote(function_name)} Python function.
+      """
+      @spec unquote(stream_name)(map(), keyword()) :: Enumerable.t()
+      def unquote(stream_name)(args \\ %{}, opts \\ []) do
+        unquote(
+          generate_stream_function_body(function_python_path, function_name, streaming_tool)
+        )
+      end
+    end
+  end
+
+  # Generate the body of a stream function based on the streaming tool
+  defp generate_stream_function_body(function_python_path, function_name, streaming_tool) do
+    quote do
+      case unquote(streaming_tool) do
+        nil ->
+          SnakeBridge.Runtime.stream_function(
+            unquote(function_python_path),
+            unquote(function_name),
+            args,
+            opts
+          )
+
+        tool_name when tool_name in ["call_python_stream", :call_python_stream] ->
+          SnakeBridge.Runtime.stream_function(
+            unquote(function_python_path),
+            unquote(function_name),
+            args,
+            opts
+          )
+
+        tool_name ->
+          session_id = Keyword.get(opts, :session_id, generate_session_id())
+          SnakeBridge.Runtime.stream_tool(session_id, tool_name, args, opts)
+      end
+    end
+  end
+
   @doc """
   Generate only changed modules from diff.
   """
@@ -361,11 +496,9 @@ defmodule SnakeBridge.Generator do
   """
   @spec compile_and_load(Macro.t()) :: {:ok, module()} | {:error, term()}
   def compile_and_load(ast) do
-    try do
-      [{module, _bytecode}] = Code.compile_quoted(ast)
-      {:ok, module}
-    rescue
-      e -> {:error, Exception.message(e)}
-    end
+    [{module, _bytecode}] = Code.compile_quoted(ast)
+    {:ok, module}
+  rescue
+    e -> {:error, Exception.message(e)}
   end
 end

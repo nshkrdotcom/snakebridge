@@ -10,7 +10,7 @@ defmodule Mix.Tasks.Snakebridge.DiscoverTest do
   setup do
     # Clean up any generated files
     on_exit(fn ->
-      File.rm_rf("config/snakebridge")
+      File.rm_rf("priv/snakebridge/manifests/_drafts")
     end)
 
     :ok
@@ -23,34 +23,34 @@ defmodule Mix.Tasks.Snakebridge.DiscoverTest do
       end
     end
 
-    test "discovers a Python module and generates config file" do
+    test "discovers a Python module and generates manifest file" do
       output =
         capture_io(fn ->
-          Discover.run(["dspy"])
+          Discover.run(["demo"])
         end)
 
-      assert output =~ "Discovering Python library: dspy"
-      assert output =~ "Config written to:"
-      assert File.exists?("config/snakebridge/dspy.exs")
+      assert output =~ "Discovering Python library: demo"
+      assert output =~ "Manifest written to:"
+      assert File.exists?("priv/snakebridge/manifests/_drafts/demo.json")
     end
 
     test "supports --output option for custom path" do
       capture_io(fn ->
-        Discover.run(["dspy", "--output", "custom/path/dspy.exs"])
+        Discover.run(["demo", "--output", "custom/path/demo.json"])
       end)
 
-      assert File.exists?("custom/path/dspy.exs")
+      assert File.exists?("custom/path/demo.json")
       File.rm_rf("custom")
     end
 
     test "supports --depth option for discovery depth" do
       output =
         capture_io(fn ->
-          Discover.run(["dspy", "--depth", "3"])
+          Discover.run(["demo", "--depth", "3"])
         end)
 
       assert output =~ "Discovery depth: 3"
-      assert File.exists?("config/snakebridge/dspy.exs")
+      assert File.exists?("priv/snakebridge/manifests/_drafts/demo.json")
     end
 
     test "handles discovery errors gracefully" do
@@ -61,38 +61,37 @@ defmodule Mix.Tasks.Snakebridge.DiscoverTest do
       end
     end
 
-    test "generated config file is valid Elixir code" do
+    test "generated manifest file is valid JSON" do
       capture_io(fn ->
-        Discover.run(["dspy"])
+        Discover.run(["demo"])
       end)
 
-      # Should be able to read and evaluate the generated file
-      {config, _bindings} = Code.eval_file("config/snakebridge/dspy.exs")
-      assert %SnakeBridge.Config{} = config
-      assert config.python_module == "dspy"
+      manifest_path = "priv/snakebridge/manifests/_drafts/demo.json"
+      {:ok, manifest} = SnakeBridge.Manifest.from_file(manifest_path)
+      assert manifest.python_module == "demo"
     end
 
     test "supports --force to overwrite existing files" do
       # Create initial file
-      capture_io(fn -> Discover.run(["dspy"]) end)
+      capture_io(fn -> Discover.run(["demo"]) end)
 
       # Corrupt the file
-      File.write!("config/snakebridge/dspy.exs", "# corrupted content")
+      File.write!("priv/snakebridge/manifests/_drafts/demo.json", "corrupted content")
 
       # Try to overwrite without --force (should error)
       assert_raise Mix.Error, ~r/already exists/, fn ->
-        capture_io(fn -> Discover.run(["dspy"]) end)
+        capture_io(fn -> Discover.run(["demo"]) end)
       end
 
       # File should still be corrupted
-      assert File.read!("config/snakebridge/dspy.exs") == "# corrupted content"
+      assert File.read!("priv/snakebridge/manifests/_drafts/demo.json") == "corrupted content"
 
       # Overwrite with --force (should succeed and regenerate)
-      capture_io(fn -> Discover.run(["dspy", "--force"]) end)
+      capture_io(fn -> Discover.run(["demo", "--force"]) end)
 
       # File should be regenerated, not corrupted
-      regenerated = File.read!("config/snakebridge/dspy.exs")
-      assert regenerated =~ "SnakeBridge.Config"
+      regenerated = File.read!("priv/snakebridge/manifests/_drafts/demo.json")
+      assert regenerated =~ "\"python_module\""
       refute regenerated =~ "# corrupted content"
     end
   end

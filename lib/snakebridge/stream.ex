@@ -26,8 +26,8 @@ defmodule SnakeBridge.Stream do
   Streams are automatically cleaned up when fully consumed.
   """
 
-  alias SnakeBridge.Runtime
   alias SnakeBridge.Error
+  alias SnakeBridge.Runtime
 
   @doc """
   Create a stream from a Python generator.
@@ -95,15 +95,7 @@ defmodule SnakeBridge.Stream do
     Stream.resource(
       fn ->
         # Spawn a task that runs the streaming callback
-        task =
-          Task.async(fn ->
-            Runtime.execute_stream(session_id, tool_name, args, fn chunk ->
-              send(parent, {:stream_chunk, chunk})
-            end)
-
-            send(parent, :stream_done)
-          end)
-
+        task = Task.async(fn -> run_streaming_task(session_id, tool_name, args, parent) end)
         %{task: task, done: false}
       end,
       fn
@@ -113,7 +105,7 @@ defmodule SnakeBridge.Stream do
         state ->
           receive do
             {:stream_chunk, chunk} ->
-              {[chunk], state}
+              handle_stream_chunk(chunk, state)
 
             :stream_done ->
               {:halt, %{state | done: true}}
@@ -129,6 +121,14 @@ defmodule SnakeBridge.Stream do
   end
 
   # Private implementation
+
+  defp run_streaming_task(session_id, tool_name, args, parent) do
+    Runtime.execute_stream(session_id, tool_name, args, fn chunk ->
+      send(parent, {:stream_chunk, chunk})
+    end)
+
+    send(parent, :stream_done)
+  end
 
   defp init_generator(session_id, module_path, function_name, args, timeout) do
     case Runtime.execute_with_timeout(
@@ -187,6 +187,9 @@ defmodule SnakeBridge.Stream do
       {:ok, %{"success" => true, "done" => true}} ->
         {:halt, %{state | done: true}}
 
+      {:ok, %{"success" => true, "data" => data}} ->
+        {[data], %{state | started: true}}
+
       {:ok, %{"chunk" => chunk}} ->
         {[chunk], %{state | started: true}}
 
@@ -205,4 +208,25 @@ defmodule SnakeBridge.Stream do
   end
 
   defp cleanup_streaming(_state), do: :ok
+
+  defp handle_stream_chunk(%{"success" => false} = chunk, state) do
+    error = Error.new(chunk)
+    {:halt, %{state | done: true, error: error}}
+  end
+
+  defp handle_stream_chunk(%{"done" => true}, state) do
+    {:halt, %{state | done: true}}
+  end
+
+  defp handle_stream_chunk(%{"data" => data}, state) do
+    {[data], state}
+  end
+
+  defp handle_stream_chunk(%{"chunk" => data}, state) do
+    {[data], state}
+  end
+
+  defp handle_stream_chunk(other, state) do
+    {[other], state}
+  end
 end

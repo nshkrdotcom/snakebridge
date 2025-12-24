@@ -1,0 +1,3 @@
+sympy>=1.13.0
+pylatexenc>=2.10
+math-verify>=0.1.0

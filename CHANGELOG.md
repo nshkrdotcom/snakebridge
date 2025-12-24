@@ -12,6 +12,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [ ] LSP server for config authoring
 - [ ] Auto-generated test suites from schemas
 
+## [0.3.0] - 2025-12-23
+
+### Added
+- Manifest-driven workflow (reader, loader, registry, compiler, diff) with mix tasks
+- Built-in manifests for sympy, pylatexenc, and math-verify
+- Python adapter bridges for SymPy, PyLatexEnc, Math-Verify, plus shared serializer
+- Snakepit auto-start launcher and `mix snakebridge.setup` task
+- Real-Python manifest example tests (one per built-in library)
+- New manifest-focused examples and `examples/run_all.sh`
+
+### Changed
+- Snakepit dependency updated to ~> 0.7.0
+- README, Python setup, and quickstart docs updated to manifest-first workflow
+- Runtime allowlist enforcement now the default for function calls (with `allow_unsafe` opt-out)
+
+### Removed
+- Outdated example scripts that referenced removed adapters, mocks, or legacy flows
+
+### Fixed
+- Normalized manifest `elixir_name` handling to prevent invalid function definitions
+- Prevented non-boolean allow_unsafe values from crashing runtime checks
+
 ## [0.2.4] - 2025-10-29
 
 ### Changed
@@ -103,7 +125,7 @@ config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "json")
 ### Documentation
 - README updated with function generation examples
 - Configuration examples show both classes and functions
-- DSPy example updated to demonstrate function calls
+- Demo example updated to demonstrate function calls
 
 ### Git History
 Six atomic commits following TDD:
@@ -148,12 +170,12 @@ Six atomic commits following TDD:
 - All 54 broken tests now passing (100% test coverage)
 - Generator now calls Runtime instead of placeholders
 - Schema.Differ recursive diffing
-- TypeSystem.Mapper smart capitalization (dspy → DSPy)
+- TypeSystem.Mapper smart capitalization (demo → Demo)
 - Cache filesystem persistence
 - Compiler warnings eliminated
 
 ### Changed
-- Runtime uses generic `call_python` tool (was library-specific `call_dspy`)
+- Runtime uses generic `call_python` tool (was library-specific `call_demo`)
 - SnakepitMock supports both old and new tool names
 - Development mode uses mocks by default (fast iteration)
 

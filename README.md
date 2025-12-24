@@ -10,22 +10,23 @@
 [![Documentation](https://img.shields.io/badge/docs-hexdocs-purple.svg)](https://hexdocs.pm/snakebridge)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/nshkrdotcom/snakebridge/blob/main/LICENSE)
 
-**Configuration-driven Python library integration for Elixir** - Bridge Elixir to the Python ML ecosystem with zero manual wrapper code.
+Manifest-driven Python library integration for Elixir. Curate the functions you want, generate Elixir modules, and run them through Snakepit's gRPC runtime.
 
-SnakeBridge is a metaprogramming framework that automatically generates type-safe Elixir modules from declarative configurations, enabling seamless integration with any Python library. Built on [Snakepit](https://hex.pm/packages/snakepit) for high-performance Python orchestration.
+SnakeBridge is a small, declarative layer on top of [Snakepit](https://hex.pm/packages/snakepit): manifests are data, generation is dumb, and humans approve what gets exposed.
 
 ## Features
 
-✨ **Zero-Code Integration** - Write configuration, not wrappers
-🔐 **Type Safety** - Automatic Python → Elixir typespec generation with Dialyzer integration
-⚡ **Hybrid Compilation** - Runtime in dev (hot reload), compile-time in production (optimized)
-🎯 **Smart Caching** - Git-style schema diffing with incremental regeneration
-🔄 **Bidirectional Tools** - Export Elixir functions to Python seamlessly
-🔁 **Streaming Pipelines** - Real-time gRPC streaming with chunk callbacks
-📊 **Built-in Telemetry** - Comprehensive observability with `:telemetry` events
-🧪 **Property-Based Testing** - Auto-generate test suites from schemas
-🛠️ **LSP Integration** - Config authoring with autocomplete and diagnostics
-🌉 **Protocol-Driven** - Extensible architecture supporting multiple backends
+- Data-only JSON manifests for curated, stateless Python functions
+- Built-in manifests for `sympy`, `pylatexenc`, and `math-verify`
+- Manifest allowlist enforcement (explicit `allow_unsafe: true` to bypass)
+- Loader for built-in + custom manifests (`priv/snakebridge/manifests`, `custom_manifests` globs)
+- Runtime and compile-time generation (via `mix snakebridge.manifest.compile`)
+- Auto-starts Snakepit pools on first real call (disable with `auto_start_snakepit: false`)
+- Streaming support via `call_python_stream` and generated `*_stream` wrappers
+- Introspection tooling: discover, gen, suggest, enrich, review, diff, check
+- Shared serializer for SymPy, pylatexenc, and NumPy outputs
+- Explicit instance lifecycle (`Runtime.release_instance/1`)
+- Telemetry on runtime calls (`[:snakebridge, :call, ...]`)
 
 ## Installation
 
@@ -34,505 +35,205 @@ SnakeBridge is a metaprogramming framework that automatically generates type-saf
 ```elixir
 def deps do
   [
-    {:snakebridge, "~> 0.2.3"},
-    {:snakepit, "~> 0.6.7"}  # Required runtime
+    {:snakebridge, "~> 0.3.0"},
+    {:snakepit, "~> 0.7.0"}
   ]
 end
 ```
 
-### 2. Install Elixir dependencies
+### 2. Install Elixir deps
 
 ```bash
 mix deps.get
 ```
 
-### 3. ⚠️ Python Environment Setup (REQUIRED for real Python execution)
+### 3. Python setup (required for real Python execution)
 
-**IMPORTANT**: SnakeBridge tests use mocks by default (no Python needed). For real Python execution, you **MUST** set up a Python virtual environment.
-
-**Why venv?** Modern systems (Ubuntu 24.04+, Debian 12+) prevent system-wide pip installs (PEP 668). Virtual environments are now mandatory, not optional.
-
-#### Quick Setup (Recommended)
+SnakeBridge uses a Python adapter via Snakepit. For live Python calls, you need a venv and packages installed.
 
 ```bash
-# From project root - creates venv and installs all dependencies
-./scripts/setup_python.sh
-```
+mix snakebridge.setup --venv .venv
 
-This automatically:
-- Creates `.venv/` if it doesn't exist
-- Installs dependencies: `grpcio`, `protobuf`, `numpy`
-- Detects and uses existing Snakepit venv if available
-
-#### Manual Setup
-
-```bash
-# Create virtual environment
-python3 -m venv .venv
-
-# Install Snakepit dependencies
-.venv/bin/pip install -r deps/snakepit/priv/python/requirements.txt
-
-# Install SnakeBridge adapter
-cd priv/python
-../../.venv/bin/pip install -e .
-cd ../..
-
-# Configure Snakepit to use venv Python
+# Export environment for runtime (or let SnakepitLauncher resolve it)
 export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
+export PYTHONPATH=$(pwd)/priv/python:$(pwd)/deps/snakepit/priv/python:$PYTHONPATH
 ```
 
-#### For Users (Installing SnakeBridge as a dependency)
+This installs:
+- Snakepit core requirements (gRPC, protobuf, numpy, telemetry)
+- SnakeBridge adapter
+- Built-in manifest libs (sympy, pylatexenc, math-verify)
 
-```bash
-# Run setup script from your project
-./deps/snakebridge/scripts/setup_python.sh
+Docs:
+- Python setup: `docs/PYTHON_SETUP.md`
+- Example walkthrough: `examples/QUICKSTART.md`
 
-# Or manually:
-cd deps/snakebridge/priv/python
-python3 -m venv .venv
-.venv/bin/pip install -e .
-export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
-```
+## Quick Start (Built-in Manifests)
 
-#### Verify Python Setup
-
-```bash
-# Check dependencies
-.venv/bin/python3 -c "import grpc; print('✓ gRPC installed')"
-.venv/bin/python3 -c "from snakebridge_adapter.adapter import SnakeBridgeAdapter; print('✓ Adapter ready')"
-```
-
-### 4. Verify installation
-
-```bash
-# Mock tests (no Python needed)
-mix test
-
-# Real Python integration tests
-# SNAKEPIT_PYTHON optional: tests auto-fall back to ./.venv/bin/python3 or system python3
-mix test --only real_python
-
-# Real Python tests start a Snakepit pool automatically; they will fail fast if no Python is available.
-```
-
-**That's it!** Start using SnakeBridge.
-
-> 📘 **Documentation Links**:
-> - **Detailed Python setup guide**: [docs/PYTHON_SETUP.md](docs/PYTHON_SETUP.md)
-> - **Example quick start**: [examples/QUICKSTART.md](examples/QUICKSTART.md)
-> - **Test environment setup**: [test/integration/README.md](test/integration/README.md)
-> - **Snakepit documentation**: See `deps/snakepit/README.md` after running `mix deps.get`
-
-### Or Just Run Examples
-
-The fastest way to see SnakeBridge:
-
-```bash
-# Mock demo (no Python needed - works immediately)
-mix run examples/api_demo.exs
-
-# Live Python examples (requires SNAKEPIT_PYTHON set)
-export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
-elixir examples/live_demo.exs       # Built-in json module via Snakepit
-elixir examples/numpy_live.exs      # NumPy scientific computing
-elixir examples/genai_streaming.exs # Full streaming tool demo
-```
-
-Examples using `Mix.install` (like `live_demo.exs`) auto-configure Python via `example_helpers.exs`.
-
-## Quick Start
-
-### Try It Now (Zero Setup)
-
-```bash
-# See SnakeBridge in action
-mix run examples/api_demo.exs
-```
-
-Shows configuration, code generation, type system - all working immediately.
-
-### Live Python Examples
-
-```bash
-# JSON (built-in, no install)
-elixir examples/live_demo.exs
-
-# NumPy (auto-installs if needed)
-elixir examples/numpy_live.exs
-
-# Streaming (GenAI adapter)
-elixir examples/genai_streaming.exs
-```
-
-**These just work** - auto-install dependencies, configure Snakepit, run live Python.
-
----
-
-## What You Can Do
-
-SnakeBridge can generate type-safe Elixir wrappers for:
-
-✅ **Python Classes** - Full OOP support with instance management
-✅ **Module-Level Functions** - Stateless function calls (added in v0.2.1)
-✅ **Streaming Tools** - Bidirectional streaming callbacks (refined in v0.2.3!)
-✅ **Mixed Integration** - Classes and functions from the same library
-
-### Streaming Tools (v0.2.3)
-
-SnakeBridge can now drive Python streams end-to-end with chunk callbacks:
-
-```elixir
-session_id = "demo:#{System.unique_integer([:positive])}"
-
-SnakeBridge.Runtime.execute_stream(
-  session_id,
-  "stream_progress",
-  %{"steps" => 5},
-  fn chunk ->
-    IO.inspect(chunk, label: "Chunk")
-  end
-)
-```
-
-**Highlights:**
-- Powered by Snakepit v0.6.4's fixed streaming executor
-- Works with adapters that expose streaming tools (GenAI, Showcase, custom)
-- Automatic heartbeats + progress metadata included in each chunk
-
-See `examples/genai_streaming.exs` or `examples/test_streaming_simple.exs` for a complete walkthrough.
-
-### Function Generation
-
-Call any Python function directly from Elixir:
-
-```elixir
-# Discover and generate
-{:ok, schema} = SnakeBridge.discover("json")
-config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "json")
-{:ok, [json_module]} = SnakeBridge.generate(config)
-
-# Call Python functions - no instances needed!
-{:ok, json_string} = json_module.dumps(%{obj: %{hello: "world", value: 42}})
-# => "{\"hello\": \"world\", \"value\": 42}"
-
-{:ok, data} = json_module.loads(%{s: json_string})
-# => %{"hello" => "world", "value" => 42}
-```
-
-**Key Features:**
-- **Stateless** - No instance creation, direct function calls
-- **Type-safe** - Full typespec generation from Python signatures
-- **Zero boilerplate** - Auto-generated from discovery
-- **Works with any library** - json, numpy, requests, etc.
-
-**Example: NumPy Math Functions**
-
-```elixir
-# Discover NumPy (626 functions!)
-{:ok, schema} = SnakeBridge.discover("numpy")
-
-# Generate wrappers for mathematical functions
-config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "numpy")
-{:ok, modules} = SnakeBridge.generate(config)
-
-# Call NumPy functions directly
-numpy_module = Enum.find(modules, &function_exported?(&1, :mean, 2))
-{:ok, result} = numpy_module.mean(%{a: [1, 2, 3, 4, 5]})
-# => 3.0
-```
-
-Complex dtypes (`complex64` / `complex128`) are serialized as `%{real: float, imag: float}` per element in the returned `data` structure.
-
-See `examples/live_demo.exs` for a complete working example.
-
----
-
-## Using SnakeBridge
-
-### 1. Discover a Python Library
-
-```bash
-# Auto-generate configuration from introspection
-mix snakebridge.discover numpy --output config/snakebridge/numpy.exs
-```
-
-### 2. Review & Customize Configuration
-
-```elixir
-# config/snakebridge/dspy.exs
-use SnakeBridge.Config
-
-config do
-  %SnakeBridge.Config{
-    python_module: "dspy",
-    version: "2.5.0",
-
-    # Python classes (OOP)
-    classes: [
-      %{
-        python_path: "dspy.Predict",
-        elixir_module: DSPy.Predict,
-        constructor: %{args: %{signature: {:required, :string}}},
-        methods: [
-          %{name: "__call__", elixir_name: :call, streaming: false}
-        ]
-      }
-    ],
-
-    # Module-level functions (available since v0.2.1)
-    functions: [
-      %{
-        name: "configure",
-        python_path: "dspy.settings.configure",
-        elixir_name: :configure
-      }
-    ]
-  }
-end
-```
-
-### 3. Use Auto-Generated Modules
-
-```elixir
-# Modules are generated at compile-time (prod) or runtime (dev)
-
-# Call module-level functions (stateless)
-DSPy.Settings.configure(%{lm: lm_config})
-
-# Create class instances and call methods
-{:ok, predictor} = DSPy.Predict.create(%{signature: "question -> answer"})
-{:ok, result} = DSPy.Predict.call(predictor, %{question: "What is SnakeBridge?"})
-
-# %{answer: "A configuration-driven Python integration framework..."}
-```
-
-## Example: DSPy Integration
-
-```elixir
-# Configure DSPy language model (function call - no instance!)
-{:ok, lm} = DSPy.LM.OpenAI.create(%{model: "gpt-4", api_key: api_key})
-DSPy.Settings.configure(%{lm: lm})
-
-# Use Chain of Thought with streaming
-{:ok, cot} = DSPy.ChainOfThought.create("question -> reasoning, answer")
-{:ok, stream} = DSPy.ChainOfThought.think(cot, %{question: "Explain quantum computing"})
-
-for {:chunk, data} <- stream do
-  IO.write(data)
-end
-
-# Optimize with BootstrapFewShot
-{:ok, optimizer} = DSPy.Optimizers.BootstrapFewShot.create(%{
-  metric: &accuracy/2,
-  max_bootstrapped_demos: 4
-})
-{:ok, optimized} = DSPy.Optimizers.BootstrapFewShot.compile(optimizer, program, trainset)
-```
-
-## Configuration
+### Configure manifests
 
 ```elixir
 # config/config.exs
-import Config
-
 config :snakebridge,
-  # Compilation strategy: :auto, :compile_time, or :runtime
-  compilation_strategy: :auto,  # Auto = dev uses runtime, prod uses compile_time
-
-  # Cache settings
-  cache_path: "priv/snakebridge/cache",
-  cache_enabled: true,
-
-  # Telemetry
-  telemetry_enabled: true,
-  telemetry_prefix: [:snakebridge]
+  load: [:sympy, :pylatexenc, :math_verify],
+  custom_manifests: ["config/snakebridge/*.json"],
+  compilation_mode: :runtime,
+  auto_start_snakepit: true,
+  allow_unsafe: false,
+  python_path: ".venv/bin/python3",
+  pool_size: 4
 ```
 
-## Advanced Features
+SnakeBridge loads configured manifests at application start (unless `compilation_mode: :compile_time`).
 
-### Configuration Composition
+### Use the generated modules
 
 ```elixir
-# Reusable mixin
-defmodule BasePredictorMixin do
-  def mixin do
-    %{
-      telemetry: %{enabled: true},
-      timeout: 30_000,
-      result_transform: &MyApp.Transforms.prediction/1
-    }
-  end
-end
-
-# Use in config
-%{
-  python_path: "dspy.Predict",
-  mixins: [BasePredictorMixin],
-  # Mixin fields are merged with local config
-}
+{:ok, roots} = SnakeBridge.SymPy.solve(%{expr: "x**2 - 1", symbol: "x"})
+{:ok, nodes} = SnakeBridge.PyLatexEnc.parse(%{latex: "\\frac{1}{2}"})
+{:ok, ok?} = SnakeBridge.MathVerify.verify(%{gold: "x**2", answer: "x*x"})
 ```
 
-### Bidirectional Tool Calling
+## Allowlist and Unsafe Calls
+
+By default, SnakeBridge only allows calls that are defined in loaded manifests. The allowlist is populated when `SnakeBridge.Manifest.Loader` runs. If you generate modules manually, register the config first or pass `allow_unsafe: true`:
 
 ```elixir
-# Export Elixir functions to Python
-bidirectional_tools: %{
-  enabled: true,
-  export_to_python: [
-    {MyApp.Validators, :validate_reasoning, 1, "elixir_validate"},
-    {MyApp.Metrics, :track_prediction, 2, "elixir_track"}
+{:ok, config} = SnakeBridge.Manifest.from_file("config/snakebridge/json.json")
+SnakeBridge.Manifest.Registry.register_config(config)
+
+SnakeBridge.Runtime.call_function("json", "dumps", %{obj: %{a: 1}}, allow_unsafe: true)
+```
+
+## Manifest Format (Simplified)
+
+```json
+{
+  "name": "sympy",
+  "python_module": "sympy",
+  "python_path_prefix": "snakebridge_adapter.sympy_bridge",
+  "version": "~> 1.13",
+  "category": "math",
+  "elixir_module": "SnakeBridge.SymPy",
+  "types": {
+    "expr": "string",
+    "symbol": "string"
+  },
+  "functions": [
+    {"name": "solve", "args": ["expr", "symbol"], "returns": {"type": "list", "element_type": "string"}},
+    {"name": "simplify", "args": ["expr"], "returns": "string"},
+    {"name": "expand", "args": ["expr"], "returns": "string"}
   ]
 }
 ```
 
-```python
-# In Python code, call Elixir functions
-validation = elixir_validate(reasoning)
-if not validation["valid"]:
-    reasoning = retry_with_feedback(validation["feedback"])
-```
+Manifests live under `priv/snakebridge/manifests/` and are registered in `priv/snakebridge/manifests/_index.json`.
 
-### Type Safety
-
-```elixir
-# Python type hints → Elixir typespecs
-# Python: def predict(signature: str, inputs: dict[str, Any]) -> dict[str, Any]:
-
-# Generated Elixir:
-@spec predict(String.t(), map()) :: {:ok, map()} | {:error, term()}
-def predict(signature, inputs, opts \\ [])
-```
-
-## Documentation
-
-- **[Getting Started Guide](https://hexdocs.pm/snakebridge/getting_started.html)** - Comprehensive tutorial
-- **[API Reference](https://hexdocs.pm/snakebridge)** - Complete function documentation
-- **[Configuration Schema](https://hexdocs.pm/snakebridge/SnakeBridge.Config.html)** - All config options
-- **[Type System](https://hexdocs.pm/snakebridge/SnakeBridge.TypeSystem.html)** - Python ↔ Elixir type mapping
-- **[Examples](https://github.com/nshkrdotcom/snakebridge/tree/main/examples)** - Working integrations
-
-## Mix Tasks
+## Manifest Workflow
 
 ```bash
-# Discover Python library schema
-mix snakebridge.discover <module> [--output path] [--depth N]
+# Discover a library and generate a draft manifest
+mix snakebridge.discover sympy --output priv/snakebridge/manifests/_drafts/sympy.json
 
-# Validate configurations
-mix snakebridge.validate
+# Generate a draft manifest from introspection
+mix snakebridge.manifest.gen sympy --output priv/snakebridge/manifests/_drafts/sympy.json
 
-# Show diff between cached and current schema
-mix snakebridge.diff <integration_id>
+# Or suggest a curated subset (heuristic)
+mix snakebridge.manifest.suggest sympy --output priv/snakebridge/manifests/_drafts/sympy.json
 
-# Generate modules from config
-mix snakebridge.generate [integration_ids...]
+# Enrich with docstrings + types (optionally cached schema)
+mix snakebridge.manifest.enrich sympy --cache --cache-dir priv/snakebridge/schemas
 
-# Clean caches
-mix snakebridge.clean
+# Review interactively
+mix snakebridge.manifest.review sympy --introspect
+
+# Validate and diff against live schema
+mix snakebridge.manifest.validate priv/snakebridge/manifests/sympy.json
+mix snakebridge.manifest.diff sympy
+
+# Fail CI on drift
+mix snakebridge.manifest.check --all
 ```
+
+## Compile-Time Generation
+
+```bash
+# Generate Elixir source files
+mix snakebridge.manifest.compile --load sympy,pylatexenc --output lib/snakebridge/generated
+
+# Clean and recompile
+mix snakebridge.manifest.clean --load sympy,pylatexenc
+```
+
+Enable compile-time loading:
+
+```elixir
+config :snakebridge, compilation_mode: :compile_time
+```
+
+## Streaming
+
+Manifests can mark functions as streaming:
+
+```elixir
+%{name: "generate", python_path: "my.module.generate", streaming: true}
+```
+
+SnakeBridge will generate a `generate_stream/2` function and call the `call_python_stream` tool:
+
+```elixir
+MyLib.generate_stream(%{prompt: "Hello"})
+|> Enum.each(&IO.inspect/1)
+```
+
+If you have a custom streaming tool, set `streaming_tool` in the manifest and the wrapper will call it directly.
+
+## Examples
+
+See `examples/README.md` for a full list and expected outputs. A quick way to run them all:
+
+```bash
+./examples/run_all.sh
+```
+
+Example scripts:
+- `examples/manifest_sympy.exs`
+- `examples/manifest_pylatexenc.exs`
+- `examples/manifest_math_verify.exs`
 
 ## Testing
 
 ```bash
-# Run all tests
+# Mock tests (no Python)
 mix test
 
-# Run with coverage
-mix coveralls
-mix coveralls.html
-
-# Run specific test categories
-mix test test/unit              # Fast unit tests
-mix test --only integration     # Integration tests
-mix test test/property          # Property-based tests
-
-# Quality checks
-mix quality                     # Format + Credo + Dialyzer
+# Real Python integration tests
+mix test --only real_python
 ```
 
-## Architecture
+## Built-in Manifests
 
-SnakeBridge is built on a six-layer architecture:
+- `sympy` -> `SnakeBridge.SymPy`
+- `pylatexenc` -> `SnakeBridge.PyLatexEnc`
+- `math_verify` -> `SnakeBridge.MathVerify`
 
-```
-┌─────────────────────────────────────┐
-│  6. Developer Tools                 │  Mix tasks, LSP, IEx helpers
-├─────────────────────────────────────┤
-│  5. Generated Modules               │  Type-safe wrappers, docs, tests
-├─────────────────────────────────────┤
-│  4. Code Generation Engine          │  Macros, templates, optimization
-├─────────────────────────────────────┤
-│  3. Schema & Type System            │  Cache, inference, composition
-├─────────────────────────────────────┤
-│  2. Discovery & Introspection       │  gRPC protocol, Python agent
-├─────────────────────────────────────┤
-│  1. Execution Runtime               │  Snakepit, sessions, telemetry
-└─────────────────────────────────────┘
+List them:
+
+```bash
+mix snakebridge.manifests
 ```
 
-See [Architecture Guide](https://hexdocs.pm/snakebridge/architecture.html) for details.
+## Mix Tasks
 
-## Roadmap
+```bash
+# Setup
+mix snakebridge.setup --venv .venv
 
-### v0.1.0 (Current)
-- [x] Core config schema
-- [x] Basic code generation
-- [x] Type system mapper
-- [x] Discovery & introspection
-- [ ] DSPy integration (proof-of-concept)
+# Manifests
+mix snakebridge.manifest.validate priv/snakebridge/manifests/sympy.json
+mix snakebridge.manifest.check --all
+mix snakebridge.manifest.install --load sympy,pylatexenc,math_verify --venv .venv --include_core
 
-### v0.2.0
-- [ ] Streaming support (gRPC)
-- [ ] Hybrid compilation mode
-- [ ] Configuration composition
-- [ ] LSP server for configs
-
-### v0.3.0
-- [ ] LangChain integration
-- [ ] Transformers integration
-- [ ] Auto-generated test suites
-- [ ] Performance optimizations
-
-### v1.0.0
-- [ ] Production-ready
-- [ ] Comprehensive documentation
-- [ ] 90%+ test coverage
-- [ ] Community integrations
-
-## Performance
-
-| Operation | Overhead |
-|-----------|----------|
-| Instance creation | +4% |
-| Method calls | +5% |
-| Streaming | +2% |
-
-**Negligible overhead** thanks to compile-time optimization.
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](https://github.com/nshkrdotcom/snakebridge/blob/main/CONTRIBUTING.md) for guidelines.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Write tests (`mix test`)
-4. Ensure quality checks pass (`mix quality`)
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](https://github.com/nshkrdotcom/snakebridge/blob/main/LICENSE) file for details.
-
-Copyright (c) 2025 nshkrdotcom
-
-## Acknowledgments
-
-- Built on [Snakepit](https://hex.pm/packages/snakepit) for Python orchestration
-- Inspired by the need for seamless Elixir-Python ML integration
-- Special thanks to the Elixir and Python communities
-
----
-
-**Made with ❤️ by [nshkrdotcom](https://github.com/nshkrdotcom)**
+# Discovery
+mix snakebridge.discover sympy --output priv/snakebridge/manifests/_drafts/sympy.json
+```

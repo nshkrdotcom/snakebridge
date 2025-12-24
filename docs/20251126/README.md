@@ -6,6 +6,8 @@ This directory contains comprehensive guides, architecture documents, and resear
 
 ---
 
+> Update (2025-12-23): The current implementation is manifest-driven (JSON manifests + allowlist) on Snakepit 0.7.0. Many documents under `docs/20251026/` and `docs/20251113/` are historical research notes and may reference legacy config workflows.
+
 ## Quick Links
 
 ### Getting Started

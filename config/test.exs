@@ -4,7 +4,7 @@ import Config
 config :logger, level: :warning
 
 config :snakebridge,
-  compilation_strategy: :runtime,
+  compilation_mode: :runtime,
   # Don't cache in tests
   cache_enabled: false,
   telemetry_enabled: false

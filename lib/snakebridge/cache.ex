@@ -62,17 +62,20 @@ defmodule SnakeBridge.Cache do
 
   defp load_from_file(cache_path) do
     if File.exists?(cache_path) do
-      cache_path
-      |> File.read!()
-      |> :erlang.binary_to_term()
-      |> then(&{:ok, &1})
+      with {:ok, contents} <- File.read(cache_path) do
+        {:ok, :erlang.binary_to_term(contents, [:safe])}
+      end
     else
       {:error, :not_found}
     end
   end
 
   defp get_cache_dir do
-    Application.get_env(:snakebridge, :cache_path, "priv/snakebridge/cache")
+    Application.get_env(
+      :snakebridge,
+      :cache_path,
+      Path.join(System.tmp_dir!(), "snakebridge")
+    )
   end
 
   @doc """

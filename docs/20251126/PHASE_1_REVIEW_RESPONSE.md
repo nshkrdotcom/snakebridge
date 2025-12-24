@@ -448,7 +448,7 @@ class InstanceManager:
 | Arrow/Nx/Explorer | Premature optimization | Benchmarks prove need (v1.5) |
 | Distributed Snakepit | Out of scope for v1 | Spring 2026 |
 | pandas Adapter | Focus on NumPy first | After NumPy stable (likely next) |
-| DSPy Adapter | Unsloth is priority | After Unsloth stable |
+| Demo Adapter | Unsloth is priority | After Unsloth stable |
 | Transformers Adapter | Unsloth covers fine-tuning | User demand |
 
 ---

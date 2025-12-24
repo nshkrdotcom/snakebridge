@@ -16,6 +16,7 @@ defmodule SnakeBridge.Integration.RealPythonTest do
   @moduletag :slow
 
   alias SnakeBridge.{Discovery, Runtime}
+  alias SnakeBridge.TestHelpers
 
   setup_all do
     adapter_spec = "snakebridge_adapter.adapter.SnakeBridgeAdapter"
@@ -24,7 +25,9 @@ defmodule SnakeBridge.Integration.RealPythonTest do
       SnakeBridge.SnakepitTestHelper.prepare_python_env!(adapter_spec)
 
     original_adapter = Application.get_env(:snakebridge, :snakepit_adapter)
+    original_allow_unsafe = Application.get_env(:snakebridge, :allow_unsafe)
     Application.put_env(:snakebridge, :snakepit_adapter, SnakeBridge.SnakepitAdapter)
+    Application.put_env(:snakebridge, :allow_unsafe, true)
 
     IO.puts("\n" <> String.duplicate("=", 60))
     IO.puts("REAL PYTHON TEST ENVIRONMENT")
@@ -44,8 +47,14 @@ defmodule SnakeBridge.Integration.RealPythonTest do
     on_exit(fn ->
       restore_env.()
       Application.put_env(:snakebridge, :snakepit_adapter, original_adapter)
+      Application.put_env(:snakebridge, :allow_unsafe, original_allow_unsafe)
     end)
 
+    :ok
+  end
+
+  setup do
+    TestHelpers.purge_modules([Json, Demo.SettingsFunctions, Demo.Predict])
     :ok
   end
 
@@ -66,7 +75,6 @@ defmodule SnakeBridge.Integration.RealPythonTest do
       assert Map.has_key?(functions, "loads") or Map.has_key?(functions, "load")
 
       IO.puts("\n✓ Successfully discovered json module from real Python")
-      IO.inspect(Map.keys(functions), label: "Available functions")
     end
 
     test "discovers module with error handling for nonexistent module" do
@@ -122,12 +130,10 @@ defmodule SnakeBridge.Integration.RealPythonTest do
 
         {:error, reason} ->
           IO.puts("\n✗ Failed to call json.dumps:")
-          IO.inspect(reason, label: "Error")
           flunk("json.dumps failed: #{inspect(reason)}")
 
         other ->
           IO.puts("\n✗ Unexpected result from json.dumps:")
-          IO.inspect(other, label: "Result")
           flunk("Unexpected result: #{inspect(other)}")
       end
     end
@@ -146,12 +152,7 @@ defmodule SnakeBridge.Integration.RealPythonTest do
         end)
 
       # Skip test if no math module generated
-      unless math_module do
-        IO.puts("\n⚠️ No module generated with sqrt function (schema might not include functions)")
-        IO.puts("  Generated modules: #{length(modules)}")
-        # Math module introspection might not work - skip test
-        assert true
-      else
+      if math_module do
         # Try calling math.sqrt
         result =
           if function_exported?(math_module, :sqrt, 1) do
@@ -169,14 +170,19 @@ defmodule SnakeBridge.Integration.RealPythonTest do
 
           {:error, reason} ->
             IO.puts("\n✗ Failed to call math.sqrt:")
-            IO.inspect(reason, label: "Error")
             # Don't fail test yet, just document the issue
             IO.puts("  Note: This might be expected if call_python needs work")
+            IO.puts("  Error: #{inspect(reason)}")
 
           other ->
             IO.puts("\n✗ Unexpected result from math.sqrt:")
-            IO.inspect(other, label: "Result")
+            IO.puts("  Result: #{inspect(other)}")
         end
+      else
+        IO.puts("\n⚠️ No module generated with sqrt function (schema might not include functions)")
+        IO.puts("  Generated modules: #{length(modules)}")
+        # Math module introspection might not work - skip test
+        assert true
       end
     end
   end
@@ -199,15 +205,15 @@ defmodule SnakeBridge.Integration.RealPythonTest do
       case result do
         {:ok, json_string} ->
           IO.puts("\n✓ Runtime.call_function works with real Python!")
-          IO.inspect(json_string, label: "Result")
+          IO.puts("  Result: #{inspect(json_string)}")
 
         {:error, reason} ->
           IO.puts("\n✗ Runtime.call_function failed:")
-          IO.inspect(reason, label: "Error")
+          IO.puts("  Error: #{inspect(reason)}")
 
         other ->
           IO.puts("\n✗ Unexpected result:")
-          IO.inspect(other, label: "Result")
+          IO.puts("  Result: #{inspect(other)}")
       end
     end
   end
@@ -257,7 +263,7 @@ defmodule SnakeBridge.Integration.RealPythonTest do
         if Code.ensure_loaded?(Snakepit) do
           stats = Snakepit.get_stats()
           IO.puts("\n3. Snakepit Stats:")
-          IO.inspect(stats, label: "   Stats")
+          IO.puts("   Stats: #{inspect(stats)}")
         end
       rescue
         e ->

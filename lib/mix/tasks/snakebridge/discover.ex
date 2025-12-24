@@ -1,6 +1,6 @@
 defmodule Mix.Tasks.Snakebridge.Discover do
   @moduledoc """
-  Discovers a Python library's schema and generates a SnakeBridge configuration.
+  Discovers a Python library's schema and generates a draft SnakeBridge manifest.
 
   ## Usage
 
@@ -8,34 +8,35 @@ defmodule Mix.Tasks.Snakebridge.Discover do
 
   ## Arguments
 
-    * `MODULE` - The Python module to discover (e.g., "dspy", "langchain")
+    * `MODULE` - The Python module to discover (e.g., "sympy", "pylatexenc")
 
   ## Options
 
-    * `--output` - Output path for the config file (default: config/snakebridge/<module>.exs)
+    * `--output` - Output path for the manifest file (default: priv/snakebridge/manifests/_drafts/<module>.json)
     * `--depth` - Discovery depth for submodules (default: 2)
     * `--force` - Overwrite existing config file without prompting
 
   ## Examples
 
-      # Discover DSPy library
-      mix snakebridge.discover dspy
+      # Discover SymPy library
+      mix snakebridge.discover sympy
 
       # Custom output path
-      mix snakebridge.discover dspy --output lib/configs/dspy.exs
+      mix snakebridge.discover sympy --output priv/snakebridge/manifests/_drafts/sympy.json
 
       # Deep discovery
       mix snakebridge.discover langchain --depth 3
 
       # Force overwrite
-      mix snakebridge.discover dspy --force
+      mix snakebridge.discover sympy --force
   """
 
-  @shortdoc "Discover a Python library and generate SnakeBridge config"
+  @shortdoc "Discover a Python library and generate a draft manifest"
 
   use Mix.Task
 
-  alias SnakeBridge.{Discovery, Config}
+  alias SnakeBridge.{Discovery, Manifest, SnakepitLauncher}
+  alias SnakeBridge.Manifest.Agent
 
   @requirements ["app.start"]
 
@@ -62,6 +63,8 @@ defmodule Mix.Tasks.Snakebridge.Discover do
     Mix.shell().info("Discovering Python library: #{module_name}")
     Mix.shell().info("Discovery depth: #{depth}")
 
+    SnakepitLauncher.ensure_pool_started!()
+
     # Check if file exists and we're not forcing
     if File.exists?(output_path) and not force? do
       Mix.raise(
@@ -73,23 +76,15 @@ defmodule Mix.Tasks.Snakebridge.Discover do
     # Discover the library
     case Discovery.discover(module_name, depth: depth) do
       {:ok, schema} ->
-        # Convert schema to config
-        config = Discovery.schema_to_config(schema, python_module: module_name)
+        manifest = Agent.suggest_from_schema(schema, module_name)
 
-        # Validate the config
-        case Config.validate(config) do
-          {:ok, valid_config} ->
-            # Write to file
-            write_config_file(valid_config, output_path)
-            Mix.shell().info("✓ Config written to: #{output_path}")
-            Mix.shell().info("")
-            Mix.shell().info("Next steps:")
-            Mix.shell().info("  1. Review and customize: #{output_path}")
-            Mix.shell().info("  2. Generate modules: mix snakebridge.generate")
+        write_manifest_file(manifest, output_path)
 
-          {:error, errors} ->
-            Mix.raise("Generated config is invalid:\n" <> Enum.join(errors, "\n"))
-        end
+        Mix.shell().info("✓ Manifest written to: #{output_path}")
+        Mix.shell().info("")
+        Mix.shell().info("Next steps:")
+        Mix.shell().info("  1. Review and customize: #{output_path}")
+        Mix.shell().info("  2. Compile manifests: mix snakebridge.manifest.compile")
 
       {:error, reason} ->
         Mix.raise("Failed to discover module '#{module_name}': #{inspect(reason)}")
@@ -112,19 +107,15 @@ defmodule Mix.Tasks.Snakebridge.Discover do
   end
 
   defp default_output_path(module_name) do
-    "config/snakebridge/#{module_name}.exs"
+    "priv/snakebridge/manifests/_drafts/#{module_name}.json"
   end
 
-  defp write_config_file(config, output_path) do
+  defp write_manifest_file(manifest, output_path) do
     # Ensure directory exists
     output_path
     |> Path.dirname()
     |> File.mkdir_p!()
 
-    # Generate Elixir code
-    config_code = Config.to_elixir_code(config)
-
-    # Write to file
-    File.write!(output_path, config_code)
+    File.write!(output_path, Manifest.to_json(manifest))
   end
 end

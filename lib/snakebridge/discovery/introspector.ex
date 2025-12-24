@@ -19,10 +19,10 @@ defmodule SnakeBridge.Discovery.Introspector do
   ## Examples
 
       # Using mock in tests
-      {:ok, schema} = Introspector.discover(IntrospectorMock, "dspy", [])
+      {:ok, schema} = Introspector.discover(IntrospectorMock, "sympy", [])
 
       # Using real implementation
-      {:ok, schema} = Introspector.discover(Introspector, "dspy", depth: 3)
+      {:ok, schema} = Introspector.discover(Introspector, "sympy", depth: 3)
   """
   @spec discover(module(), String.t(), keyword()) :: {:ok, map()} | {:error, term()}
   def discover(impl, module_path, opts) when is_atom(impl) do
@@ -88,6 +88,6 @@ defmodule SnakeBridge.Discovery.Introspector do
   end
 
   defp generate_session_id do
-    "introspection_#{:rand.uniform(100_000)}"
+    SnakeBridge.SessionId.generate("introspection")
   end
 end

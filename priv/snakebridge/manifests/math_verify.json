@@ -1,0 +1,30 @@
+{
+  "name": "math_verify",
+  "python_module": "math_verify",
+  "python_path_prefix": "snakebridge_adapter.math_verify_bridge",
+  "version": "~> 0.1",
+  "category": "math",
+  "elixir_module": "SnakeBridge.MathVerify",
+  "types": {
+    "text": "string",
+    "gold": "string",
+    "answer": "string"
+  },
+  "functions": [
+    {
+      "name": "parse",
+      "args": ["text"],
+      "returns": "any"
+    },
+    {
+      "name": "verify",
+      "args": ["gold", "answer"],
+      "returns": "boolean"
+    },
+    {
+      "name": "grade",
+      "args": ["gold", "answer"],
+      "returns": "boolean"
+    }
+  ]
+}

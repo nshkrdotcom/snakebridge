@@ -3,8 +3,8 @@ import Config
 # Development configuration
 config :snakebridge,
   # Hot reload in dev
-  compilation_strategy: :runtime,
+  compilation_mode: :runtime,
   cache_enabled: true,
   telemetry_enabled: true,
-  # Use mock in dev (until Snakepit is configured)
-  snakepit_adapter: SnakeBridge.SnakepitMock
+  # Use real adapter so manifest tooling works in dev
+  snakepit_adapter: SnakeBridge.SnakepitAdapter

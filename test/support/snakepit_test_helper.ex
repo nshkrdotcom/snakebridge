@@ -13,24 +13,22 @@ defmodule SnakeBridge.SnakepitTestHelper do
     venv_python = Path.join(project_venv, "bin/python3")
 
     python_exe =
-      cond do
-        File.exists?(venv_python) ->
-          venv_python
+      if File.exists?(venv_python) do
+        venv_python
+      else
+        base_python =
+          [System.get_env("SNAKEPIT_PYTHON"), System.find_executable("python3")]
+          |> Enum.find(& &1) ||
+            raise "Python executable not found. Set SNAKEPIT_PYTHON to a Python 3.9+ interpreter."
 
-        true ->
-          base_python =
-            [System.get_env("SNAKEPIT_PYTHON"), System.find_executable("python3")]
-            |> Enum.find(& &1) ||
-              raise "Python executable not found. Set SNAKEPIT_PYTHON to a Python 3.9+ interpreter."
+        File.mkdir_p!(project_venv)
 
-          File.mkdir_p!(project_venv)
+        case System.cmd(base_python, ["-m", "venv", project_venv]) do
+          {_out, 0} -> :ok
+          {out, code} -> raise "Failed to create venv at #{project_venv} (code #{code}): #{out}"
+        end
 
-          case System.cmd(base_python, ["-m", "venv", project_venv]) do
-            {_out, 0} -> :ok
-            {out, code} -> raise "Failed to create venv at #{project_venv} (code #{code}): #{out}"
-          end
-
-          venv_python
+        venv_python
       end
 
     snakebridge_python = Path.join([project_root, "priv", "python"])
@@ -155,6 +153,9 @@ defmodule SnakeBridge.SnakepitTestHelper do
     requirements = Application.app_dir(:snakepit, "priv/python/requirements.txt")
     adapter_dir = Path.expand(Path.join([File.cwd!(), "priv/python"]))
 
+    extra_requirements =
+      Path.expand(Path.join([File.cwd!(), "priv/python/requirements.snakebridge.txt"]))
+
     # Ensure pip exists
     _ = System.cmd(python_exec, ["-m", "ensurepip", "--upgrade"], env: env)
 
@@ -162,6 +163,13 @@ defmodule SnakeBridge.SnakepitTestHelper do
       System.cmd(python_exec, ["-m", "pip", "install", "-r", requirements], env: env)
 
     {out2, code2} = System.cmd(python_exec, ["-m", "pip", "install", "-e", adapter_dir], env: env)
+
+    _ =
+      if File.exists?(extra_requirements) do
+        System.cmd(python_exec, ["-m", "pip", "install", "-r", extra_requirements], env: env)
+      else
+        {[], 0}
+      end
 
     case System.cmd(python_exec, ["-c", "import grpc"], env: env) do
       {_out, 0} ->
@@ -176,7 +184,11 @@ defmodule SnakeBridge.SnakepitTestHelper do
     Enum.reduce_while(1..20, :error, fn attempt, _ ->
       case Process.whereis(Snakepit.Pool) do
         nil ->
-          Process.sleep(100 * attempt)
+          receive do
+          after
+            100 * attempt -> :ok
+          end
+
           {:cont, :error}
 
         _pid ->

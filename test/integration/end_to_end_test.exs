@@ -2,9 +2,25 @@ defmodule SnakeBridge.Integration.EndToEndTest do
   use ExUnit.Case
 
   alias SnakeBridge.{Config, Discovery, Generator}
+  alias SnakeBridge.Manifest.Registry
+  alias SnakeBridge.Schema.Differ
   alias SnakeBridge.TestFixtures
+  alias SnakeBridge.TestHelpers
 
   @moduletag :integration
+
+  setup do
+    Registry.reset()
+
+    TestHelpers.purge_modules([
+      TestApp.Predict,
+      Demo.Settings,
+      Demo.SettingsFunctions,
+      Demo.Predict
+    ])
+
+    :ok
+  end
 
   describe "full integration workflow" do
     @tag :slow
@@ -22,6 +38,8 @@ defmodule SnakeBridge.Integration.EndToEndTest do
       assert is_list(config.classes)
 
       # Step 3: Generate Elixir modules
+      Registry.register_config(config)
+
       {:ok, modules} = Generator.generate_all(config)
 
       assert is_list(modules)
@@ -58,10 +76,12 @@ defmodule SnakeBridge.Integration.EndToEndTest do
       new_config = %{old_config | version: "2.6.0"}
 
       # Generate initial modules
+      Registry.register_config(old_config)
+
       {:ok, old_modules} = Generator.generate_all(old_config)
 
       # Compute diff
-      diff = SnakeBridge.Schema.Differ.diff(old_config, new_config)
+      diff = Differ.diff(old_config, new_config)
 
       # Regenerate only changed modules
       {:ok, updated_modules} = Generator.generate_incremental(diff, old_modules)

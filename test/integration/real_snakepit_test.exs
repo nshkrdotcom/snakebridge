@@ -10,8 +10,8 @@ defmodule SnakeBridge.Integration.RealSnakepitTest do
   """
   use ExUnit.Case
 
-  alias SnakeBridge.Runtime
   alias SnakeBridge.Error
+  alias SnakeBridge.Runtime
 
   @moduletag :real_python
 
@@ -22,7 +22,9 @@ defmodule SnakeBridge.Integration.RealSnakepitTest do
       SnakeBridge.SnakepitTestHelper.prepare_python_env!(adapter_spec)
 
     original_adapter = Application.get_env(:snakebridge, :snakepit_adapter)
+    original_allow_unsafe = Application.get_env(:snakebridge, :allow_unsafe)
     Application.put_env(:snakebridge, :snakepit_adapter, SnakeBridge.SnakepitAdapter)
+    Application.put_env(:snakebridge, :allow_unsafe, true)
 
     IO.puts("\n" <> String.duplicate("=", 60))
     IO.puts("REAL PYTHON TEST ENVIRONMENT (Runtime)")
@@ -42,6 +44,7 @@ defmodule SnakeBridge.Integration.RealSnakepitTest do
     on_exit(fn ->
       restore_env.()
       Application.put_env(:snakebridge, :snakepit_adapter, original_adapter)
+      Application.put_env(:snakebridge, :allow_unsafe, original_allow_unsafe)
     end)
 
     :ok

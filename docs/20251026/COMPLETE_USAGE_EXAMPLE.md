@@ -6,6 +6,8 @@
 
 ---
 
+> Note (2025-12-23): The recommended workflow is **manifest-driven** (JSON manifests + `mix snakebridge.manifest.*` tasks). Legacy config-based generation (`mix snakebridge.generate`) still works for backward compatibility, but new docs and examples favor manifests.
+
 ## Prerequisites
 
 ### 1. Elixir Project Setup
@@ -26,8 +28,8 @@ defmodule MyApp.MixProject do
 
   defp deps do
     [
-      {:snakebridge, "~> 0.1.0"},
-      {:snakepit, "~> 0.6"}
+      {:snakebridge, "~> 0.2.4"},
+      {:snakepit, "~> 0.7.0"}
     ]
   end
 end
@@ -63,36 +65,15 @@ cd ../../../..
 ```elixir
 import Config
 
-# Configure Snakepit to use SnakeBridge's Python adapter
-config :snakepit,
-  # Pool configuration
-  pool_size: 4,
-  max_overflow: 2,
-
-  # Use SnakeBridge adapter
-  adapter_module: "snakebridge_adapter.adapter",
-  adapter_class: "SnakeBridgeAdapter",
-
-  # Python path includes SnakeBridge adapter
-  python_paths: [
-    Path.join(:code.priv_dir(:snakebridge), "python")
-  ],
-
-  # gRPC configuration
-  grpc_enabled: true,
-  grpc_port: 50051
-
-# Configure SnakeBridge
+# Configure SnakeBridge (auto-start Snakepit by default)
 config :snakebridge,
-  # Use real Snakepit adapter (not mock)
   snakepit_adapter: SnakeBridge.SnakepitAdapter,
-
-  # Cache settings
-  cache_enabled: true,
-  cache_path: "priv/snakebridge/cache",
-
-  # Telemetry
-  telemetry_enabled: true
+  auto_start_snakepit: true,
+  python_path: ".venv/bin/python3",
+  pool_size: 2,
+  load: [],
+  custom_manifests: ["config/snakebridge/*.json"],
+  allow_unsafe: true # set false when exclusively using manifest allowlists
 ```
 
 ---
@@ -102,68 +83,33 @@ config :snakebridge,
 ### Option A: Using Mix Task (Recommended)
 
 ```bash
-# Discover the json module and generate config
-mix snakebridge.discover json --output config/snakebridge/json.exs
+# Discover the json module and generate a draft manifest
+mix snakebridge.discover json --output config/snakebridge/json.json
 
 # Output:
 # Discovering Python library: json
 # Discovery depth: 2
-# ✓ Config written to: config/snakebridge/json.exs
+# ✓ Manifest written to: config/snakebridge/json.json
 #
 # Next steps:
-#   1. Review and customize: config/snakebridge/json.exs
-#   2. Generate modules: mix snakebridge.generate
+#   1. Review and curate: config/snakebridge/json.json
+#   2. Compile modules: mix snakebridge.manifest.compile
 ```
 
-### Generated Config File
+### Generated Manifest File
 
-**File**: `config/snakebridge/json.exs`
+**File**: `config/snakebridge/json.json`
 
-```elixir
-%SnakeBridge.Config{
-  python_module: "json",
-  version: "2.0.9",  # Python's json module version
-  description: nil,
-
-  # Discovered functions
-  functions: [
-    %{
-      python_path: "json.dumps",
-      elixir_name: :dumps,
-      args: %{obj: {:required, :any}}
-    },
-    %{
-      python_path: "json.loads",
-      elixir_name: :loads,
-      args: %{s: {:required, :string}}
-    },
-    %{
-      python_path: "json.dump",
-      elixir_name: :dump,
-      args: %{obj: {:required, :any}, fp: {:required, :any}}
-    },
-    %{
-      python_path: "json.load",
-      elixir_name: :load,
-      args: %{fp: {:required, :any}}
-    }
-  ],
-
-  # No classes in json module
-  classes: [],
-
-  # Additional configuration
-  introspection: %{
-    enabled: true,
-    cache_path: "priv/snakebridge/schemas/json.json",
-    discovery_depth: 2
-  },
-
-  telemetry: %{
-    enabled: true,
-    prefix: [:snakebridge, :json],
-    metrics: ["duration", "count", "errors"]
-  }
+```json
+{
+  "name": "json",
+  "python_module": "json",
+  "python_path_prefix": "json",
+  "elixir_module": "Json",
+  "functions": [
+    { "name": "dumps", "args": ["obj"], "returns": "string" },
+    { "name": "loads", "args": ["s"], "returns": "map" }
+  ]
 }
 ```
 
@@ -174,25 +120,9 @@ mix snakebridge.discover json --output config/snakebridge/json.exs
 ```elixir
 # In IEx or your code
 iex> {:ok, schema} = SnakeBridge.discover("json")
-
-{:ok,
- %{
-   "library_version" => "2.0.9",
-   "classes" => %{},
-   "functions" => %{
-     "dumps" => %{
-       "name" => "dumps",
-       "python_path" => "json.dumps",
-       "docstring" => "Serialize obj to a JSON formatted str...",
-       "parameters" => [...]
-     },
-     "loads" => %{...}
-   }
- }}
-
-# Convert to config
-iex> config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "json")
-%SnakeBridge.Config{python_module: "json", ...}
+iex> manifest = SnakeBridge.Manifest.Agent.suggest_from_schema(schema)
+iex> File.write!("config/snakebridge/json.json", SnakeBridge.Manifest.to_json(manifest))
+:ok
 ```
 
 ---
@@ -202,25 +132,26 @@ iex> config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "jso
 ### Option A: Using Mix Task
 
 ```bash
-# Generate from all configs
-mix snakebridge.generate
+# Ensure custom manifests are configured (in config/config.exs)
+# config :snakebridge, custom_manifests: ["config/snakebridge/*.json"]
+
+# Compile manifests into Elixir modules
+mix snakebridge.manifest.compile --output lib/my_app/generated
 
 # Output:
-# Generating modules from configs...
-#
-# ✓ config/snakebridge/json.exs
-#   - Elixir.Json
+# Compiled 1 modules into lib/my_app/generated
 ```
 
 ### Option B: Using Public API
 
 ```elixir
-iex> config = Code.eval_file("config/snakebridge/json.exs") |> elem(0)
+iex> {:ok, config} = SnakeBridge.Manifest.from_file("config/snakebridge/json.json")
+iex> SnakeBridge.Manifest.Registry.register_config(config)
 iex> {:ok, modules} = SnakeBridge.generate(config)
 {:ok, [Json]}
 
 # Or in one step:
-iex> {:ok, modules} = SnakeBridge.integrate("json")
+iex> {:ok, modules} = SnakeBridge.integrate("json") # legacy config path
 {:ok, [Json]}
 ```
 
@@ -307,6 +238,8 @@ end
 
 ## Step 5: Working with Classes (More Complex Example)
 
+> Note: Class-based integrations still use the legacy Config pipeline. Manifests currently target stateless functions, so class examples below use `SnakeBridge.integrate/2` and require `allow_unsafe: true` to bypass the manifest allowlist.
+
 ### Discover a Library with Classes
 
 ```bash
@@ -344,14 +277,14 @@ mix snakebridge.discover unittest --depth 2
 {:ok, [Unittest.TestCase]} = SnakeBridge.integrate("unittest")
 
 # Create instance
-{:ok, test_case} = Unittest.TestCase.create(%{})
+{:ok, test_case} = Unittest.TestCase.create(%{}, allow_unsafe: true)
 # Returns: {:ok, {"session_abc123", "instance_xyz789"}}
 
 # Call methods on the instance
 {:ok, result} = Unittest.TestCase.assert_equal(test_case, %{
   first: 1,
   second: 1
-})
+}, allow_unsafe: true)
 # Python: test_case.assertEqual(1, 1) → returns None
 # Elixir: {:ok, nil}
 
@@ -359,7 +292,7 @@ mix snakebridge.discover unittest --depth 2
 {:error, reason} = Unittest.TestCase.assert_equal(test_case, %{
   first: 1,
   second: 2
-})
+}, allow_unsafe: true)
 # Python exception caught and returned as {:error, "AssertionError: 1 != 2"}
 ```
 
@@ -482,51 +415,36 @@ iex> MyApp.PythonIntegration.example_usage()
 
 ---
 
-## Step 7: Advanced Example - Custom Configuration
+## Step 7: Advanced Example - Custom Manifest
 
-### Customize the Generated Config
+### Customize the Generated Manifest
 
-**File**: `config/snakebridge/json_custom.exs`
+**File**: `config/snakebridge/json_custom.json`
 
-```elixir
-%SnakeBridge.Config{
-  python_module: "json",
-  version: "2.0.9",
-
-  # Only include the functions we need
-  functions: [
-    %{
-      python_path: "json.dumps",
-      elixir_name: :encode,  # Custom name!
-      args: %{
-        obj: {:required, :any},
-        indent: {:optional, :integer}
-      }
-    },
-    %{
-      python_path: "json.loads",
-      elixir_name: :decode,  # Custom name!
-      args: %{s: {:required, :string}}
-    }
-  ],
-
-  # Add telemetry
-  telemetry: %{
-    enabled: true,
-    prefix: [:my_app, :json],
-    metrics: ["duration", "count", "errors"]
+```json
+{
+  "name": "json_custom",
+  "python_module": "json",
+  "python_path_prefix": "json",
+  "elixir_module": "CustomJson",
+  "types": {
+    "obj": "any",
+    "indent": "integer",
+    "s": "string"
   },
-
-  # Add timeout
-  timeout: 5000  # 5 seconds max
+  "functions": [
+    { "name": "dumps", "elixir_name": "encode", "args": ["obj", "indent"], "returns": "string" },
+    { "name": "loads", "elixir_name": "decode", "args": ["s"], "returns": "map" }
+  ]
 }
 ```
 
 ### Use Customized Module
 
 ```elixir
-# Generate with custom config
-config = Code.eval_file("config/snakebridge/json_custom.exs") |> elem(0)
+# Generate with custom manifest
+{:ok, config} = SnakeBridge.Manifest.from_file("config/snakebridge/json_custom.json")
+SnakeBridge.Manifest.Registry.register_config(config)
 {:ok, [CustomJson]} = SnakeBridge.generate(config)
 
 # Now using custom names!
@@ -905,14 +823,13 @@ iex> Snakepit.get_stats()
 ```elixir
 import Config
 
-config :snakepit,
-  adapter_module: "snakebridge_adapter.adapter",
-  adapter_class: "SnakeBridgeAdapter",
-  pool_size: 4
-
 config :snakebridge,
   snakepit_adapter: SnakeBridge.SnakepitAdapter,
-  cache_enabled: true
+  auto_start_snakepit: true,
+  python_path: ".venv/bin/python3",
+  pool_size: 2,
+  load: [],
+  custom_manifests: ["config/snakebridge/*.json"]
 ```
 
 ### Development config/dev.exs
@@ -921,9 +838,7 @@ config :snakebridge,
 import Config
 
 config :snakebridge,
-  compilation_strategy: :runtime,  # Hot reload
-  cache_enabled: true,
-  telemetry_enabled: true
+  compilation_mode: :runtime  # Hot reload
 
 config :logger, level: :debug  # See Snakepit gRPC calls
 ```
@@ -934,9 +849,7 @@ config :logger, level: :debug  # See Snakepit gRPC calls
 import Config
 
 config :snakebridge,
-  snakepit_adapter: SnakeBridge.SnakepitMock,  # Use mocks
-  cache_enabled: false,
-  telemetry_enabled: false
+  snakepit_adapter: SnakeBridge.SnakepitMock  # Use mocks
 
 config :logger, level: :warning
 ```
@@ -952,20 +865,21 @@ pip3 install grpcio protobuf
 cd deps/snakebridge/priv/python && pip3 install -e . && cd ../../../..
 
 # 2. Discover Python library
-mix snakebridge.discover json
+mix snakebridge.discover json --output config/snakebridge/json.json
 
-# 3. Review generated config
-cat config/snakebridge/json.exs
+# 3. Review generated manifest
+cat config/snakebridge/json.json
 
 # 4. Generate Elixir modules
-mix snakebridge.generate
+mix snakebridge.manifest.compile
 
 # 5. Use in your code
 ```
 
 ```elixir
 # 6. In your application
-{:ok, [Json]} = SnakeBridge.integrate("json")
+{:ok, config} = SnakeBridge.Manifest.from_file("config/snakebridge/json.json")
+{:ok, [Json]} = SnakeBridge.generate(config)
 {:ok, json} = Json.dumps(%{hello: "world"})
 {:ok, data} = Json.loads(%{s: json})
 ```
@@ -986,37 +900,34 @@ MIX_ENV=prod mix release
 ### Discovery Output
 
 ```
-$ mix snakebridge.discover json
+$ mix snakebridge.discover json --output config/snakebridge/json.json
 
 Discovering Python library: json
 Discovery depth: 2
-✓ Config written to: config/snakebridge/json.exs
+✓ Manifest written to: config/snakebridge/json.json
 
 Next steps:
-  1. Review and customize: config/snakebridge/json.exs
-  2. Generate modules: mix snakebridge.generate
+  1. Review and curate: config/snakebridge/json.json
+  2. Compile modules: mix snakebridge.manifest.compile
 ```
 
 ### Generation Output
 
 ```
-$ mix snakebridge.generate
+$ mix snakebridge.manifest.compile
 
-Generating modules from configs...
-
-✓ config/snakebridge/json.exs
-  - Elixir.Json
+Compiled 1 modules into lib/snakebridge/generated
 ```
 
 ### Validation Output
 
 ```
-$ mix snakebridge.validate
+$ mix snakebridge.manifest.validate
 
-Validating configs in config/snakebridge/...
+Validating manifests...
 
-✓ json.exs
-✓ 1 config(s) validated successfully
+✓ json.json
+✓ 1 manifest(s) validated successfully
 ```
 
 ### Usage Output

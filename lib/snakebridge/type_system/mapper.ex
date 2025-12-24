@@ -2,8 +2,11 @@ defmodule SnakeBridge.TypeSystem.Mapper do
   @moduledoc """
   Maps between Python type system and Elixir typespecs.
 
-  Supports ~15 concrete types plus normalization of descriptor formats
+  Supports generic types plus normalization of descriptor formats
   to handle both `kind/primitive_type` and `type` style keys.
+
+  Library-specific types (ndarray, DataFrame, Tensor, etc.) fall through
+  to `term()` and should be handled by their respective bridges.
 
   ## Supported Types
 
@@ -21,12 +24,6 @@ defmodule SnakeBridge.TypeSystem.Mapper do
   - dict -> %{optional(key_type) => value_type}
   - tuple -> {type1, type2, ...}
   - set -> MapSet.t(element_type)
-
-  ### NumPy/ML Types
-  - ndarray -> list(number()) with dtype consideration
-  - DataFrame -> list(map())
-  - Tensor -> list(number())
-  - Series -> list(term())
 
   ### Datetime Types
   - datetime -> DateTime.t()
@@ -116,9 +113,6 @@ defmodule SnakeBridge.TypeSystem.Mapper do
       normalize_collection_type(type_str, original) ->
         normalize_collection_type(type_str, original)
 
-      normalize_numpy_ml_type(type_str, original) ->
-        normalize_numpy_ml_type(type_str, original)
-
       normalize_datetime_type(type_str) ->
         normalize_datetime_type(type_str)
 
@@ -175,16 +169,6 @@ defmodule SnakeBridge.TypeSystem.Mapper do
     end
   end
 
-  defp normalize_numpy_ml_type(type_str, original) do
-    case type_str do
-      "ndarray" -> %{kind: "ndarray", dtype: Map.get(original, :dtype)}
-      "DataFrame" -> %{kind: "dataframe"}
-      "Tensor" -> %{kind: "tensor", dtype: Map.get(original, :dtype)}
-      "Series" -> %{kind: "series"}
-      _ -> nil
-    end
-  end
-
   defp normalize_datetime_type(type_str) do
     case type_str do
       "datetime" -> %{kind: "datetime"}
@@ -226,7 +210,6 @@ defmodule SnakeBridge.TypeSystem.Mapper do
   defp normalize_by_kind(kind, original) do
     normalize_by_kind_primitive(kind, original) ||
       normalize_by_kind_collection(kind, original) ||
-      normalize_by_kind_numpy_ml(kind, original) ||
       normalize_by_kind_datetime(kind) ||
       normalize_by_kind_callable(kind) ||
       %{kind: "primitive", primitive_type: "any"}
@@ -274,16 +257,6 @@ defmodule SnakeBridge.TypeSystem.Mapper do
 
       _ ->
         nil
-    end
-  end
-
-  defp normalize_by_kind_numpy_ml(kind, original) do
-    case kind do
-      "ndarray" -> %{kind: "ndarray", dtype: Map.get(original, :dtype)}
-      "dataframe" -> %{kind: "dataframe"}
-      "tensor" -> %{kind: "tensor", dtype: Map.get(original, :dtype)}
-      "series" -> %{kind: "series"}
-      _ -> nil
     end
   end
 
@@ -389,35 +362,6 @@ defmodule SnakeBridge.TypeSystem.Mapper do
   defp do_to_elixir_spec(%{kind: "class", class_path: path}) do
     module = python_class_to_elixir_module(path)
     quote do: unquote(module).t()
-  end
-
-  # NumPy ndarray
-  defp do_to_elixir_spec(%{kind: "ndarray", dtype: dtype}) when dtype in ["float64", "float32"] do
-    quote do: list(float())
-  end
-
-  defp do_to_elixir_spec(%{kind: "ndarray", dtype: dtype})
-       when dtype in ["int32", "int64", "int16", "int8", "uint8", "uint16", "uint32", "uint64"] do
-    quote do: list(integer())
-  end
-
-  defp do_to_elixir_spec(%{kind: "ndarray"}) do
-    quote do: list(number())
-  end
-
-  # DataFrame
-  defp do_to_elixir_spec(%{kind: "dataframe"}) do
-    quote do: list(map())
-  end
-
-  # Tensor
-  defp do_to_elixir_spec(%{kind: "tensor"}) do
-    quote do: list(number())
-  end
-
-  # Series
-  defp do_to_elixir_spec(%{kind: "series"}) do
-    quote do: list(term())
   end
 
   # Datetime types

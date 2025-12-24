@@ -51,27 +51,31 @@ defmodule SnakeBridge.TypeSystem.MapperTest do
       assert normalized.value_type.kind == "primitive"
     end
 
-    test "normalizes ndarray type" do
+    test "normalizes ndarray type to class" do
       descriptor = %{"type" => "ndarray", "dtype" => "float64"}
       normalized = Mapper.normalize_descriptor(descriptor)
 
-      assert normalized.kind == "ndarray"
-      assert normalized.dtype == "float64"
+      # Library-specific types now fall through to class_or_any
+      assert normalized.kind == "primitive"
+      assert normalized.primitive_type == "any"
     end
 
-    test "normalizes DataFrame type" do
+    test "normalizes DataFrame type to class" do
       descriptor = %{"type" => "DataFrame"}
       normalized = Mapper.normalize_descriptor(descriptor)
 
-      assert normalized.kind == "dataframe"
+      # Library-specific types now fall through to class_or_any
+      assert normalized.kind == "class"
+      assert normalized.class_path == "DataFrame"
     end
 
-    test "normalizes Tensor type" do
+    test "normalizes Tensor type to class" do
       descriptor = %{"type" => "Tensor", "dtype" => "float32"}
       normalized = Mapper.normalize_descriptor(descriptor)
 
-      assert normalized.kind == "tensor"
-      assert normalized.dtype == "float32"
+      # Library-specific types now fall through to class_or_any
+      assert normalized.kind == "class"
+      assert normalized.class_path == "Tensor"
     end
   end
 
@@ -186,35 +190,30 @@ defmodule SnakeBridge.TypeSystem.MapperTest do
     end
   end
 
-  describe "to_elixir_spec/1 with NumPy/ML types" do
-    test "converts ndarray to list of numbers" do
+  describe "to_elixir_spec/1 with unknown library types" do
+    test "converts ndarray to term() (fallback)" do
       spec = Mapper.to_elixir_spec(%{kind: "ndarray"})
-      assert Macro.to_string(spec) == "list(number())"
+      assert Macro.to_string(spec) == "term()"
     end
 
-    test "converts ndarray with float64 dtype" do
+    test "converts ndarray with dtype to term() (fallback)" do
       spec = Mapper.to_elixir_spec(%{kind: "ndarray", dtype: "float64"})
-      assert Macro.to_string(spec) == "list(float())"
+      assert Macro.to_string(spec) == "term()"
     end
 
-    test "converts ndarray with int32 dtype" do
-      spec = Mapper.to_elixir_spec(%{kind: "ndarray", dtype: "int32"})
-      assert Macro.to_string(spec) == "list(integer())"
-    end
-
-    test "converts DataFrame to list of maps" do
+    test "converts dataframe to term() (fallback)" do
       spec = Mapper.to_elixir_spec(%{kind: "dataframe"})
-      assert Macro.to_string(spec) == "list(map())"
+      assert Macro.to_string(spec) == "term()"
     end
 
-    test "converts Tensor to list of numbers" do
+    test "converts tensor to term() (fallback)" do
       spec = Mapper.to_elixir_spec(%{kind: "tensor"})
-      assert Macro.to_string(spec) == "list(number())"
+      assert Macro.to_string(spec) == "term()"
     end
 
-    test "converts Series to list" do
+    test "converts series to term() (fallback)" do
       spec = Mapper.to_elixir_spec(%{kind: "series"})
-      assert Macro.to_string(spec) == "list(term())"
+      assert Macro.to_string(spec) == "term()"
     end
   end
 

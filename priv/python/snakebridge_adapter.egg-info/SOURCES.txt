@@ -1,11 +1,13 @@
 setup.py
+bridges/__init__.py
+bridges/math_verify_bridge.py
+bridges/numpy_bridge.py
+bridges/pylatexenc_bridge.py
+bridges/sympy_bridge.py
 snakebridge_adapter/__init__.py
 snakebridge_adapter/adapter.py
-snakebridge_adapter/math_verify_bridge.py
-snakebridge_adapter/numpy_bridge.py
-snakebridge_adapter/pylatexenc_bridge.py
+snakebridge_adapter/bridge_base.py
 snakebridge_adapter/serializer.py
-snakebridge_adapter/sympy_bridge.py
 snakebridge_adapter.egg-info/PKG-INFO
 snakebridge_adapter.egg-info/SOURCES.txt
 snakebridge_adapter.egg-info/dependency_links.txt

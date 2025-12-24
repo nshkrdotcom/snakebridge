@@ -80,17 +80,17 @@ python3 -m venv .venv
 # Install Snakepit dependencies (gRPC, protobuf, numpy, etc.)
 .venv/bin/pip install -r deps/snakepit/priv/python/requirements.txt
 
-# Install SnakeBridge Python adapter + built-in manifest libs
-.venv/bin/pip install -r priv/python/requirements.snakebridge.txt
+# Install SnakeBridge Python adapter
 .venv/bin/pip install -e priv/python
+
+# Install built-in manifest libraries
+mix snakebridge.manifest.install --all --venv .venv
 ```
 
-### Optional: Install manifest packages via Mix
-
-If you want to install packages based on the manifest registry (built-ins or custom), you can use:
+Alternatively, install manifest packages individually:
 
 ```bash
-mix snakebridge.manifest.install --load sympy,pylatexenc,math_verify --venv .venv --include_core
+mix snakebridge.manifest.install --load sympy,pylatexenc,math_verify --venv .venv
 ```
 
 ### Step 3: Configure Snakepit
@@ -99,7 +99,7 @@ Tell Snakepit which Python to use:
 
 ```bash
 export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
-export PYTHONPATH=$(pwd)/priv/python:$(pwd)/deps/snakepit/priv/python:$PYTHONPATH
+export PYTHONPATH=$(pwd)/priv/python:$(pwd)/priv/python/bridges:$(pwd)/deps/snakepit/priv/python:$PYTHONPATH
 ```
 
 **Make it persistent** (choose one):

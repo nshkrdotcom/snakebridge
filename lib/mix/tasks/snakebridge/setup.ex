@@ -45,15 +45,12 @@ defmodule Mix.Tasks.Snakebridge.Setup do
     SnakeBridge.Python.run!(venv_python, ["-m", "pip", "install", "--upgrade", "pip"])
 
     snakepit_reqs = Application.app_dir(:snakepit, "priv/python/requirements.txt")
-    snakebridge_reqs = Path.expand("priv/python/requirements.snakebridge.txt")
 
     SnakeBridge.Python.install_requirements(venv_pip, snakepit_reqs)
-
-    if File.exists?(snakebridge_reqs) do
-      SnakeBridge.Python.install_requirements(venv_pip, snakebridge_reqs)
-    end
-
     SnakeBridge.Python.run!(venv_pip, ["install", "-e", Path.expand("priv/python")])
+
+    Mix.shell().info("Installing manifest dependencies via manifest.install...")
+    Mix.Task.run("snakebridge.manifest.install", ["--all"])
 
     snakebridge_python = Path.expand("priv/python")
     snakepit_python = Application.app_dir(:snakepit, "priv/python")

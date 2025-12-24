@@ -1,10 +1,13 @@
 {
   "name": "math_verify",
   "python_module": "math_verify",
-  "python_path_prefix": "snakebridge_adapter.math_verify_bridge",
+  "python_path_prefix": "bridges.math_verify_bridge",
   "version": "~> 0.1",
   "category": "math",
   "elixir_module": "SnakeBridge.MathVerify",
+  "pypi_package": "math-verify",
+  "description": "Math answer verification",
+  "status": "experimental",
   "types": {
     "text": "string",
     "gold": "string",

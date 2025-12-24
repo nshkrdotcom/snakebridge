@@ -1,245 +1,331 @@
-# SnakeBridge Library Scaling Plan (2025-12-23)
+# SnakeBridge Library Scaling: Critical Review and v2 Plan (2025-12-23)
 
-## Purpose
+## Scope and Goal
 
-This document captures the current SnakeBridge architecture and explains how it scales to add Python libraries quickly without growing core complexity. It also outlines a cleanup plan to remove per-library logic from core and make the add-a-library workflow tight, repeatable, and safe at scale.
+Goal (original): integrate the first three Python libraries in a **clean, isolated, repeatable** way, so adding more libraries scales without core churn.
 
-This is written for the current repository state after the Snakepit 0.7.0 upgrade and the initial three-library target:
-- sympy: symbolic math validation
-- pylatexenc: LaTeX parsing for math grading
-- math-verify: equivalence checks for math answers
+Reality: the three integrations work, but their code is spread across core, Python adapter, manifests, and tooling. The system is not yet “cleanly isolated” per library.
 
-## Current Architecture Snapshot
+This document is a critical review of the current state and a minimal‑change plan to reach a robust scaling design.
 
-SnakeBridge is a manifest-driven wrapper around Snakepit. Manifests describe a curated allowlist of stateless functions, and the runtime uses a single generic adapter tool (call_python) to invoke Python through Snakepit.
+Target libraries:
+- sympy (symbolic math validation)
+- pylatexenc (LaTeX parsing for grading)
+- math-verify (equivalence checks)
 
-High-level flow:
+## What Exists Today (Evidence, Not Preference)
 
-1) Manifests are loaded and validated.
-2) Allowlist is registered.
-3) Generator emits Elixir modules for those functions.
-4) Runtime calls call_python through Snakepit.
+### Manifest‑first flow (sound, keep it)
+- Manifests define allowlisted functions and simple types.
+- Loader validates + registers allowlists.
+- Generator emits modules.
+- Runtime calls generic `call_python` via Snakepit.
 
-In practice, some Python libraries do not return JSON-safe values. For those, the current system uses per-library Python bridge modules that normalize outputs into JSON-friendly shapes. Manifests reference the bridge using python_path_prefix.
+This is the correct backbone and should remain.
 
-## Key Components and Where They Live
+### Actual integration footprint per library (current)
 
-### Manifests and Registry
-- priv/snakebridge/manifests/*.json
-- priv/snakebridge/manifests/_index.json
-- lib/snakebridge/manifest/loader.ex
-- lib/snakebridge/manifest/registry.ex
+Each new library currently touches **8+ locations**, which is the opposite of “isolated”:
 
-Manifests are small JSON files that define:
-- python_module (import path)
-- python_path_prefix (optional) for bridge routing
-- functions (curated allowlist, args, return types)
-- types (simple type hints for arguments)
+1) Manifest
+- `priv/snakebridge/manifests/<lib>.json`
 
-### Runtime and Generator
-- lib/snakebridge/runtime.ex
-- lib/snakebridge/generator.ex
-- lib/snakebridge/manifest.ex
+2) Built‑in manifest index (duplicate metadata)
+- `priv/snakebridge/manifests/_index.json`
 
-Runtime is generic and does not embed library-specific logic. Generator builds Elixir functions from manifest data. Runtime enforces allowlist via the manifest registry.
+3) Python dependencies list (duplicate metadata)
+- `priv/python/requirements.snakebridge.txt`
 
-### Python Adapter (generic)
-- priv/python/snakebridge_adapter/adapter.py
+4) Python bridge module (if serialization needed)
+- `priv/python/snakebridge_adapter/<lib>_bridge.py`
 
-This is the only generic Python adapter. It exposes tools such as describe_library and call_python and dispatches calls to Python code.
+5) Shared serializer with library‑specific branches
+- `priv/python/snakebridge_adapter/serializer.py` (sympy / pylatexenc / numpy handling)
 
-### Python Bridges (library-specific)
-- priv/python/snakebridge_adapter/sympy_bridge.py
-- priv/python/snakebridge_adapter/pylatexenc_bridge.py
-- priv/python/snakebridge_adapter/math_verify_bridge.py
-- priv/python/snakebridge_adapter/numpy_bridge.py
+6) Catalog (duplicate metadata)
+- `lib/snakebridge/catalog.ex`
 
-These are the current per-library conversion layers. They are referenced by manifest python_path_prefix and exist to serialize non-JSON-safe objects into strings/lists/maps.
+7) Examples
+- `examples/manifest_<lib>.exs`
 
-### Elixir-side Adapter (library-specific)
-- lib/snakebridge/adapters/numpy.ex
+8) Tests
+- `test/integration/real_python_libraries_test.exs`
+- `test/integration/manifest_examples_test.exs`
 
-This is an Elixir convenience adapter built before the manifest-first flow stabilized. It is not required by the manifest system and is a candidate for removal or externalization.
+This is the concrete spread that breaks isolation.
 
-### Examples and Tests
-- examples/manifest_sympy.exs
-- examples/manifest_pylatexenc.exs
-- examples/manifest_math_verify.exs
-- test/integration/real_python_libraries_test.exs
-- test/integration/manifest_examples_test.exs
+## Critical Problems (Actual Design Issues)
 
-These demonstrate end-to-end usage of the built-in manifests with real Python.
+### 1) Multiple Sources of Truth for library metadata (High)
 
-## Why the Per-Library Bridges Exist
+Problem:
+- Manifest, `_index.json`, `catalog.ex`, and `requirements.snakebridge.txt` all define library metadata (package name, version, description, status).
+- They are not auto‑derived from each other.
 
-The core constraint is JSON serialization. Many Python libraries return objects that cannot be serialized by default (SymPy expressions, LaTeX AST nodes, NumPy arrays). The bridges exist to normalize results into safe shapes so the Elixir side can remain generic.
+Impact:
+- Every new library requires updates in multiple places.
+- Drift is likely and silent (a manifest can exist but not be discoverable via `_index.json`; catalog can diverge from actual manifests).
 
-Examples:
-- SymPy objects (Expr, Symbol, Equation) are converted into strings.
-- pylatexenc nodes are converted into maps/lists of maps.
-- math-verify returns booleans and lists of strings directly.
+Evidence:
+- Loader uses `_index.json` to resolve built‑ins (`lib/snakebridge/manifest/loader.ex`).
+- Install task uses `_index.json` for pypi lookup if missing in manifest.
+- `catalog.ex` duplicates all metadata again.
 
-If a library is already JSON-safe (for example, json in stdlib), it can be called directly without a bridge.
+### 2) Library‑specific serialization in the core adapter (High)
 
-## How It Scales Today (Without Cleanup)
+Problem:
+- `priv/python/snakebridge_adapter/serializer.py` contains **hardcoded SymPy / pylatexenc / NumPy** logic.
 
-Even with bridges in the core repo, the scale story is already mostly data-driven:
+Impact:
+- Core adapter is no longer generic.
+- Adding a new library often requires editing serializer, which violates isolation and forces core changes.
 
-1) Create manifest
-- Run mix snakebridge.discover <lib> to draft a manifest.
-- Curate 10-30 stateless functions; keep it small.
-- Save to priv/snakebridge/manifests/<lib>.json
+### 3) Library‑specific Elixir adapter in core (Medium)
 
-2) Decide whether a bridge is needed
-- If all return values are JSON-safe, no bridge needed.
-- If not, add a small bridge module in priv/python/snakebridge_adapter/<lib>_bridge.py and set python_path_prefix.
+Problem:
+- `lib/snakebridge/adapters/numpy.ex` is a library‑specific API surface in core.
 
-3) Register manifest
-- Add entry to priv/snakebridge/manifests/_index.json
+Impact:
+- Bypasses the manifest system and makes the core appear library‑aware.
+- Creates a separate integration path that does not scale.
 
-4) Add example and test
-- Add examples/manifest_<lib>.exs
-- Add or extend integration tests to validate core calls
+### 4) Bridge path coupling to internal module names (Medium)
 
-5) Install Python dependencies
-- Ensure mix snakebridge.setup installs the Python package or document pip install.
+Problem:
+- Manifests point `python_path_prefix` into `snakebridge_adapter.*`.
 
-This is already low friction, but the per-library bridges living in the core repo is the main scaling smell.
+Impact:
+- Hard to move bridges out of core without breaking manifests.
+- No clear boundary between core adapter and per‑library logic.
 
-## Architectural Smells That Block Scaling
+### 5) Requirements file is manual and redundant (Medium)
 
-1) Per-library Python bridges in core
-- This blurs the line between generic runtime and library integrations.
-- It creates a central bottleneck for new library additions.
+Problem:
+- `priv/python/requirements.snakebridge.txt` lists built‑in libs manually.
 
-2) Elixir-side adapters in core
-- lib/snakebridge/adapters/numpy.ex is a library-specific API surface.
-- It bypasses the manifest-first approach and makes the core look library-aware.
+Impact:
+- New libraries require edits in yet another place.
+- `mix snakebridge.manifest.install` already knows how to resolve packages from manifests, but `setup` uses the requirements file.
 
-3) No formal bridge contract
-- We do not have a strict, documented interface for bridge inputs/outputs.
-- This increases the review load for each new library.
+### 6) No enforced bridge contract (High)
 
-4) Manifest path prefix couples to internal path
-- python_path_prefix currently points into snakebridge_adapter.*
-- This makes it hard to move bridges out of core without migration.
+Problem:
+- Bridges are not required to implement a consistent interface or safety checks.
+- Example: `math_verify_bridge.py` lacks `_ensure_math_verify()` guards, so its behavior is inconsistent with other bridges.
 
-## Target Architecture for Clean Scaling
+Impact:
+- Bridge logic drifts and becomes fragile with each new library.
+- Inconsistencies reappear as soon as library 4/5/6 land.
 
-Goal: The core is 100 percent generic; adding a new library is data-only (manifest) plus optional external bridge.
+### 7) Redundant tests and CLI overlap (Medium)
 
-### Target Boundaries
+Problem:
+- `test/integration/manifest_examples_test.exs` overlaps `real_python_libraries_test.exs` almost exactly.
+- `discover` / `manifest.gen` / `manifest.suggest` are three paths to similar output and create UX debt.
 
-Core (SnakeBridge repo):
-- Runtime, loader, generator, type mapper, registry
-- Manifest tooling (discover, validate, check)
-- No per-library adapters in Elixir
+Impact:
+- Test suite noise and longer maintenance tail.
+- Users have too many entry points for the same action.
 
-Library Packs (external or separate tree):
-- Manifests
-- Optional Python bridge modules
-- Tests and examples
+## What Is Working and Should Not Change
 
-### Bridge Contract (Required)
+These parts are sound and should be preserved:
+- Manifest allowlisting and runtime enforcement.
+- Generator emitting modules from manifest data.
+- Generic `call_python` tool as the single runtime path.
+- Manifest tooling (discover/validate/check) — this is helpful and not the source of sprawl.
 
-Define a minimal bridge contract and enforce it:
-- Inputs are JSON-serializable (dict/list/str/int/float/bool)
-- Outputs must be JSON-serializable
-- No global state or external I/O in bridge functions
-- Bridge functions are pure and idempotent
-- Bridge functions must accept named args only (kwargs)
+## v2 Plan (Big Bang, No Legacy Support)
 
-### Standardized Manifest Conventions
+The goal is **one source of truth** and **no per‑library logic in core**. This is a clean break, not a migration. All legacy artifacts are deleted, not deprecated.
 
-- python_module: actual Python import path
-- python_path_prefix: optional; points to bridge module
-- functions: curated allowlist of stateless functions
-- types: optional hints for args, limited to simple shapes
+### Step 1: Make the manifest the single source of truth (High)
 
-## Tight, Clean Add-a-Library Flow (Target)
+Change:
+- Add `pypi_package`, `description`, `status` directly into each manifest.
+- **Delete `_index.json`**. Loader scans the manifests directory directly.
+- **Delete `catalog.ex`**. Any catalog functionality reads from manifests at runtime.
 
-1) Draft manifest
-- mix snakebridge.discover <lib>
-- Remove stateful or non-serializable functions
-- Keep 10-30 functions max
+Result:
+- Removes 2 files and 2 manual edit points per library.
 
-2) Decide bridge
-- If a function returns non-JSON output, implement a bridge function that returns strings/lists/maps
-- Store bridge in external pack and point python_path_prefix to it
+### Step 2: Move library‑specific serialization into bridges (High)
 
-3) Validate
-- mix snakebridge.manifest.validate <manifest>
-- mix snakebridge.manifest.check --all
+Change:
+- **Strip `serializer.py` down to generic JSON‑safe primitives only** (None, str, int, float, bool, list, dict, bytes).
+- **Delete all SymPy / pylatexenc / NumPy logic from serializer.py**.
+- Each bridge calls its own serialization before returning.
 
-4) Test and example
-- Add one example script
-- Add one integration test per library
+Result:
+- Core adapter becomes truly generic.
+- New libraries never touch `serializer.py`.
 
-5) Publish
-- Add manifest entry to index
-- Update docs to include the library
+### Step 3: Delete Elixir adapters from core (Medium)
 
-## Cleanup Plan (Concrete Steps)
+Change:
+- **Delete `lib/snakebridge/adapters/numpy.ex`**.
+- **Delete the entire `lib/snakebridge/adapters/` directory**.
 
-### Phase 0: Freeze
-- No new per-library Elixir adapters in core
-- No new per-library Python bridges in core
+Result:
+- One integration path: manifests only.
+- No bypass mechanism exists.
 
-### Phase 1: Separate bridges
-- Move priv/python/snakebridge_adapter/*_bridge.py to a new location (e.g., priv/python/bridges/ or an external repo)
-- Update python_path_prefix in manifests to point to new bridge path
-- Ensure PYTHONPATH includes bridge path
+### Step 3b: Remove library-specific types from TypeMapper (High)
 
-### Phase 2: Remove Elixir adapters
-- Remove lib/snakebridge/adapters/numpy.ex from core
-- Replace with a manifest example and tests
+Change:
+- **Delete `normalize_numpy_ml_type/2`** function from `lib/snakebridge/type_system/mapper.ex`.
+- **Delete `normalize_by_kind_numpy_ml/2`** function.
+- **Delete all `do_to_elixir_spec` clauses** for `ndarray`, `dataframe`, `tensor`, `series`.
+- **Remove references** to these types from `normalize_type_string/2`.
 
-### Phase 3: Formalize contract
-- Add a small document describing the bridge contract
-- Add a test helper that validates bridge outputs are JSON-safe
+These types should be:
+- Handled as `:any` or `term()` by default.
+- Or defined in manifests if libraries need custom type mappings.
 
-### Phase 4: CI enforcement
-- CI check fails if new modules are added under lib/snakebridge/adapters
-- CI check fails if manifests point to internal bridge paths
+Result:
+- TypeMapper is 100% generic.
+- No library-specific knowledge in core type system.
 
-### Phase 5: Packaging
-- Create a separate repo or directory for "library packs":
-  - manifests
-  - bridges
-  - examples
-  - tests
+### Step 4: Relocate bridges out of core adapter (Medium)
 
-## What This Means For the Three Initial Libraries
+Change:
+- **Move all `*_bridge.py` files** from `priv/python/snakebridge_adapter/` to `priv/python/bridges/`.
+- **Update `python_path_prefix`** in all manifests to point to `bridges.<lib>_bridge`.
+- **Update PYTHONPATH** in setup/launcher to include the bridges path.
 
-### sympy
-- Current manifest routes through sympy_bridge
-- Bridge converts SymPy objects into strings
-- Works today; bridge should move out of core
+Result:
+- Clear boundary: `snakebridge_adapter/` is core, `bridges/` is per-library.
 
-### pylatexenc
-- Current manifest routes through pylatexenc_bridge
-- Bridge flattens LaTeX node objects into maps/lists
-- Works today; bridge should move out of core
+### Step 5: Delete requirements file (Medium)
 
-### math-verify
-- Bridge exists but mostly unnecessary since outputs are already JSON-safe
-- Can test direct calls after contract is enforced
+Change:
+- **Delete `priv/python/requirements.snakebridge.txt`**.
+- **Update `mix snakebridge.setup`** to call `mix snakebridge.manifest.install --all` instead of reading a requirements file.
 
-## Risks and Constraints
+Result:
+- Manifests are the only source for Python dependencies.
+- One fewer file to maintain.
 
-- Some libraries will always require a bridge (SymPy, NumPy)
-- Some libraries can be handled entirely by manifest (json, math)
-- The current python_path_prefix model couples manifests to a module path; moving bridges requires a path migration plan
-- Any bridge that leaks state breaks reproducibility; enforcing statelessness is critical
+### Step 6: Delete redundant tests (Quick Win)
 
-## Verification and Quality Gates
+Change:
+- **Delete `test/integration/manifest_examples_test.exs`**.
 
-Standard checks for each new library:
-- mix snakebridge.manifest.validate <manifest>
-- mix snakebridge.manifest.check --all
-- mix test --include integration --include real_python
-- examples/manifest_<lib>.exs produces explicit outputs
+Result:
+- `real_python_libraries_test.exs` provides full coverage.
+- No duplicate test maintenance.
 
-## Summary
+## v2 Definition of Done (Clear, Measurable)
 
-The architecture already scales if we treat manifests as data and bridges as optional, tiny normalization layers. The main blocker is that the bridges and a legacy Elixir adapter live inside the core repo, making the core appear library-aware. The cleanup plan separates those concerns and formalizes a bridge contract so we can add libraries at scale without contaminating the core.
+A new library should require:
+- **1 manifest file**
+- **0 core code changes**
+- **1 optional bridge file** (only if needed)
+- **1 example + 1 test**
+
+And it should not require:
+- Editing `_index.json`
+- Editing `catalog.ex`
+- Editing `requirements.snakebridge.txt`
+- Editing `serializer.py`
+
+## Phase 2: Isolation Hardening (Post‑v2)
+
+Phase 2 continues the big bang approach. No legacy support, no deprecation cycles.
+
+### 2.1 Library Packs (Directory‑level isolation)
+
+Change:
+- **Restructure to one directory per library**: manifest + bridge + tests + examples together.
+- **Delete the flat `priv/snakebridge/manifests/` structure**.
+- **Delete the flat `priv/python/bridges/` structure** (from v2 Step 4).
+
+New structure:
+```
+packs/sympy/manifest.json
+packs/sympy/bridge.py
+packs/sympy/test.exs
+packs/sympy/example.exs
+```
+
+Result:
+- A library is a self‑contained directory.
+- Adding/removing a library = adding/removing one directory.
+
+### 2.2 BridgeBase Contract (Enforcement)
+
+Change:
+- **Create `BridgeBase` class** with required interface: `ensure_available()`, `serialize()`.
+- **Refactor all bridges to inherit from `BridgeBase`**.
+- **Add CI check**: bridges that don't inherit from `BridgeBase` fail the build.
+
+Result:
+- Consistent safety checks across all bridges.
+- No more missing `_ensure_*()` guards.
+
+### 2.3 CLI Consolidation
+
+Change:
+- **Create `mix snakebridge.add <lib>`** as the single entry point.
+- **Delete `mix snakebridge.discover`**.
+- **Delete `mix snakebridge.manifest.gen`**.
+- **Delete `mix snakebridge.manifest.suggest`**.
+
+Result:
+- One command to add a library.
+- No confusion about which discovery task to use.
+
+## Expected Outcome
+
+After v2:
+- Adding a new library = 1 manifest + 1 optional bridge + 1 test.
+- Core is 100% generic. Zero library-specific code.
+- No drift possible. Manifest is the only source of truth.
+
+After Phase 2:
+- Adding a new library = 1 directory with all files together.
+- Bridges are contract-enforced. No inconsistent implementations.
+- CLI has one obvious path.
+
+## Appendix: Files Deleted in v2
+
+| File | Step | Reason |
+|------|------|--------|
+| `priv/snakebridge/manifests/_index.json` | 1 | Replaced by directory scan |
+| `lib/snakebridge/catalog.ex` | 1 | Duplicate of manifest data |
+| `lib/snakebridge/adapters/numpy.ex` | 3 | Bypass mechanism |
+| `lib/snakebridge/adapters/` (directory) | 3 | No adapters in core |
+| `priv/python/requirements.snakebridge.txt` | 5 | Replaced by manifest.install |
+| `test/integration/manifest_examples_test.exs` | 6 | Redundant coverage |
+
+## Appendix: Files Modified in v2
+
+| File | Step | Change |
+|------|------|--------|
+| `priv/python/snakebridge_adapter/serializer.py` | 2 | Strip to generic primitives only |
+| `priv/snakebridge/manifests/*.json` | 1, 4 | Add metadata, update python_path_prefix |
+| `lib/snakebridge/manifest/loader.ex` | 1 | Scan directory instead of reading _index.json |
+| `lib/snakebridge/type_system/mapper.ex` | 3b | Remove ndarray/DataFrame/Tensor/Series handling |
+| `lib/snakebridge/snakepit_launcher.ex` | 4 | Add bridges/ to PYTHONPATH |
+| `lib/mix/tasks/snakebridge/setup.ex` | 5 | Call manifest.install instead of pip install -r |
+
+## Appendix: Files Moved in v2
+
+| From | To | Step |
+|------|-----|------|
+| `priv/python/snakebridge_adapter/sympy_bridge.py` | `priv/python/bridges/sympy_bridge.py` | 4 |
+| `priv/python/snakebridge_adapter/pylatexenc_bridge.py` | `priv/python/bridges/pylatexenc_bridge.py` | 4 |
+| `priv/python/snakebridge_adapter/math_verify_bridge.py` | `priv/python/bridges/math_verify_bridge.py` | 4 |
+| `priv/python/snakebridge_adapter/numpy_bridge.py` | `priv/python/bridges/numpy_bridge.py` | 4 |
+
+## Appendix: Files Deleted in Phase 2
+
+| File/Directory | Step | Reason |
+|----------------|------|--------|
+| `priv/snakebridge/manifests/` | 2.1 | Replaced by packs structure |
+| `priv/python/bridges/` | 2.1 | Replaced by packs structure |
+| `lib/mix/tasks/snakebridge/discover.ex` | 2.3 | Replaced by `add` command |
+| `lib/mix/tasks/snakebridge/manifest/gen.ex` | 2.3 | Replaced by `add` command |
+| `lib/mix/tasks/snakebridge/manifest/suggest.ex` | 2.3 | Replaced by `add` command |
+
+This is a clean break. No migration. No legacy support.

@@ -197,12 +197,29 @@ defmodule SnakeBridge.Manifest.Loader do
   defp resolve_custom_files(_), do: []
 
   defp builtin_index do
-    index_path = Path.join(manifest_dir(), "_index.json")
+    manifest_dir()
+    |> scan_manifest_files()
+    |> Enum.reduce(%{}, fn path, acc ->
+      case read_manifest_name(path) do
+        {:ok, name} -> Map.put(acc, name, %{file: Path.basename(path)})
+        :error -> acc
+      end
+    end)
+  end
 
-    if File.exists?(index_path) do
-      Reader.read_file!(index_path)
-    else
-      %{}
+  defp scan_manifest_files(dir) do
+    pattern = Path.join(dir, "*.json")
+
+    pattern
+    |> Path.wildcard()
+    |> Enum.reject(&String.ends_with?(&1, "_index.json"))
+  end
+
+  defp read_manifest_name(path) do
+    case Reader.read_file(path) do
+      {:ok, %{"name" => name}} -> {:ok, name}
+      {:ok, %{name: name}} -> {:ok, name}
+      _ -> :error
     end
   end
 

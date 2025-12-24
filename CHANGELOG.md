@@ -12,6 +12,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [ ] LSP server for config authoring
 - [ ] Auto-generated test suites from schemas
 
+## [0.3.1] - 2025-12-23
+
+### Changed
+- Manifest is now the single source of truth for library metadata
+- Library-specific serialization moved from core to bridges
+- Bridges relocated to `priv/python/bridges/`
+- Setup task now uses `manifest.install` instead of requirements file
+- Loader scans manifest directory directly instead of reading `_index.json`
+
+### Removed
+- `_index.json` (loader scans manifest directory directly)
+- `catalog.ex` (duplicate of manifest data)
+- `lib/snakebridge/adapters/` (NumPy adapter and directory)
+- `requirements.snakebridge.txt` (replaced by manifest.install)
+- `manifest_examples_test.exs` (redundant test coverage)
+- Library-specific types (ndarray, DataFrame, Tensor, Series) from TypeMapper
+
 ## [0.3.0] - 2025-12-23
 
 ### Added

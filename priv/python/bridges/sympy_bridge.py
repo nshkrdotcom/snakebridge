@@ -4,22 +4,25 @@ SymPy helper functions for SnakeBridge.
 These wrappers normalize string inputs and return JSON-safe outputs.
 """
 
+import sys
 from typing import Any
 
-from . import serializer
+# Add parent directory to path for bridge_base import
+sys.path.insert(0, str(__file__).rsplit("/bridges", 1)[0])
 
-try:
-    import sympy as sp
-    HAS_SYMPY = True
-except ImportError:
-    sp = None
-    HAS_SYMPY = False
+from snakebridge_adapter.bridge_base import make_import_guard, make_json_safe
+
+# Import guard
+sp, HAS_SYMPY, _ensure_sympy = make_import_guard("sympy", "sympy")
+
+# JSON-safe serializer for SymPy types
+_json_safe = make_json_safe(
+    type_check=lambda v: HAS_SYMPY and sp is not None and isinstance(v, sp.Basic),
+    convert=str
+)
 
 
-def _ensure_sympy():
-    if not HAS_SYMPY:
-        raise ImportError("sympy not installed. Install with: pip install sympy")
-
+# Input converters (library-specific)
 
 def _to_expr(value: Any):
     _ensure_sympy()
@@ -42,12 +45,11 @@ def _to_mapping(mapping: Any):
     if mapping is None:
         return {}
     if isinstance(mapping, dict):
-        converted = {}
-        for key, val in mapping.items():
-            converted[_to_symbol(key)] = _to_expr(val)
-        return converted
+        return {_to_symbol(k): _to_expr(v) for k, v in mapping.items()}
     raise ValueError("mapping must be a dict")
 
+
+# Public API functions
 
 def symbols(names: str):
     _ensure_sympy()
@@ -71,11 +73,10 @@ def solve(expr, symbol=None):
     _ensure_sympy()
     expr_obj = _to_expr(expr)
     if symbol is not None:
-        symbol_obj = _to_symbol(symbol)
-        result = sp.solve(expr_obj, symbol_obj)
+        result = sp.solve(expr_obj, _to_symbol(symbol))
     else:
         result = sp.solve(expr_obj)
-    return serializer.json_safe(result)
+    return _json_safe(result)
 
 
 def simplify(expr):
@@ -112,20 +113,17 @@ def n(expr, precision=None):
     _ensure_sympy()
     expr_obj = _to_expr(expr)
     result = sp.N(expr_obj, precision) if precision is not None else sp.N(expr_obj)
-    return serializer.json_safe(result)
+    return _json_safe(result)
 
 
 def subs(expr, mapping):
     _ensure_sympy()
-    expr_obj = _to_expr(expr)
-    mapping_obj = _to_mapping(mapping)
-    return str(expr_obj.subs(mapping_obj))
+    return str(_to_expr(expr).subs(_to_mapping(mapping)))
 
 
 def free_symbols(expr):
     _ensure_sympy()
-    expr_obj = _to_expr(expr)
-    return [str(s) for s in expr_obj.free_symbols]
+    return [str(s) for s in _to_expr(expr).free_symbols]
 
 
 def sqrt(expr):

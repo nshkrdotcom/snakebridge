@@ -1,10 +1,13 @@
 {
   "name": "sympy",
   "python_module": "sympy",
-  "python_path_prefix": "snakebridge_adapter.sympy_bridge",
+  "python_path_prefix": "bridges.sympy_bridge",
   "version": "~> 1.13",
   "category": "math",
   "elixir_module": "SnakeBridge.SymPy",
+  "pypi_package": "sympy",
+  "description": "Symbolic mathematics",
+  "status": "beta",
   "types": {
     "names": "string",
     "expr": "string",

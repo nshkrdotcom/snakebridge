@@ -109,30 +109,14 @@ defmodule SnakeBridge.SnakepitLauncher do
     Python.run!(python_exec, ["-m", "pip", "install", "--upgrade", "pip"])
 
     snakepit_reqs = Application.app_dir(:snakepit, "priv/python/requirements.txt")
-    snakebridge_reqs = resolve_snakebridge_requirements()
     adapter_dir = resolve_snakebridge_adapter_dir()
 
     if File.exists?(snakepit_reqs) do
       Python.run!(python_exec, ["-m", "pip", "install", "-r", snakepit_reqs])
     end
 
-    if snakebridge_reqs && File.exists?(snakebridge_reqs) do
-      Python.run!(python_exec, ["-m", "pip", "install", "-r", snakebridge_reqs])
-    end
-
     if adapter_dir && File.exists?(Path.join(adapter_dir, "setup.py")) do
       Python.run!(python_exec, ["-m", "pip", "install", "-e", adapter_dir])
-    end
-  end
-
-  defp resolve_snakebridge_requirements do
-    local = Path.expand("priv/python/requirements.snakebridge.txt")
-    app_dir = Application.app_dir(:snakebridge, "priv/python/requirements.snakebridge.txt")
-
-    cond do
-      File.exists?(local) -> local
-      File.exists?(app_dir) -> app_dir
-      true -> nil
     end
   end
 
@@ -151,7 +135,9 @@ defmodule SnakeBridge.SnakepitLauncher do
     candidates =
       [
         Path.expand("priv/python"),
+        Path.expand("priv/python/bridges"),
         Application.app_dir(:snakebridge, "priv/python"),
+        Application.app_dir(:snakebridge, "priv/python/bridges"),
         Application.app_dir(:snakepit, "priv/python")
       ]
       |> Enum.filter(&File.dir?/1)

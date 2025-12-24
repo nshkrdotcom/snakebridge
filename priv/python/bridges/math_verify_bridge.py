@@ -4,20 +4,19 @@ math-verify helper functions for SnakeBridge.
 Thin wrappers that normalize the most common API entry points.
 """
 
+import sys
 from typing import Any
 
-try:
-    import math_verify
-    HAS_MATH_VERIFY = True
-except ImportError:
-    math_verify = None
-    HAS_MATH_VERIFY = False
+# Add parent directory to path for bridge_base import
+sys.path.insert(0, str(__file__).rsplit("/bridges", 1)[0])
+
+from snakebridge_adapter.bridge_base import make_import_guard
+
+# Import guard
+math_verify, HAS_MATH_VERIFY, _ensure_math_verify = make_import_guard("math_verify", "math-verify")
 
 
-def _ensure_math_verify():
-    if not HAS_MATH_VERIFY:
-        raise ImportError("math-verify not installed. Install with: pip install math-verify")
-
+# Public API functions
 
 def parse(text: str, **kwargs) -> Any:
     _ensure_math_verify()

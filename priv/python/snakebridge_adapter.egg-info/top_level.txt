@@ -1,2 +1,3 @@
+bridges
 snakebridge_adapter
 test_modules

@@ -24,7 +24,7 @@ SnakeBridge is a small, declarative layer on top of [Snakepit](https://hex.pm/pa
 - Auto-starts Snakepit pools on first real call (disable with `auto_start_snakepit: false`)
 - Streaming support via `call_python_stream` and generated `*_stream` wrappers
 - Introspection tooling: discover, gen, suggest, enrich, review, diff, check
-- Shared serializer for SymPy, pylatexenc, and NumPy outputs
+- Per-library bridge serialization (bridges in `priv/python/bridges/`)
 - Explicit instance lifecycle (`Runtime.release_instance/1`)
 - Telemetry on runtime calls (`[:snakebridge, :call, ...]`)
 
@@ -35,7 +35,7 @@ SnakeBridge is a small, declarative layer on top of [Snakepit](https://hex.pm/pa
 ```elixir
 def deps do
   [
-    {:snakebridge, "~> 0.3.0"},
+    {:snakebridge, "~> 0.3.1"},
     {:snakepit, "~> 0.7.0"}
   ]
 end
@@ -56,7 +56,7 @@ mix snakebridge.setup --venv .venv
 
 # Export environment for runtime (or let SnakepitLauncher resolve it)
 export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
-export PYTHONPATH=$(pwd)/priv/python:$(pwd)/deps/snakepit/priv/python:$PYTHONPATH
+export PYTHONPATH=$(pwd)/priv/python:$(pwd)/priv/python/bridges:$(pwd)/deps/snakepit/priv/python:$PYTHONPATH
 ```
 
 This installs:
@@ -111,10 +111,13 @@ SnakeBridge.Runtime.call_function("json", "dumps", %{obj: %{a: 1}}, allow_unsafe
 {
   "name": "sympy",
   "python_module": "sympy",
-  "python_path_prefix": "snakebridge_adapter.sympy_bridge",
+  "python_path_prefix": "bridges.sympy_bridge",
   "version": "~> 1.13",
   "category": "math",
   "elixir_module": "SnakeBridge.SymPy",
+  "pypi_package": "sympy",
+  "description": "Symbolic mathematics",
+  "status": "beta",
   "types": {
     "expr": "string",
     "symbol": "string"
@@ -127,7 +130,7 @@ SnakeBridge.Runtime.call_function("json", "dumps", %{obj: %{a: 1}}, allow_unsafe
 }
 ```
 
-Manifests live under `priv/snakebridge/manifests/` and are registered in `priv/snakebridge/manifests/_index.json`.
+Manifests live under `priv/snakebridge/manifests/`. The loader scans this directory automatically.
 
 ## Manifest Workflow
 
@@ -222,6 +225,74 @@ List them:
 ```bash
 mix snakebridge.manifests
 ```
+
+## Creating a New Integration
+
+Adding a new Python library integration requires **1-2 files**:
+
+### Minimal: Manifest Only (1 file)
+
+If the library returns JSON-serializable types (strings, numbers, lists, dicts), you only need a manifest:
+
+```bash
+# priv/snakebridge/manifests/my_library.json
+```
+
+```json
+{
+  "name": "my_library",
+  "python_module": "my_library",
+  "python_path_prefix": "my_library",
+  "elixir_module": "SnakeBridge.MyLibrary",
+  "pypi_package": "my-library",
+  "description": "My library description",
+  "status": "experimental",
+  "functions": [
+    {"name": "do_something", "args": ["input"], "returns": "string"}
+  ]
+}
+```
+
+Then add to config and use:
+
+```elixir
+config :snakebridge, load: [:my_library]
+
+# After restart:
+{:ok, result} = SnakeBridge.MyLibrary.do_something(%{input: "hello"})
+```
+
+### With Bridge: Custom Serialization (2 files)
+
+If the library returns complex objects (custom classes, numpy arrays, etc.), add a bridge:
+
+```bash
+# priv/python/bridges/my_library_bridge.py
+```
+
+```python
+def do_something(input):
+    result = my_library.do_something(input)
+    return str(result)  # Or custom serialization
+```
+
+Update manifest to point to bridge:
+
+```json
+{
+  "python_path_prefix": "bridges.my_library_bridge",
+  ...
+}
+```
+
+### Files Required
+
+| Scenario | Manifest | Bridge | Total |
+|----------|----------|--------|-------|
+| Simple library (JSON-safe returns) | 1 | 0 | **1 file** |
+| Complex library (custom objects) | 1 | 1 | **2 files** |
+
+No changes needed to core SnakeBridge code, `_index.json`, catalogs, or adapters.
 
 ## Mix Tasks
 

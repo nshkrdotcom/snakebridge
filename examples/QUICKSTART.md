@@ -7,7 +7,7 @@
 ```bash
 mix snakebridge.setup --venv .venv
 export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
-export PYTHONPATH=$(pwd)/priv/python:$(pwd)/deps/snakepit/priv/python:$PYTHONPATH
+export PYTHONPATH=$(pwd)/priv/python:$(pwd)/priv/python/bridges:$(pwd)/deps/snakepit/priv/python:$PYTHONPATH
 ```
 
 ### Step 2: Run all examples

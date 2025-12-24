@@ -1,3 +1,5 @@
+> Update (2025-12-23): This strategy note predates the manifest-driven implementation and Snakepit 0.7.0. Treat it as historical context.
+
 It’s ambitious, but it is absolutely **not** cray-cray. It’s a very coherent “Elixir-native Ray-adjacent” story, and the pieces you’ve already built (Snakepit + SnakeBridge) are *exactly* what you’d want as the foundation.
 
 Let me break it down in concrete terms instead of just cheerleading.
@@ -188,7 +190,7 @@ That’s a ton of the boring, hard plumbing already done. The next bits are “j
 * pick 1–2 killer use-cases (e.g.:
 
   * Phoenix app calling GenAI with streaming via SnakeBridge,
-  * or DSPy/NumPy/requests workflows orchestrated via SnakeBridge modules),
+  * or Demo/NumPy/requests workflows orchestrated via SnakeBridge modules),
 * polish the developer experience there,
 * then iterate on multi-node / scheduling.
 

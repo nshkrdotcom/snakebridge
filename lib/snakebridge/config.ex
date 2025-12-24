@@ -7,23 +7,29 @@ defmodule SnakeBridge.Config do
   ## Example
 
       config = %SnakeBridge.Config{
-        python_module: "dspy",
-        version: "2.5.0",
+        python_module: "sympy",
+        version: "1.13.0",
         introspection: %{
           enabled: true,
-          cache_path: "priv/snakebridge/schemas/dspy.json"
+          cache_path: "priv/snakebridge/schemas/sympy.json"
         },
         classes: [
           %{
-            python_path: "dspy.Predict",
-            elixir_module: DSPy.Predict,
-            constructor: %{args: %{signature: {:required, :string}}},
-            methods: [%{name: "__call__", elixir_name: :call}]
+            python_path: "sympy.Symbol",
+            elixir_module: Sympy.Symbol,
+            constructor: %{args: %{name: {:required, :string}}},
+            methods: [%{name: "subs", elixir_name: :subs}]
           }
         ]
       }
 
       {:ok, validated} = SnakeBridge.Config.validate(config)
+
+  ## Legacy Fields
+
+  The following fields are retained for backward compatibility but are not
+  currently enforced by the runtime: `grpc`, `bidirectional_tools`,
+  `caching`, `telemetry`, `mixins`, `extends`.
   """
 
   defstruct python_module: nil,

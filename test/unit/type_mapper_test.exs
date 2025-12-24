@@ -242,8 +242,8 @@ defmodule SnakeBridge.TypeSystem.MapperTest do
 
   describe "to_elixir_spec/1 with class types" do
     test "converts class to module.t()" do
-      spec = Mapper.to_elixir_spec(%{kind: "class", class_path: "dspy.Predict"})
-      assert Macro.to_string(spec) == "DSPy.Predict.t()"
+      spec = Mapper.to_elixir_spec(%{kind: "class", class_path: "demo.Predict"})
+      assert Macro.to_string(spec) == "Demo.Predict.t()"
     end
   end
 
@@ -314,11 +314,12 @@ defmodule SnakeBridge.TypeSystem.MapperTest do
     end
 
     test "converts dotted path" do
-      assert Mapper.python_class_to_elixir_module("dspy.Predict") == DSPy.Predict
+      assert Mapper.python_class_to_elixir_module("demo.Predict") == Demo.Predict
     end
 
-    test "preserves acronyms like DSPy, AI, ML" do
-      assert Mapper.python_class_to_elixir_module("dspy.Module") == DSPy.Module
+    test "preserves acronyms like AI, ML" do
+      assert Mapper.python_class_to_elixir_module("ai.Module") == AI.Module
+      assert Mapper.python_class_to_elixir_module("ml.Module") == ML.Module
     end
   end
 end

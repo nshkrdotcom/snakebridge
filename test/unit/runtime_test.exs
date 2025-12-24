@@ -88,19 +88,24 @@ defmodule SnakeBridge.RuntimeTest do
 
   describe "call_function/4" do
     test "calls module-level Python function" do
-      result = Runtime.call_function("json", "dumps", %{obj: %{a: 1}})
+      result = Runtime.call_function("json", "dumps", %{obj: %{a: 1}}, allow_unsafe: true)
 
       assert {:ok, _} = result
     end
 
     test "passes session_id option" do
-      result = Runtime.call_function("json", "dumps", %{obj: %{}}, session_id: "custom_session")
+      result =
+        Runtime.call_function("json", "dumps", %{obj: %{}},
+          session_id: "custom_session",
+          allow_unsafe: true
+        )
 
       assert {:ok, _} = result
     end
 
     test "accepts timeout option" do
-      result = Runtime.call_function("json", "dumps", %{obj: %{}}, timeout: 10_000)
+      result =
+        Runtime.call_function("json", "dumps", %{obj: %{}}, timeout: 10_000, allow_unsafe: true)
 
       assert {:ok, _} = result
     end
@@ -108,7 +113,8 @@ defmodule SnakeBridge.RuntimeTest do
 
   describe "create_instance/4" do
     test "creates Python instance and returns session_id and instance_id" do
-      result = Runtime.create_instance("dspy.Predict", %{"signature" => "q->a"}, nil)
+      result =
+        Runtime.create_instance("demo.Predict", %{"signature" => "q->a"}, nil, allow_unsafe: true)
 
       assert {:ok, {session_id, instance_id}} = result
       assert is_binary(session_id)
@@ -116,7 +122,10 @@ defmodule SnakeBridge.RuntimeTest do
     end
 
     test "uses provided session_id" do
-      result = Runtime.create_instance("dspy.Predict", %{"signature" => "q->a"}, "my_session")
+      result =
+        Runtime.create_instance("demo.Predict", %{"signature" => "q->a"}, "my_session",
+          allow_unsafe: true
+        )
 
       assert {:ok, {"my_session", _instance_id}} = result
     end
@@ -126,14 +135,24 @@ defmodule SnakeBridge.RuntimeTest do
     test "calls method on Python instance" do
       {:ok, {session_id, instance_id}} =
         Runtime.create_instance(
-          "dspy.Predict",
+          "demo.Predict",
           %{"signature" => "q->a"},
-          nil
+          nil,
+          allow_unsafe: true
         )
 
-      result = Runtime.call_method({session_id, instance_id}, "__call__", %{})
+      result = Runtime.call_method({session_id, instance_id}, "__call__", %{}, allow_unsafe: true)
 
       assert {:ok, _} = result
+    end
+  end
+
+  describe "release_instance/2" do
+    test "releases a stored instance" do
+      {:ok, {_session_id, instance_id}} =
+        Runtime.create_instance("demo.Predict", %{"signature" => "q->a"}, nil, allow_unsafe: true)
+
+      assert {:ok, true} = Runtime.release_instance(instance_id)
     end
   end
 

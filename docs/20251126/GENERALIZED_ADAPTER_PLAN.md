@@ -853,41 +853,41 @@ end
 
 ---
 
-### 3.2 DSPy Adapter
+### 3.2 Demo Adapter
 
 **Goal:** Programmatic LLM prompting framework
 
 **Test Files:**
 
 ```
-test/adapters/dspy/
-├── dspy_discovery_test.exs        # Discover DSPy structure
-├── dspy_signatures_test.exs       # Signature definitions
-├── dspy_modules_test.exs          # Predict, ChainOfThought, etc.
-├── dspy_optimizers_test.exs       # BootstrapFewShot, etc.
-├── dspy_teleprompters_test.exs    # Teleprompter compilation
-└── dspy_evaluate_test.exs         # Evaluation metrics
+test/adapters/demo/
+├── demo_discovery_test.exs        # Discover Demo structure
+├── demo_signatures_test.exs       # Signature definitions
+├── demo_modules_test.exs          # Predict, ChainOfThought, etc.
+├── demo_optimizers_test.exs       # BootstrapFewShot, etc.
+├── demo_teleprompters_test.exs    # Teleprompter compilation
+└── demo_evaluate_test.exs         # Evaluation metrics
 ```
 
 **Tests to Implement:**
 
 ```elixir
-# test/adapters/dspy/dspy_modules_test.exs
-defmodule SnakeBridge.Adapters.DSPyModulesTest do
+# test/adapters/demo/demo_modules_test.exs
+defmodule SnakeBridge.Adapters.DemoModulesTest do
   use ExUnit.Case
-  @moduletag [:dspy, :external]
+  @moduletag [:demo, :external]
 
   describe "Predict module" do
     test "basic prediction with signature" do
-      {:ok, predict} = DSPy.Predict.create("question -> answer")
-      {:ok, result} = DSPy.Predict.forward(predict, %{question: "What is 2+2?"})
+      {:ok, predict} = Demo.Predict.create("question -> answer")
+      {:ok, result} = Demo.Predict.forward(predict, %{question: "What is 2+2?"})
 
       assert Map.has_key?(result, :answer)
     end
 
     test "prediction with multiple outputs" do
-      {:ok, predict} = DSPy.Predict.create("question -> answer, confidence")
-      {:ok, result} = DSPy.Predict.forward(predict, %{question: "Capital of France?"})
+      {:ok, predict} = Demo.Predict.create("question -> answer, confidence")
+      {:ok, result} = Demo.Predict.forward(predict, %{question: "Capital of France?"})
 
       assert Map.has_key?(result, :answer)
       assert Map.has_key?(result, :confidence)
@@ -896,8 +896,8 @@ defmodule SnakeBridge.Adapters.DSPyModulesTest do
 
   describe "ChainOfThought module" do
     test "generates reasoning steps" do
-      {:ok, cot} = DSPy.ChainOfThought.create("question -> answer")
-      {:ok, result} = DSPy.ChainOfThought.forward(cot, %{question: "What is 15% of 80?"})
+      {:ok, cot} = Demo.ChainOfThought.create("question -> answer")
+      {:ok, result} = Demo.ChainOfThought.forward(cot, %{question: "What is 15% of 80?"})
 
       assert Map.has_key?(result, :rationale)
       assert Map.has_key?(result, :answer)
@@ -906,27 +906,27 @@ defmodule SnakeBridge.Adapters.DSPyModulesTest do
 
   describe "ReAct module" do
     test "tool-using agent" do
-      {:ok, react} = DSPy.ReAct.create("question -> answer", tools: [
+      {:ok, react} = Demo.ReAct.create("question -> answer", tools: [
         %{name: "search", desc: "Search the web"},
         %{name: "calculate", desc: "Do math"}
       ])
 
-      {:ok, result} = DSPy.ReAct.forward(react, %{
+      {:ok, result} = Demo.ReAct.forward(react, %{
         question: "What is the GDP of Japan in billions?"
       })
     end
   end
 end
 
-# test/adapters/dspy/dspy_optimizers_test.exs
-defmodule SnakeBridge.Adapters.DSPyOptimizersTest do
+# test/adapters/demo/demo_optimizers_test.exs
+defmodule SnakeBridge.Adapters.DemoOptimizersTest do
   use ExUnit.Case
-  @moduletag [:dspy, :external, :slow]
+  @moduletag [:demo, :external, :slow]
 
   describe "BootstrapFewShot" do
     test "optimizes module with examples" do
       # Define metric
-      {:ok, metric} = DSPy.Evaluate.create_metric(fn pred, expected ->
+      {:ok, metric} = Demo.Evaluate.create_metric(fn pred, expected ->
         pred.answer == expected.answer
       end)
 
@@ -936,13 +936,13 @@ defmodule SnakeBridge.Adapters.DSPyOptimizersTest do
         %{question: "3*3?", answer: "9"}
       ]
 
-      {:ok, optimizer} = DSPy.BootstrapFewShot.create(%{
+      {:ok, optimizer} = Demo.BootstrapFewShot.create(%{
         metric: metric,
         max_bootstrapped_demos: 4
       })
 
-      {:ok, module} = DSPy.Predict.create("question -> answer")
-      {:ok, optimized} = DSPy.BootstrapFewShot.compile(optimizer, module, trainset)
+      {:ok, module} = Demo.Predict.create("question -> answer")
+      {:ok, optimized} = Demo.BootstrapFewShot.compile(optimizer, module, trainset)
 
       # Optimized module should perform better
     end
@@ -1252,7 +1252,7 @@ docs/
 │   ├── pandas.md                  # Pandas integration guide
 │   ├── sklearn.md                 # Scikit-learn guide
 │   ├── unsloth.md                 # Unsloth fine-tuning guide
-│   ├── dspy.md                    # DSPy guide
+│   ├── demo.md                    # Demo guide
 │   └── transformers.md            # HuggingFace guide
 ├── patterns/
 │   ├── streaming.md               # Streaming patterns
@@ -1393,7 +1393,7 @@ jobs:
 @moduletag :pandas
 @moduletag :sklearn
 @moduletag :unsloth
-@moduletag :dspy
+@moduletag :demo
 @moduletag :transformers
 ```
 
@@ -1415,7 +1415,7 @@ jobs:
 
 ### Phase 3 (Weeks 6-9): AI/ML Frameworks
 - [ ] Unsloth adapter with 35+ tests (fine-tuning, LoRA, export)
-- [ ] DSPy adapter with 30+ tests
+- [ ] Demo adapter with 30+ tests
 - [ ] Transformers adapter with 25+ tests
 - [ ] Streaming integration for all
 
@@ -1467,9 +1467,9 @@ test/
 │   │   ├── unsloth_model_test.exs
 │   │   ├── unsloth_finetune_test.exs
 │   │   └── unsloth_export_test.exs
-│   ├── dspy/
-│   │   ├── dspy_modules_test.exs
-│   │   └── dspy_optimizers_test.exs
+│   ├── demo/
+│   │   ├── demo_modules_test.exs
+│   │   └── demo_optimizers_test.exs
 │   └── transformers/
 │       ├── transformers_pipeline_test.exs
 │       └── transformers_generation_test.exs
@@ -1499,7 +1499,7 @@ priv/python/snakebridge_adapter/adapters/
 ├── pandas_adapter.py              # Pandas optimizations
 ├── sklearn_adapter.py             # Scikit-learn adapter
 ├── unsloth_adapter.py             # Unsloth fine-tuning adapter
-├── dspy_adapter.py                # DSPy adapter
+├── demo_adapter.py                # Demo adapter
 └── transformers_adapter.py        # Transformers adapter
 ```
 

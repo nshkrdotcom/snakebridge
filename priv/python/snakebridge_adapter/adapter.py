@@ -13,7 +13,10 @@ import logging
 import traceback
 import threading
 import typing
+from collections.abc import Iterable
 from typing import Any, Dict, List, Optional, get_type_hints
+
+from . import serializer
 
 # Import Snakepit base adapter
 try:
@@ -170,14 +173,20 @@ class SnakeBridgeAdapter(ThreadSafeAdapter):
     # Maximum depth for introspection to prevent infinite recursion
     MAX_INTROSPECTION_DEPTH = 5
 
+    _shared_instance_manager: Optional[InstanceManager] = None
+
     def __init__(self, ttl_seconds: int = 3600, max_instances: int = 1000):
-        """Initialize adapter with instance storage."""
+        """Initialize adapter with shared instance storage."""
         if HAS_SNAKEPIT:
             super().__init__()
-        self.instance_manager = InstanceManager(
-            ttl_seconds=ttl_seconds,
-            max_instances=max_instances
-        )
+
+        if SnakeBridgeAdapter._shared_instance_manager is None:
+            SnakeBridgeAdapter._shared_instance_manager = InstanceManager(
+                ttl_seconds=ttl_seconds,
+                max_instances=max_instances
+            )
+
+        self.instance_manager = SnakeBridgeAdapter._shared_instance_manager
         self.session_context = None
         self.initialized = False
         logger.info("SnakeBridgeAdapter initialized")
@@ -196,7 +205,6 @@ class SnakeBridgeAdapter(ThreadSafeAdapter):
     async def cleanup(self):
         """Clean up adapter resources."""
         self.initialized = False
-        self.instance_manager.shutdown()
         logger.info("Adapter cleaned up")
 
     def execute_tool(self, tool_name: str, arguments: dict, context) -> dict:
@@ -217,6 +225,17 @@ class SnakeBridgeAdapter(ThreadSafeAdapter):
                 args=arguments.get("args"),
                 kwargs=arguments.get("kwargs")
             )
+        elif tool_name == "call_python_stream":
+            return self.call_python_stream(
+                module_path=arguments.get("module_path"),
+                function_name=arguments.get("function_name"),
+                args=arguments.get("args"),
+                kwargs=arguments.get("kwargs")
+            )
+        elif tool_name == "release_instance":
+            return self.release_instance(
+                instance_id=arguments.get("instance_id")
+            )
         else:
             return {
                 "success": False,
@@ -230,7 +249,7 @@ class SnakeBridgeAdapter(ThreadSafeAdapter):
         Introspect a Python module and return its schema.
 
         Args:
-            module_path: Python module path (e.g., "json", "dspy.Predict")
+            module_path: Python module path (e.g., "json", "sympy")
             discovery_depth: How deep to recurse into submodules (default: 2)
 
         Returns:
@@ -304,7 +323,7 @@ class SnakeBridgeAdapter(ThreadSafeAdapter):
 
         Supports:
         - Module functions: call_python("json", "dumps", [], {"obj": {...}})
-        - Instance creation: call_python("dspy.Predict", "__init__", [], {"signature": "q->a"})
+        - Instance creation: call_python("sympy.Symbol", "__init__", [], {"name": "x"})
         - Instance methods: call_python("instance:<id>", "forward", [], {...})
 
         Args:
@@ -339,6 +358,58 @@ class SnakeBridgeAdapter(ThreadSafeAdapter):
 
         except Exception as e:
             logger.error(f"Error calling {module_path}.{function_name}: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+
+    @tool(description="Execute Python code dynamically (streaming)", supports_streaming=True)
+    def call_python_stream(
+        self,
+        module_path: str,
+        function_name: str,
+        args: Optional[List] = None,
+        kwargs: Optional[Dict] = None
+    ):
+        """
+        Dynamically execute Python code with streaming response.
+
+        Yields a sequence of JSON-safe chunks under the \"data\" key.
+        """
+        args = args or []
+        kwargs = kwargs or {}
+
+        def iterator():
+            try:
+                result = self._invoke_raw(module_path, function_name, args, kwargs)
+
+                for item in self._iter_stream_items(result):
+                    yield {"success": True, "data": self._json_safe(item)}
+
+                yield {"success": True, "done": True}
+            except Exception as e:
+                logger.error(
+                    f"Error streaming {module_path}.{function_name}: {e}",
+                    exc_info=True
+                )
+                raise
+
+        return iterator()
+
+    @tool(description="Release a stored Python instance")
+    def release_instance(self, instance_id: str) -> dict:
+        """
+        Release a stored Python instance by instance_id.
+        """
+        try:
+            removed = self.instance_manager.remove(instance_id)
+            return {
+                "success": True,
+                "instance_id": instance_id,
+                "released": removed
+            }
+        except Exception as e:
             return {
                 "success": False,
                 "error": str(e),
@@ -564,7 +635,7 @@ class SnakeBridgeAdapter(ThreadSafeAdapter):
         Create a Python instance and store it.
 
         Args:
-            module_path: Full path to class (e.g., "dspy.Predict")
+            module_path: Full path to class (e.g., "sympy.Symbol")
             args: Positional arguments for __init__
             kwargs: Keyword arguments for __init__
 
@@ -634,6 +705,50 @@ class SnakeBridgeAdapter(ThreadSafeAdapter):
 
         return args_list, kwargs_copy
 
+    def _invoke_raw(self, module_path: str, function_name: str, args: list, kwargs: dict) -> Any:
+        """
+        Invoke a function or method and return the raw result.
+        """
+        # Instance creation
+        if function_name == "__init__":
+            return self._create_instance(module_path, args, kwargs)
+
+        # Instance method call
+        if module_path.startswith("instance:"):
+            instance_id = module_path.replace("instance:", "")
+            instance = self.instance_manager.get(instance_id)
+            method = getattr(instance, function_name)
+            prepared_args, prepared_kwargs = self._prepare_args(method, args, kwargs)
+            return method(*prepared_args, **prepared_kwargs)
+
+        # Module function call
+        module = importlib.import_module(module_path)
+        func = getattr(module, function_name)
+        prepared_args, prepared_kwargs = self._prepare_args(func, args, kwargs)
+        return func(*prepared_args, **prepared_kwargs)
+
+    def _is_stream_iterable(self, value: Any) -> bool:
+        if value is None:
+            return False
+
+        if isinstance(value, (str, bytes, dict)):
+            return False
+
+        if inspect.isgenerator(value):
+            return True
+
+        return isinstance(value, Iterable)
+
+    def _iter_stream_items(self, result: Any):
+        if self._is_stream_iterable(result):
+            for item in result:
+                yield item
+        else:
+            yield result
+
+    def _json_safe(self, value: Any) -> Any:
+        return serializer.json_safe(value)
+
     def _call_instance_method(
         self,
         instance_ref: str,
@@ -669,6 +784,8 @@ class SnakeBridgeAdapter(ThreadSafeAdapter):
             if inspect.isgenerator(result):
                 # Convert generator to list for JSON serialization
                 result = list(result)
+
+            result = self._json_safe(result)
 
             return {
                 "success": True,
@@ -721,6 +838,8 @@ class SnakeBridgeAdapter(ThreadSafeAdapter):
             if inspect.isgenerator(result):
                 # Convert generator to list for JSON serialization
                 result = list(result)
+
+            result = self._json_safe(result)
 
             return {
                 "success": True,

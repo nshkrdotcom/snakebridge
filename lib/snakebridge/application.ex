@@ -3,6 +3,8 @@ defmodule SnakeBridge.Application do
 
   use Application
 
+  alias SnakeBridge.Manifest.Loader
+
   @impl true
   def start(_type, _args) do
     children = [
@@ -13,6 +15,19 @@ defmodule SnakeBridge.Application do
     ]
 
     opts = [strategy: :one_for_one, name: SnakeBridge.Supervisor]
-    Supervisor.start_link(children, opts)
+    {:ok, pid} = Supervisor.start_link(children, opts)
+
+    strategy =
+      Application.get_env(:snakebridge, :compilation_mode) ||
+        Application.get_env(:snakebridge, :compilation_strategy, :auto)
+
+    if strategy == :compile_time do
+      require Logger
+      Logger.info("SnakeBridge: compile_time strategy enabled; skipping runtime manifest load")
+    else
+      _ = Loader.load_configured()
+    end
+
+    {:ok, pid}
   end
 end

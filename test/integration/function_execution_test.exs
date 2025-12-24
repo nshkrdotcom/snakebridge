@@ -1,15 +1,37 @@
 defmodule SnakeBridge.Integration.FunctionExecutionTest do
   use ExUnit.Case, async: false
 
+  alias SnakeBridge.Manifest.Registry
+  alias SnakeBridge.TestHelpers
+
   @moduletag :integration
+
+  setup do
+    Registry.reset()
+
+    TestHelpers.purge_modules([
+      Json,
+      Demo.Settings,
+      Demo.SettingsFunctions,
+      Demo.Predict,
+      DemoTest.Predict
+    ])
+
+    :ok
+  end
 
   describe "function execution with mocked Snakepit" do
     setup do
       # Use the mock adapter for testing
+      original_adapter = Application.get_env(:snakebridge, :snakepit_adapter)
       Application.put_env(:snakebridge, :snakepit_adapter, SnakeBridge.SnakepitMock)
 
       on_exit(fn ->
-        Application.delete_env(:snakebridge, :snakepit_adapter)
+        if is_nil(original_adapter) do
+          Application.delete_env(:snakebridge, :snakepit_adapter)
+        else
+          Application.put_env(:snakebridge, :snakepit_adapter, original_adapter)
+        end
       end)
 
       :ok
@@ -17,7 +39,7 @@ defmodule SnakeBridge.Integration.FunctionExecutionTest do
 
     test "discover -> generate -> call function workflow" do
       # Step 1: Discover a module
-      {:ok, schema} = SnakeBridge.discover("dspy")
+      {:ok, schema} = SnakeBridge.discover("demo")
 
       # Verify functions were discovered
       assert Map.has_key?(schema, "functions")
@@ -26,7 +48,7 @@ defmodule SnakeBridge.Integration.FunctionExecutionTest do
       assert map_size(functions) > 0
 
       # Step 2: Convert to config
-      config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "dspy")
+      config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "demo")
 
       # Verify functions in config
       assert length(config.functions) > 0
@@ -38,7 +60,7 @@ defmodule SnakeBridge.Integration.FunctionExecutionTest do
       assert length(modules) > 0
 
       # Step 4: Find function module and call a function
-      # Note: The function module will be generated for dspy.settings.configure
+      # Note: The function module will be generated for demo.settings.configure
       function_module =
         Enum.find(modules, fn mod ->
           function_exported?(mod, :configure, 0) || function_exported?(mod, :configure, 1) ||
@@ -48,6 +70,8 @@ defmodule SnakeBridge.Integration.FunctionExecutionTest do
       assert function_module != nil, "Should generate a module with configure function"
 
       # Step 5: Call the function
+      Registry.register_config(config)
+
       {:ok, result} = function_module.configure()
 
       # Mock should return a result
@@ -102,6 +126,8 @@ defmodule SnakeBridge.Integration.FunctionExecutionTest do
         ]
       }
 
+      Registry.register_config(config)
+
       {:ok, [json_module]} = SnakeBridge.generate(config)
 
       # Call dumps with arguments
@@ -126,6 +152,8 @@ defmodule SnakeBridge.Integration.FunctionExecutionTest do
         ]
       }
 
+      Registry.register_config(config)
+
       {:ok, [json_module]} = SnakeBridge.generate(config)
 
       # Call loads with arguments
@@ -149,6 +177,8 @@ defmodule SnakeBridge.Integration.FunctionExecutionTest do
           }
         ]
       }
+
+      Registry.register_config(config)
 
       {:ok, [json_module]} = SnakeBridge.generate(config)
 
@@ -177,6 +207,8 @@ defmodule SnakeBridge.Integration.FunctionExecutionTest do
         ]
       }
 
+      Registry.register_config(config)
+
       {:ok, [json_module]} = SnakeBridge.generate(config)
 
       # Call should return ok tuple even if Python has issues
@@ -190,12 +222,12 @@ defmodule SnakeBridge.Integration.FunctionExecutionTest do
   describe "function generation with classes" do
     test "can generate both class and function modules from same config" do
       config = %SnakeBridge.Config{
-        python_module: "dspy",
-        version: "2.5.0",
+        python_module: "demo",
+        version: "1.0.0",
         classes: [
           %{
-            python_path: "dspy.Predict",
-            elixir_module: DspyTest.Predict,
+            python_path: "demo.Predict",
+            elixir_module: DemoTest.Predict,
             constructor: %{args: %{}, session_aware: true},
             methods: [%{name: "__call__", elixir_name: :call, streaming: false}]
           }
@@ -203,11 +235,13 @@ defmodule SnakeBridge.Integration.FunctionExecutionTest do
         functions: [
           %{
             name: "configure",
-            python_path: "dspy.settings.configure",
+            python_path: "demo.settings.configure",
             elixir_name: :configure
           }
         ]
       }
+
+      Registry.register_config(config)
 
       {:ok, modules} = SnakeBridge.generate(config)
 

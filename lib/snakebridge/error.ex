@@ -18,6 +18,7 @@ defmodule SnakeBridge.Error do
   - `:module_not_found_error` - ModuleNotFoundError
   - `:json_decode_error` - JSONDecodeError
   - `:timeout` - Operation timed out
+  - `:unauthorized` - Call was not allowlisted
   - `:snakepit_unavailable` - Snakepit was not running when a call was attempted
   - `:unknown` - Unclassified error
 
@@ -46,6 +47,7 @@ defmodule SnakeBridge.Error do
           | :runtime_error
           | :module_not_found_error
           | :json_decode_error
+          | :unauthorized
           | :snakepit_unavailable
           | :timeout
           | :unknown
@@ -142,6 +144,19 @@ defmodule SnakeBridge.Error do
       message: "Operation timed out after #{timeout_ms}ms",
       python_traceback: nil,
       details: %{timeout_ms: timeout_ms}
+    }
+  end
+
+  @doc """
+  Create an unauthorized error for disallowed calls.
+  """
+  @spec unauthorized(String.t(), map()) :: t()
+  def unauthorized(message, details \\ %{}) do
+    %__MODULE__{
+      type: :unauthorized,
+      message: message,
+      python_traceback: nil,
+      details: details
     }
   end
 

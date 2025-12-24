@@ -22,8 +22,8 @@ defmodule SnakeBridge.TestFixtures do
 
     %{
       name: "Predict#{suffix}",
-      python_path: "dspy.Predict#{suffix}",
-      docstring: "Basic prediction module without intermediate reasoning.",
+      python_path: "demo.Predict#{suffix}",
+      docstring: "Example prediction module for tests.",
       constructor: %{
         parameters: [
           %{
@@ -60,8 +60,8 @@ defmodule SnakeBridge.TestFixtures do
   def sample_function_descriptor do
     %{
       name: "configure",
-      python_path: "dspy.settings.configure",
-      docstring: "Configure global DSPy settings",
+      python_path: "demo.settings.configure",
+      docstring: "Configure global demo settings",
       parameters: [
         %{
           name: "lm",
@@ -91,17 +91,17 @@ defmodule SnakeBridge.TestFixtures do
     python_path_suffix = if module_suffix, do: "_#{module_suffix}", else: ""
 
     %SnakeBridge.Config{
-      python_module: "dspy",
-      version: "2.5.0",
+      python_module: "demo",
+      version: "1.0.0",
       introspection: %{
         enabled: true,
-        cache_path: "test/fixtures/cache/dspy.json",
+        cache_path: "test/fixtures/cache/demo.json",
         discovery_depth: 2,
         submodules: ["teleprompt"]
       },
       classes: [
         %{
-          python_path: "dspy.Predict#{python_path_suffix}",
+          python_path: "demo.Predict#{python_path_suffix}",
           elixir_module: elixir_module,
           constructor: %{
             args: %{signature: {:required, :string}},
@@ -115,7 +115,7 @@ defmodule SnakeBridge.TestFixtures do
       functions: [
         %{
           name: "configure",
-          python_path: "dspy.settings.configure",
+          python_path: "demo.settings.configure",
           elixir_name: :configure,
           args: %{lm: {:optional, :any}}
         }
@@ -131,7 +131,7 @@ defmodule SnakeBridge.TestFixtures do
     descriptor = sample_class_descriptor(module_suffix)
 
     %{
-      "library_version" => "2.5.0",
+      "library_version" => "1.0.0",
       "classes" => %{
         descriptor.name => descriptor
       },

@@ -57,8 +57,8 @@ defmodule SnakeBridge.Adapters.Numpy do
   """
   @spec array(list(), keyword()) :: {:ok, map()} | {:error, term()}
   def array(data, opts \\ []) do
-    call_numpy_tool(
-      "np_create_array",
+    call_numpy_function(
+      "array",
       %{
         "data" => data,
         "dtype" => Keyword.get(opts, :dtype),
@@ -78,8 +78,8 @@ defmodule SnakeBridge.Adapters.Numpy do
   """
   @spec zeros(list(integer()), keyword()) :: {:ok, map()} | {:error, term()}
   def zeros(shape, opts \\ []) do
-    call_numpy_tool(
-      "np_zeros",
+    call_numpy_function(
+      "zeros",
       %{
         "shape" => shape,
         "dtype" => Keyword.get(opts, :dtype, "float64")
@@ -98,8 +98,8 @@ defmodule SnakeBridge.Adapters.Numpy do
   """
   @spec ones(list(integer()), keyword()) :: {:ok, map()} | {:error, term()}
   def ones(shape, opts \\ []) do
-    call_numpy_tool(
-      "np_ones",
+    call_numpy_function(
+      "ones",
       %{
         "shape" => shape,
         "dtype" => Keyword.get(opts, :dtype, "float64")
@@ -119,8 +119,8 @@ defmodule SnakeBridge.Adapters.Numpy do
   """
   @spec arange(number(), number() | nil, number(), keyword()) :: {:ok, map()} | {:error, term()}
   def arange(start, stop \\ nil, step \\ 1, opts \\ []) do
-    call_numpy_tool(
-      "np_arange",
+    call_numpy_function(
+      "arange",
       %{
         "start" => start,
         "stop" => stop,
@@ -141,8 +141,8 @@ defmodule SnakeBridge.Adapters.Numpy do
   """
   @spec linspace(number(), number(), integer(), keyword()) :: {:ok, map()} | {:error, term()}
   def linspace(start, stop, num \\ 50, opts \\ []) do
-    call_numpy_tool(
-      "np_linspace",
+    call_numpy_function(
+      "linspace",
       %{
         "start" => start,
         "stop" => stop,
@@ -164,8 +164,8 @@ defmodule SnakeBridge.Adapters.Numpy do
   """
   @spec mean(list(), keyword()) :: {:ok, map()} | {:error, term()}
   def mean(data, opts \\ []) do
-    call_numpy_tool(
-      "np_mean",
+    call_numpy_function(
+      "mean",
       %{
         "data" => data,
         "axis" => Keyword.get(opts, :axis)
@@ -184,8 +184,8 @@ defmodule SnakeBridge.Adapters.Numpy do
   """
   @spec sum(list(), keyword()) :: {:ok, map()} | {:error, term()}
   def sum(data, opts \\ []) do
-    call_numpy_tool(
-      "np_sum",
+    call_numpy_function(
+      "sum",
       %{
         "data" => data,
         "axis" => Keyword.get(opts, :axis)
@@ -204,8 +204,8 @@ defmodule SnakeBridge.Adapters.Numpy do
   """
   @spec dot(list(), list(), keyword()) :: {:ok, map()} | {:error, term()}
   def dot(a, b, opts \\ []) do
-    call_numpy_tool(
-      "np_dot",
+    call_numpy_function(
+      "dot",
       %{
         "a" => a,
         "b" => b
@@ -224,8 +224,8 @@ defmodule SnakeBridge.Adapters.Numpy do
   """
   @spec reshape(list(), list(integer()), keyword()) :: {:ok, map()} | {:error, term()}
   def reshape(data, shape, opts \\ []) do
-    call_numpy_tool(
-      "np_reshape",
+    call_numpy_function(
+      "reshape",
       %{
         "data" => data,
         "shape" => shape
@@ -244,8 +244,8 @@ defmodule SnakeBridge.Adapters.Numpy do
   """
   @spec transpose(list(), keyword()) :: {:ok, map()} | {:error, term()}
   def transpose(data, opts \\ []) do
-    call_numpy_tool(
-      "np_transpose",
+    call_numpy_function(
+      "transpose",
       %{
         "data" => data,
         "axes" => Keyword.get(opts, :axes)
@@ -256,18 +256,28 @@ defmodule SnakeBridge.Adapters.Numpy do
 
   # Private helpers
 
-  defp call_numpy_tool(tool_name, args, opts) do
+  defp call_numpy_function(function_name, args, opts) do
     session_id = Keyword.get(opts, :session_id, generate_session_id())
     timeout = Keyword.get(opts, :timeout, @default_timeout)
 
-    result = Runtime.execute_with_timeout(session_id, tool_name, args, timeout: timeout)
+    python_path = "snakebridge_adapter.numpy_bridge.#{function_name}"
+
+    result =
+      Runtime.call_function(
+        python_path,
+        function_name,
+        args,
+        session_id: session_id,
+        timeout: timeout,
+        allow_unsafe: true
+      )
 
     case result do
-      {:ok, %{"success" => true} = response} ->
+      {:ok, response} when is_map(response) ->
         {:ok, normalize_response(response)}
 
-      {:ok, %{"success" => false, "error" => error}} ->
-        {:error, error}
+      {:ok, response} ->
+        {:ok, %{result: response}}
 
       {:error, _} = error ->
         error
@@ -281,7 +291,6 @@ defmodule SnakeBridge.Adapters.Numpy do
   end
 
   defp generate_session_id do
-    unique = System.unique_integer([:positive, :monotonic])
-    "numpy_session_#{unique}"
+    SnakeBridge.SessionId.generate("numpy")
   end
 end

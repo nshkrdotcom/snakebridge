@@ -19,7 +19,7 @@ defmodule SnakeBridge.Discovery do
 
   ## Example
 
-      {:ok, schema} = SnakeBridge.Discovery.discover("dspy", depth: 3)
+      {:ok, schema} = SnakeBridge.Discovery.discover("sympy", depth: 3)
   """
   @spec discover(String.t(), keyword()) :: {:ok, map()} | {:error, term()}
   def discover(module_path, opts \\ []) do
@@ -85,8 +85,7 @@ defmodule SnakeBridge.Discovery do
   defp python_path_to_module(python_path) when is_binary(python_path) do
     python_path
     |> String.split(".")
-    |> Enum.map(&String.capitalize/1)
-    |> Enum.join(".")
+    |> Enum.map_join(".", &String.capitalize/1)
     |> String.to_atom()
   end
 

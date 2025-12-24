@@ -3,15 +3,25 @@ defmodule SnakeBridgeAPITest do
 
   alias SnakeBridge
 
+  setup do
+    purge_module(:"Demo.Predict")
+    purge_module(:"Demo.Settings")
+    purge_module(:"Demo.SettingsFunctions")
+    purge_module(Demo.Predict)
+    purge_module(Demo.Settings)
+    purge_module(Demo.SettingsFunctions)
+    :ok
+  end
+
   describe "discover/2" do
     test "discovers a Python library schema" do
-      assert {:ok, schema} = SnakeBridge.discover("dspy")
+      assert {:ok, schema} = SnakeBridge.discover("demo")
       assert is_map(schema)
       assert Map.has_key?(schema, "library_version")
     end
 
     test "passes options to discovery" do
-      assert {:ok, _schema} = SnakeBridge.discover("dspy", depth: 3)
+      assert {:ok, _schema} = SnakeBridge.discover("demo", depth: 3)
     end
   end
 
@@ -28,30 +38,32 @@ defmodule SnakeBridgeAPITest do
   describe "integrate/2" do
     test "discovers and generates in one step" do
       # Cleanup any existing modules before and after test
-      purge_module(:"Dspy.Predict")
-      purge_module(:"Dspy.Settings")
-
       on_exit(fn ->
-        purge_module(:"Dspy.Predict")
-        purge_module(:"Dspy.Settings")
+        purge_module(:"Demo.Predict")
+        purge_module(:"Demo.Settings")
+        purge_module(:"Demo.SettingsFunctions")
+        purge_module(Demo.Predict)
+        purge_module(Demo.Settings)
+        purge_module(Demo.SettingsFunctions)
       end)
 
-      assert {:ok, modules} = SnakeBridge.integrate("dspy")
+      assert {:ok, modules} = SnakeBridge.integrate("demo")
       assert is_list(modules)
     end
 
     test "returns config along with modules" do
       # Cleanup any existing modules before and after test
-      purge_module(:"Dspy.Predict")
-      purge_module(:"Dspy.Settings")
-
       on_exit(fn ->
-        purge_module(:"Dspy.Predict")
-        purge_module(:"Dspy.Settings")
+        purge_module(:"Demo.Predict")
+        purge_module(:"Demo.Settings")
+        purge_module(:"Demo.SettingsFunctions")
+        purge_module(Demo.Predict)
+        purge_module(Demo.Settings)
+        purge_module(Demo.SettingsFunctions)
       end)
 
       assert {:ok, %{config: config, modules: modules}} =
-               SnakeBridge.integrate("dspy", return: :full)
+               SnakeBridge.integrate("demo", return: :full)
 
       assert %SnakeBridge.Config{} = config
       assert is_list(modules)

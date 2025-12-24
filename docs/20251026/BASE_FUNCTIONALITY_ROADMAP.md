@@ -7,6 +7,8 @@
 
 ---
 
+> Update (2025-12-23): This roadmap is historical. SnakeBridge is now manifest‑driven (JSON manifests + allowlist), Snakepit is 0.7.0, the Python adapter and serializers are implemented, and real‑Python tests pass. For current usage, see `README.md` and `docs/20251222/snakebridge-functionality/full_functionality.md`.
+
 ## Reality Check: What We Actually Have
 
 ### ✅ Working (Tested with Mocks)
@@ -31,7 +33,7 @@
 
 ### Hypothesis to Test
 **Simple libraries** (numpy, requests) → Simple adapters (~50 lines)
-**Complex libraries** (DSPy, LangChain) → Complex adapters (~500+ lines?)
+**Complex libraries** (Demo, LangChain) → Complex adapters (~500+ lines?)
 
 **We need data points to know if AI automation is worth it.**
 
@@ -45,7 +47,7 @@
    - Measure: same metrics
    - Result: Does complexity scale linearly?
 
-3. **Build adapter** for DSPy (complex)
+3. **Build adapter** for Demo (complex)
    - Measure: same metrics
    - Result: Is AI automation justified?
 
@@ -222,12 +224,12 @@ config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "json")
 
 ---
 
-#### Example 2.3: DSPy in DSPex Project
+#### Example 2.3: Demo in DSPex Project
 **Complexity**: High (complex API, stateful, callbacks)
 **Location**: ~/p/g/n/DSPex
 
 **Why separate project**:
-- DSPy is domain-specific (prompt programming)
+- Demo is domain-specific (prompt programming)
 - Needs custom business logic on top of SnakeBridge
 - Good separation of concerns
 
@@ -244,14 +246,14 @@ end
 
 # Usage in DSPex
 defmodule DSPex.Predictor do
-  # Use SnakeBridge to get base DSPy integration
-  {:ok, modules} = SnakeBridge.integrate("dspy")
-  [dspy_predict | _] = modules
+  # Use SnakeBridge to get base Demo integration
+  {:ok, modules} = SnakeBridge.integrate("demo")
+  [demo_predict | _] = modules
 
   # DSPex adds domain logic on top
   def predict_with_context(prompt, context) do
     # Business logic here
-    dspy_predict.call(...)
+    demo_predict.call(...)
   end
 end
 ```
@@ -275,7 +277,7 @@ After building 3 examples, we'll have data:
 | json    | ~10 funcs   | ? lines     | ?          | ? hours       | ?      |
 | requests| ~10 funcs   | ? lines     | ?          | ? hours       | ?      |
 | numpy   | ~100s funcs | ? lines     | ?          | ? hours       | ?      |
-| DSPy    | Complex     | ? lines     | ?          | ? hours       | ?      |
+| Demo    | Complex     | ? lines     | ?          | ? hours       | ?      |
 
 **Decision Point**:
 - If adapter LOC stays ~50-100 → Manual is fine, skip AI
@@ -317,12 +319,12 @@ class SnakeBridgeAdapter(ThreadSafeAdapter):
 
 ### Step 2: Update Runtime to Use Generic Tool
 
-**Current**: Calls `"call_dspy"` (specific)
+**Current**: Calls `"call_demo"` (specific)
 **Update to**: Call `"call_python"` (generic)
 
 **File**: `lib/snakebridge/runtime.ex`
 ```elixir
-# Line 35: Change from "call_dspy" to "call_python"
+# Line 35: Change from "call_demo" to "call_python"
 case adapter.execute_in_session(session_id, "call_python", %{
   "module_path" => python_path,
   "function_name" => "__init__",
@@ -390,12 +392,12 @@ end
     install: true
   },
 
-  # DSPy for DSPex project
+  # Demo for DSPex project
   %{
-    package_name: "dspy-ai",
-    import_name: "dspy",
+    package_name: "demo-ai",
+    import_name: "demo",
     version: "2.5.0",  # Latest as of Oct 2025
-    source: "https://github.com/stanfordnlp/dspy",
+    source: "https://github.com/stanfordnlp/demo",
     install: true,
     dependencies: ["openai>=1.0.0", "anthropic>=0.3.0"],
     notes: "Used by DSPex project for prompt programming"
@@ -510,22 +512,22 @@ end
 
 ---
 
-### Week 3: DSPy Integration in DSPex Project
+### Week 3: Demo Integration in DSPex Project
 
 **Location**: ~/p/g/n/DSPex (separate project)
 
 **Deliverables**:
 - [ ] DSPex depends on SnakeBridge
-- [ ] Basic DSPy example works (Predict)
+- [ ] Basic Demo example works (Predict)
 - [ ] Document complexity vs simple libraries
-- [ ] Identify DSPy-specific challenges
+- [ ] Identify Demo-specific challenges
 
 **Questions answered**:
-- Is DSPy too complex for generic adapter?
+- Is Demo too complex for generic adapter?
 - Do we need custom adapter per complex library?
 - Is AI automation worth building?
 
-**Success metric**: Can run DSPy.Predict from DSPex via SnakeBridge ✅
+**Success metric**: Can run Demo.Predict from DSPex via SnakeBridge ✅
 
 ---
 
@@ -595,9 +597,9 @@ def _get_functions(self, module):
 
 #### 2. Update Runtime Tool Names
 **File**: `lib/snakebridge/runtime.ex`
-**Change**: `"call_dspy"` → `"call_python"`
+**Change**: `"call_demo"` → `"call_python"`
 **File**: `test/support/snakepit_mock.ex`
-**Change**: Add `"call_python"` handler (or rename `call_dspy`)
+**Change**: Add `"call_python"` handler (or rename `call_demo`)
 **Time**: 30 min
 
 ---
@@ -702,7 +704,7 @@ end
 
 **Fallback**: Library-specific adapters (still simpler than AI automation)
 ```python
-# priv/python/adapters/dspy_adapter.py (DSPy-specific)
+# priv/python/adapters/demo_adapter.py (Demo-specific)
 # priv/python/adapters/numpy_adapter.py (numpy-specific)
 ```
 

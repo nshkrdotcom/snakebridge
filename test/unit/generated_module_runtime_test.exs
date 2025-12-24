@@ -23,7 +23,7 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
       # The generated module should call Runtime.create_instance
       # With the mock adapter, this should succeed
       args = %{signature: "question -> answer"}
-      assert {:ok, {session_id, instance_id}} = module.create(args)
+      assert {:ok, {session_id, instance_id}} = module.create(args, allow_unsafe: true)
 
       # Verify it returns proper session/instance tuple from Runtime
       assert is_binary(session_id)
@@ -42,7 +42,9 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
 
       # Provide explicit session_id
       custom_session = "my_custom_session_123"
-      assert {:ok, {session_id, _instance_id}} = module.create(%{}, session_id: custom_session)
+
+      assert {:ok, {session_id, _instance_id}} =
+               module.create(%{}, session_id: custom_session, allow_unsafe: true)
 
       # Should use the provided session_id
       assert session_id == custom_session
@@ -57,8 +59,8 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
       {:ok, module} = Generator.compile_and_load(ast)
 
       # Create two instances without session_id
-      {:ok, {session1, _}} = module.create(%{})
-      {:ok, {session2, _}} = module.create(%{})
+      {:ok, {session1, _}} = module.create(%{}, allow_unsafe: true)
+      {:ok, {session2, _}} = module.create(%{}, allow_unsafe: true)
 
       # Should generate different sessions (or reuse if we want session pooling)
       # For now, each call generates a new session
@@ -83,11 +85,11 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
       {:ok, module} = Generator.compile_and_load(ast)
 
       # Create instance first
-      {:ok, instance_ref} = module.create(%{signature: "test -> output"})
+      {:ok, instance_ref} = module.create(%{signature: "test -> output"}, allow_unsafe: true)
 
       # Call the method (should call Runtime.call_method)
       # The method name in fixture is "__call__", mapped to elixir_name :call
-      assert {:ok, result} = module.call(instance_ref, %{test: "input"})
+      assert {:ok, result} = module.call(instance_ref, %{test: "input"}, allow_unsafe: true)
 
       # Mock should return actual response from SnakepitMock, not placeholder
       assert is_map(result)
@@ -108,7 +110,7 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
 
       # Should propagate error from Runtime
       # Note: Mock might not fail, but real Snakepit would
-      result = module.call(invalid_ref, %{})
+      result = module.call(invalid_ref, %{}, allow_unsafe: true)
 
       # Should be {:ok, ...} or {:error, ...}, not crash
       assert match?({:ok, _}, result) or match?({:error, _}, result)
@@ -126,8 +128,8 @@ defmodule SnakeBridge.GeneratedModuleRuntimeTest do
       {:ok, module} = Generator.compile_and_load(ast)
 
       # Full workflow: create instance, call method
-      {:ok, instance} = module.create(%{signature: "question -> answer"})
-      {:ok, result} = module.call(instance, %{question: "test"})
+      {:ok, instance} = module.create(%{signature: "question -> answer"}, allow_unsafe: true)
+      {:ok, result} = module.call(instance, %{question: "test"}, allow_unsafe: true)
 
       # Mock returns this structure
       assert is_map(result)

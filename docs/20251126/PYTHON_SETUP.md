@@ -49,14 +49,23 @@ error: externally-managed-environment
 
 ```bash
 # From SnakeBridge project root
-./scripts/setup_python.sh
+mix snakebridge.setup --venv .venv
 ```
 
-This script:
+This task:
 1. ✅ Creates `.venv/` if it doesn't exist
-2. ✅ Installs all required dependencies
-3. ✅ Configures paths automatically
-4. ✅ Detects existing Snakepit venv
+2. ✅ Installs Snakepit + SnakeBridge dependencies
+3. ✅ Installs built-in manifest libraries (sympy, pylatexenc, math-verify)
+4. ✅ Prints required `SNAKEPIT_PYTHON` and `PYTHONPATH` exports
+
+By default, SnakeBridge will auto-start the Snakepit pool on the first real call
+using the configured Python interpreter.
+
+You can also use the setup script:
+
+```bash
+./scripts/setup_python.sh
+```
 
 **Done!** Skip to [Verification](#verification).
 
@@ -82,19 +91,27 @@ This creates `.venv/` directory containing isolated Python environment.
 # Install Snakepit dependencies (gRPC, protobuf, numpy, etc.)
 .venv/bin/pip install -r deps/snakepit/priv/python/requirements.txt
 
-# Install SnakeBridge Python adapter
-cd priv/python
-../../.venv/bin/pip install -e .
-cd ../..
+# Install SnakeBridge Python adapter + built-in manifest libs
+.venv/bin/pip install -r priv/python/requirements.snakebridge.txt
+.venv/bin/pip install -e priv/python
 ```
 
 **What gets installed?**
 - `grpcio` >= 1.60.0 - gRPC communication
 - `protobuf` >= 4.25.0 - Protocol buffers
 - `numpy` >= 1.21.0 - Scientific computing (required by Snakepit serialization)
+- `sympy`, `pylatexenc`, `math-verify` - Built-in manifest libraries
 - `psutil` >= 5.9.0 - Process management
 - `orjson` >= 3.9.0 - Fast JSON serialization
 - OpenTelemetry packages - Telemetry/observability
+
+### Optional: Install manifest packages via Mix
+
+If you want to install packages based on the manifest registry (built-ins or custom), you can use:
+
+```bash
+mix snakebridge.manifest.install --load sympy,pylatexenc,math_verify --venv .venv --include_core
+```
 
 ### Step 3: Configure Snakepit
 
@@ -102,6 +119,7 @@ Tell Snakepit which Python to use:
 
 ```bash
 export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
+export PYTHONPATH=$(pwd)/priv/python:$(pwd)/deps/snakepit/priv/python:$PYTHONPATH
 ```
 
 **Make it persistent** (choose one):
@@ -142,6 +160,11 @@ echo 'export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3' > .env
 .venv/bin/python3 -c "import numpy; print('✓ NumPy:', numpy.__version__)"
 # Should print: ✓ NumPy: 2.3.4 (or similar)
 
+# Verify built-in manifest libraries
+.venv/bin/python3 -c "import sympy; print('✓ SymPy:', sympy.__version__)"
+.venv/bin/python3 -c "import pylatexenc; print('✓ pylatexenc:', pylatexenc.__version__)"
+.venv/bin/python3 -c "import math_verify; print('✓ math_verify')"
+
 # Verify SnakeBridge adapter
 .venv/bin/python3 -c "from snakebridge_adapter.adapter import SnakeBridgeAdapter; print('✓ Adapter ready')"
 # Should print: ✓ Adapter ready
@@ -174,6 +197,8 @@ mix test
 export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
 mix test --only real_python
 # Should pass if environment is configured correctly
+
+# Note: real_python tests that call non-manifest modules (json/math) enable allowlist bypass in test setup.
 ```
 
 ---
@@ -191,7 +216,7 @@ mix test --only real_python
 **`PYTHONPATH`** (Usually auto-configured)
 - **Purpose**: Python module search path
 - **Format**: Colon-separated paths (Linux/macOS) or semicolon (Windows)
-- **Auto-set by**: `setup_python.sh` and `example_helpers.exs`
+- **Auto-set by**: `mix snakebridge.setup`, `setup_python.sh`, and `example_helpers.exs`
 - **Example**: `/path/to/snakebridge/priv/python:/path/to/snakepit/priv/python`
 
 ### Elixir Configuration
@@ -200,27 +225,32 @@ mix test --only real_python
 # config/config.exs
 import Config
 
-# For real Python execution (not mocks)
+# For real Python execution (auto-start Snakepit by default)
 config :snakebridge,
-  snakepit_adapter: SnakeBridge.SnakepitAdapter
+  snakepit_adapter: SnakeBridge.SnakepitAdapter,
+  auto_start_snakepit: true,
+  python_path: ".venv/bin/python3",
+  pool_size: 2,
+  load: [:sympy, :pylatexenc],
+  custom_manifests: ["config/snakebridge/*.json"],
+  allow_unsafe: false
 
-# Snakepit pool configuration
-config :snakepit,
-  pooling_enabled: true,
-  pool_config: %{pool_size: 2}
+# Optional: manage Snakepit manually (disable auto-start)
+# config :snakebridge, auto_start_snakepit: false
+# config :snakepit, pooling_enabled: true, pool_config: %{pool_size: 2}
 
 # Environment-specific overrides
 import_config "#{config_env()}.exs"
 ```
 
 ```elixir
-# config/dev.exs - use mocks in development by default
-config :snakebridge,
-  snakepit_adapter: SnakeBridge.SnakepitMock  # Fast, no Python needed
-
-# config/prod.exs - use real Python in production
+# config/dev.exs - real adapter by default (needed for manifest tooling)
 config :snakebridge,
   snakepit_adapter: SnakeBridge.SnakepitAdapter
+
+# config/test.exs - mock adapter for fast tests
+config :snakebridge,
+  snakepit_adapter: SnakeBridge.SnakepitMock
 ```
 
 ---

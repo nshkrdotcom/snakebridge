@@ -1,0 +1,29 @@
+{
+  "sympy": {
+    "file": "sympy.json",
+    "python_module": "sympy",
+    "version": "~> 1.13",
+    "category": "math",
+    "description": "Symbolic mathematics",
+    "pypi_package": "sympy",
+    "status": "beta"
+  },
+  "pylatexenc": {
+    "file": "pylatexenc.json",
+    "python_module": "pylatexenc",
+    "version": "~> 2.10",
+    "category": "text",
+    "description": "LaTeX parsing and encoding",
+    "pypi_package": "pylatexenc",
+    "status": "beta"
+  },
+  "math_verify": {
+    "file": "math_verify.json",
+    "python_module": "math_verify",
+    "version": "~> 0.1",
+    "category": "math",
+    "description": "Math answer verification",
+    "pypi_package": "math-verify",
+    "status": "experimental"
+  }
+}

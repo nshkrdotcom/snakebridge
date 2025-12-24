@@ -6,6 +6,8 @@
 
 ---
 
+> Update (2025-12-23): Snakepit is now 0.7.0, SnakeBridge uses JSON manifests with allowlist enforcement, and real‑Python tests pass for sympy/pylatexenc/math‑verify plus runtime calls when `allow_unsafe` is enabled. Treat the 0.6.x notes below as historical context.
+
 ## Executive Summary
 
 ### What Happened Today
@@ -99,7 +101,7 @@ Error: "dumps() missing 1 required positional argument: 'obj'"
 1. **Class instantiation with real Python** - Mocked but not tested with real Python
 2. **Method calls on instances** - Mocked but not tested with real Python
 3. **Streaming support** - Attempted previously, "Snakepit streaming is broken" (commit 208ba73)
-4. **Complex libraries** (numpy, pandas, DSPy) - Not tested yet
+4. **Complex libraries** (numpy, pandas, Demo) - Not tested yet
 5. **Error handling edge cases** - Only happy path tested
 
 ---
@@ -323,7 +325,7 @@ Once basic function calls and classes work, expand to:
 
 **Estimated Time**: 2 hours
 
-#### 4.3 DSPy Integration (in DSPex project)
+#### 4.3 Demo Integration (in DSPex project)
 - Complex library
 - Stateful classes
 - Callbacks and streaming
@@ -345,7 +347,7 @@ Once we have 3-5 libraries working, collect:
 | requests | ~10 functions | TBD | TBD | TBD |
 | math | ~50 functions | TBD | TBD | TBD |
 | numpy | 100s functions + ndarray | TBD | TBD | TBD |
-| DSPy | Complex classes | TBD | TBD | TBD |
+| Demo | Complex classes | TBD | TBD | TBD |
 
 ### Decision Criteria
 
@@ -435,15 +437,15 @@ Once we have 3-5 libraries working, collect:
 
 ---
 
-### Week 4: DSPy Integration & Decision
+### Week 4: Demo Integration & Decision
 
 #### DSPex Project Integration
 - **Task 9.1**: Create DSPex project (separate repo)
 - **Task 9.2**: Add SnakeBridge as dependency
-- **Task 9.3**: Integrate DSPy library
-- **Task 9.4**: Implement DSPy.Predict example
+- **Task 9.3**: Integrate Demo library
+- **Task 9.4**: Implement Demo.Predict example
 - **Task 9.5**: Test prompt programming workflow
-- **Deliverable**: DSPy working via SnakeBridge in DSPex project
+- **Deliverable**: Demo working via SnakeBridge in DSPex project
 
 #### Documentation & Release
 - **Task 10.1**: Write integration guides for tested libraries
@@ -452,7 +454,7 @@ Once we have 3-5 libraries working, collect:
 - **Task 10.4**: Prepare v0.3.0 release
 - **Deliverable**: Release v0.3.0 with real Python support
 
-**Week 4 Success Metric**: DSPy integration working, v0.3.0 released ✅
+**Week 4 Success Metric**: Demo integration working, v0.3.0 released ✅
 
 ---
 
@@ -563,7 +565,7 @@ end
 - [ ] 5+ libraries integrated and tested
 - [ ] Decision made on manual vs AI adapters
 - [ ] v0.3.0 released
-- [ ] DSPex project using SnakeBridge for DSPy
+- [ ] DSPex project using SnakeBridge for Demo
 
 ---
 
@@ -583,7 +585,7 @@ end
 
 ### High Risk 🔴
 - **AI automation scope** - Could be 3-4 weeks if needed
-- **DSPy complexity** - May expose fundamental limitations
+- **Demo complexity** - May expose fundamental limitations
 - **Performance at scale** - Not tested with heavy workloads
 - **Production readiness** - Need more real-world usage
 
@@ -615,7 +617,7 @@ end
 
 2. **What's the target use case?**
    - Scientific computing (numpy, scipy)?
-   - ML/AI (DSPy, langchain, transformers)?
+   - ML/AI (Demo, langchain, transformers)?
    - General Python (any library)?
    - Answer determines priority
 
@@ -643,7 +645,7 @@ end
 
 ### Related Projects
 - **Snakepit**: https://hex.pm/packages/snakepit (Python orchestration)
-- **DSPex**: ~/p/g/n/DSPex (future SnakeBridge user for DSPy integration)
+- **DSPex**: ~/p/g/n/DSPex (future SnakeBridge user for Demo integration)
 
 ---
 

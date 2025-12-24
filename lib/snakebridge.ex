@@ -8,14 +8,14 @@ defmodule SnakeBridge do
   ## Quick Start
 
       # Discover a Python library
-      {:ok, schema} = SnakeBridge.discover("dspy")
+      {:ok, schema} = SnakeBridge.discover("sympy")
 
       # Convert to config and generate modules
-      config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "dspy")
+      config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "sympy")
       {:ok, modules} = SnakeBridge.generate(config)
 
       # Or do it all in one step
-      {:ok, modules} = SnakeBridge.integrate("dspy")
+      {:ok, modules} = SnakeBridge.integrate("sympy")
 
   ## Workflow
 
@@ -37,7 +37,7 @@ defmodule SnakeBridge do
 
   ## Parameters
 
-    * `module_path` - Python module to discover (e.g., "dspy", "langchain")
+    * `module_path` - Python module to discover (e.g., "sympy", "pylatexenc")
     * `opts` - Discovery options
       * `:depth` - How deep to traverse submodules (default: 2)
       * `:session_id` - Reuse existing Snakepit session
@@ -50,8 +50,8 @@ defmodule SnakeBridge do
 
   ## Examples
 
-      {:ok, schema} = SnakeBridge.discover("dspy")
-      {:ok, schema} = SnakeBridge.discover("langchain", depth: 3)
+      {:ok, schema} = SnakeBridge.discover("sympy")
+      {:ok, schema} = SnakeBridge.discover("pylatexenc", depth: 3)
   """
   @spec discover(String.t(), keyword()) :: {:ok, map()} | {:error, term()}
   def discover(module_path, opts \\ []) do
@@ -76,8 +76,8 @@ defmodule SnakeBridge do
 
   ## Examples
 
-      config = %SnakeBridge.Config{python_module: "dspy", ...}
-      {:ok, [DSPy.Predict]} = SnakeBridge.generate(config)
+      config = %SnakeBridge.Config{python_module: "sympy", ...}
+      {:ok, [Sympy.Symbol]} = SnakeBridge.generate(config)
   """
   @spec generate(SnakeBridge.Config.t()) :: {:ok, [module()]} | {:error, term()}
   def generate(config) do
@@ -106,11 +106,11 @@ defmodule SnakeBridge do
   ## Examples
 
       # Simple integration
-      {:ok, modules} = SnakeBridge.integrate("dspy")
+      {:ok, modules} = SnakeBridge.integrate("sympy")
 
       # Get config too
       {:ok, %{config: config, modules: modules}} =
-        SnakeBridge.integrate("dspy", return: :full)
+        SnakeBridge.integrate("sympy", return: :full)
   """
   @spec integrate(String.t(), keyword()) ::
           {:ok, [module()] | map()} | {:error, term()}

@@ -24,6 +24,7 @@ defmodule SnakeBridge.Runtime do
   """
 
   alias SnakeBridge.Error
+  alias SnakeBridge.Manifest.Registry
 
   @default_timeout 30_000
 
@@ -90,36 +91,32 @@ defmodule SnakeBridge.Runtime do
       %{session_id: session_id, tool_name: tool_name}
     )
 
-    task =
-      Task.async(fn ->
-        adapter = snakepit_adapter()
-        adapter.execute_in_session(session_id, tool_name, args, opts)
-      end)
+    adapter = snakepit_adapter()
 
     result =
-      case Task.yield(task, timeout) || Task.shutdown(task) do
-        {:ok, {:ok, %{"success" => true} = response}} ->
+      adapter.execute_in_session(
+        session_id,
+        tool_name,
+        args,
+        Keyword.put(opts, :timeout, timeout)
+      )
+
+    result =
+      case result do
+        {:ok, %{"success" => true} = response} ->
           {:ok, response}
 
-        {:ok, {:ok, %{"success" => false} = response}} ->
+        {:ok, %{"success" => false} = response} ->
           {:error, Error.new(response)}
 
-        {:ok, {:error, reason}} ->
-          {:error, reason}
-
-        {:exit, reason} ->
-          duration = System.monotonic_time() - start_time
-
-          :telemetry.execute(
-            [:snakebridge, :call, :exception],
-            %{duration: duration},
-            %{session_id: session_id, tool_name: tool_name, kind: :exit, reason: reason}
-          )
-
-          {:error, reason}
-
-        nil ->
+        {:error, :worker_timeout} ->
           {:error, Error.from_timeout(timeout)}
+
+        {:error, %Snakepit.Error{category: :timeout}} ->
+          {:error, Error.from_timeout(timeout)}
+
+        {:error, reason} ->
+          {:error, reason}
       end
 
     duration = System.monotonic_time() - start_time
@@ -162,50 +159,46 @@ defmodule SnakeBridge.Runtime do
   end
 
   @doc """
+  Build a Stream for a streaming tool call.
+  """
+  @spec stream_tool(String.t(), String.t(), map(), keyword()) :: Enumerable.t()
+  def stream_tool(session_id, tool_name, args, opts) do
+    SnakeBridge.Stream.from_callback(session_id, tool_name, normalize_args(args), opts)
+  end
+
+  @doc """
+  Build a Stream for a tool, generating a session_id if needed.
+  """
+  @spec stream_tool(String.t(), map(), keyword()) :: Enumerable.t()
+  def stream_tool(tool_name, args \\ %{}, opts \\ []) do
+    session_id = Keyword.get(opts, :session_id, generate_session_id())
+    stream_tool(session_id, tool_name, args, opts)
+  end
+
+  @doc """
   Create a Python instance.
   """
   @spec create_instance(String.t(), map(), String.t() | nil, keyword()) ::
           {:ok, {String.t(), String.t()}} | {:error, Error.t() | term()}
   def create_instance(python_path, args, session_id, opts \\ []) do
-    session_id = session_id || generate_session_id()
-    timeout = Keyword.get(opts, :timeout, @default_timeout)
+    with :ok <- ensure_allowed_class(python_path, opts) do
+      session_id = session_id || generate_session_id()
+      timeout = Keyword.get(opts, :timeout, @default_timeout)
 
-    result =
-      execute_with_timeout(
-        session_id,
-        "call_python",
-        %{
-          "module_path" => python_path,
-          "function_name" => "__init__",
-          "args" => [],
-          "kwargs" => normalize_args(args)
-        },
-        timeout: timeout
-      )
+      result =
+        execute_with_timeout(
+          session_id,
+          "call_python",
+          %{
+            "module_path" => python_path,
+            "function_name" => "__init__",
+            "args" => [],
+            "kwargs" => normalize_args(args)
+          },
+          timeout: timeout
+        )
 
-    case result do
-      {:ok, response} when is_map(response) ->
-        response = normalize_response(response)
-
-        cond do
-          match?(%{"success" => true, "instance_id" => _}, response) ->
-            {:ok, {session_id, response["instance_id"]}}
-
-          match?(%{"success" => false}, response) ->
-            {:error, Error.new(response)}
-
-          true ->
-            {:error, {:unexpected_response, response}}
-        end
-
-      {:ok, other} ->
-        {:error, {:unexpected_response, other}}
-
-      {:error, %Error{} = error} ->
-        {:error, error}
-
-      {:error, reason} ->
-        {:error, reason}
+      handle_create_instance_result(result, session_id)
     end
   end
 
@@ -215,44 +208,23 @@ defmodule SnakeBridge.Runtime do
   @spec call_method({String.t(), String.t()}, String.t(), map(), keyword()) ::
           {:ok, term()} | {:error, Error.t() | term()}
   def call_method({session_id, instance_id}, method_name, args, opts \\ []) do
-    timeout = Keyword.get(opts, :timeout, @default_timeout)
+    with :ok <- ensure_allowed_method(instance_id, method_name, opts) do
+      timeout = Keyword.get(opts, :timeout, @default_timeout)
 
-    result =
-      execute_with_timeout(
-        session_id,
-        "call_python",
-        %{
-          "module_path" => "instance:#{instance_id}",
-          "function_name" => method_name,
-          "args" => [],
-          "kwargs" => normalize_args(args)
-        },
-        timeout: timeout
-      )
+      result =
+        execute_with_timeout(
+          session_id,
+          "call_python",
+          %{
+            "module_path" => "instance:#{instance_id}",
+            "function_name" => method_name,
+            "args" => [],
+            "kwargs" => normalize_args(args)
+          },
+          timeout: timeout
+        )
 
-    case result do
-      {:ok, response} when is_map(response) ->
-        response = normalize_response(response)
-
-        cond do
-          match?(%{"success" => true, "result" => _}, response) ->
-            {:ok, response["result"]}
-
-          match?(%{"success" => false}, response) ->
-            {:error, Error.new(response)}
-
-          true ->
-            {:error, {:unexpected_response, response}}
-        end
-
-      {:ok, other} ->
-        {:error, {:unexpected_response, other}}
-
-      {:error, %Error{} = error} ->
-        {:error, error}
-
-      {:error, reason} ->
-        {:error, reason}
+      handle_method_call_result(result)
     end
   end
 
@@ -272,44 +244,54 @@ defmodule SnakeBridge.Runtime do
   def call_function(python_path, function_name, args, opts \\ []) do
     session_id = Keyword.get(opts, :session_id, generate_session_id())
     timeout = Keyword.get(opts, :timeout, @default_timeout)
+    module_path = extract_module_path(python_path)
 
-    # Extract module path from full python_path (e.g., "json.dumps" -> "json")
-    module_path =
-      case String.split(python_path, ".") do
-        [single] -> single
-        parts -> Enum.take(parts, length(parts) - 1) |> Enum.join(".")
-      end
+    with :ok <- ensure_allowed_function(module_path, function_name, opts) do
+      result =
+        execute_with_timeout(
+          session_id,
+          "call_python",
+          %{
+            "module_path" => module_path,
+            "function_name" => function_name,
+            "args" => [],
+            "kwargs" => normalize_args(args)
+          },
+          timeout: timeout
+        )
+
+      handle_function_call_result(result)
+    end
+  end
+
+  @doc """
+  Release a stored Python instance by instance_id.
+  """
+  @spec release_instance({String.t(), String.t()} | String.t(), keyword()) ::
+          {:ok, boolean()} | {:error, Error.t() | term()}
+  def release_instance(instance_id, opts \\ [])
+
+  def release_instance({_, instance_id}, opts),
+    do: release_instance(instance_id, opts)
+
+  def release_instance(instance_id, opts) when is_binary(instance_id) do
+    session_id = Keyword.get(opts, :session_id, generate_session_id())
+    timeout = Keyword.get(opts, :timeout, @default_timeout)
 
     result =
       execute_with_timeout(
         session_id,
-        "call_python",
-        %{
-          "module_path" => module_path,
-          "function_name" => function_name,
-          "args" => [],
-          "kwargs" => normalize_args(args)
-        },
+        "release_instance",
+        %{"instance_id" => instance_id},
         timeout: timeout
       )
 
     case result do
-      {:ok, response} when is_map(response) ->
-        response = normalize_response(response)
+      {:ok, %{"success" => true, "released" => released}} ->
+        {:ok, released}
 
-        cond do
-          match?(%{"success" => true, "result" => _}, response) ->
-            {:ok, response["result"]}
-
-          match?(%{"success" => false}, response) ->
-            {:error, Error.new(response)}
-
-          true ->
-            {:error, {:unexpected_response, response}}
-        end
-
-      {:ok, other} ->
-        {:error, {:unexpected_response, other}}
+      {:ok, %{"success" => false} = response} ->
+        {:error, Error.new(response)}
 
       {:error, %Error{} = error} ->
         {:error, error}
@@ -319,19 +301,79 @@ defmodule SnakeBridge.Runtime do
     end
   end
 
+  @doc """
+  Stream a module-level Python function via the streaming adapter.
+
+  This uses the `call_python_stream` tool and yields chunks as they arrive.
+  """
+  @spec stream_function(String.t(), String.t(), map(), keyword()) :: Enumerable.t()
+  def stream_function(python_path, function_name, args, opts \\ []) do
+    session_id = Keyword.get(opts, :session_id, generate_session_id())
+
+    module_path =
+      case String.split(python_path, ".") do
+        [single] -> single
+        parts -> Enum.take(parts, length(parts) - 1) |> Enum.join(".")
+      end
+
+    tool_args = %{
+      "module_path" => module_path,
+      "function_name" => function_name,
+      "args" => [],
+      "kwargs" => normalize_args(args)
+    }
+
+    stream_tool(session_id, "call_python_stream", tool_args, opts)
+  end
+
   defp generate_session_id do
-    "snakebridge_session_#{:rand.uniform(100_000)}"
+    SnakeBridge.SessionId.generate("snakebridge")
+  end
+
+  defp allow_unsafe?(opts) do
+    Keyword.get(opts, :allow_unsafe, Application.get_env(:snakebridge, :allow_unsafe, false)) ==
+      true
+  end
+
+  defp return_unauthorized(module_path, function_name) do
+    {:error,
+     Error.unauthorized("Call not allowlisted", %{
+       module_path: module_path,
+       function_name: function_name
+     })}
+  end
+
+  defp ensure_allowed_function(module_path, function_name, opts) do
+    if allow_unsafe?(opts) or Registry.allowed_function?(module_path, function_name) do
+      :ok
+    else
+      return_unauthorized(module_path, function_name)
+    end
+  end
+
+  defp ensure_allowed_class(python_path, opts) do
+    if allow_unsafe?(opts) or Registry.allowed_class?(python_path) do
+      :ok
+    else
+      return_unauthorized(python_path, "__init__")
+    end
+  end
+
+  defp ensure_allowed_method(instance_id, method_name, opts) do
+    if allow_unsafe?(opts) do
+      :ok
+    else
+      return_unauthorized("instance:#{instance_id}", method_name)
+    end
   end
 
   defp normalize_args(map) when is_map(map) do
-    cond do
-      Map.has_key?(map, :__struct__) ->
-        map
-
-      true ->
-        map
-        |> Enum.map(fn {key, value} -> {normalize_key(key), normalize_args(value)} end)
-        |> Enum.into(%{})
+    if Map.has_key?(map, :__struct__) do
+      map
+    else
+      map
+      |> Enum.map(fn {key, value} -> {normalize_key(key), normalize_args(value)} end)
+      |> Enum.into(%{})
     end
   end
 
@@ -374,4 +416,84 @@ defmodule SnakeBridge.Runtime do
 
   defp normalize_key(key) when is_atom(key), do: Atom.to_string(key)
   defp normalize_key(key), do: key
+
+  # Helper to extract module path from full python_path
+  defp extract_module_path(python_path) do
+    case String.split(python_path, ".") do
+      [single] -> single
+      parts -> Enum.take(parts, length(parts) - 1) |> Enum.join(".")
+    end
+  end
+
+  # Helper to handle create_instance result
+  defp handle_create_instance_result({:ok, response}, session_id) when is_map(response) do
+    response = normalize_response(response)
+
+    cond do
+      match?(%{"success" => true, "instance_id" => _}, response) ->
+        {:ok, {session_id, response["instance_id"]}}
+
+      match?(%{"success" => false}, response) ->
+        {:error, Error.new(response)}
+
+      true ->
+        {:error, {:unexpected_response, response}}
+    end
+  end
+
+  defp handle_create_instance_result({:error, %Error{} = error}, _session_id) do
+    {:error, error}
+  end
+
+  defp handle_create_instance_result({:error, reason}, _session_id) do
+    {:error, reason}
+  end
+
+  # Helper to handle method call result
+  defp handle_method_call_result({:ok, response}) when is_map(response) do
+    response = normalize_response(response)
+
+    cond do
+      match?(%{"success" => true, "result" => _}, response) ->
+        {:ok, response["result"]}
+
+      match?(%{"success" => false}, response) ->
+        {:error, Error.new(response)}
+
+      true ->
+        {:error, {:unexpected_response, response}}
+    end
+  end
+
+  defp handle_method_call_result({:error, %Error{} = error}) do
+    {:error, error}
+  end
+
+  defp handle_method_call_result({:error, reason}) do
+    {:error, reason}
+  end
+
+  # Helper to handle function call result
+  defp handle_function_call_result({:ok, response}) when is_map(response) do
+    response = normalize_response(response)
+
+    cond do
+      match?(%{"success" => true, "result" => _}, response) ->
+        {:ok, response["result"]}
+
+      match?(%{"success" => false}, response) ->
+        {:error, Error.new(response)}
+
+      true ->
+        {:error, {:unexpected_response, response}}
+    end
+  end
+
+  defp handle_function_call_result({:error, %Error{} = error}) do
+    {:error, error}
+  end
+
+  defp handle_function_call_result({:error, reason}) do
+    {:error, reason}
+  end
 end

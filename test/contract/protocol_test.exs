@@ -52,7 +52,7 @@ defmodule SnakeBridge.Contract.ProtocolTest do
     test "class descriptor has required fields" do
       class = %{
         "name" => "Predict",
-        "python_path" => "dspy.Predict",
+        "python_path" => "demo.Predict",
         "docstring" => "Basic prediction module",
         "methods" => [],
         "constructor" => %{

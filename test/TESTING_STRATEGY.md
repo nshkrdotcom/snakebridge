@@ -5,6 +5,8 @@
 
 ---
 
+> Update (2025-12-23): SnakeBridge is now manifest-driven with allowlist enforcement. Real-Python tests set `allow_unsafe: true` where they call non-manifest libraries (json/math), while manifest-based tests keep allowlist on. The legacy config/discovery pipeline still exists for backward compatibility, but manifests are the primary workflow.
+
 ## Overview
 
 SnakeBridge testing follows a **layered strategy** that separates pure Elixir logic from external dependencies (Snakepit/Python).
@@ -70,7 +72,7 @@ SnakeBridge testing follows a **layered strategy** that separates pure Elixir lo
 **Example**:
 ```elixir
 test "hash is consistent for same config" do
-  config = %SnakeBridge.Config{python_module: "dspy"}
+  config = %SnakeBridge.Config{python_module: "demo"}
 
   hash1 = SnakeBridge.Config.hash(config)
   hash2 = SnakeBridge.Config.hash(config)
@@ -105,7 +107,7 @@ defmodule SnakeBridge.SnakepitMock do
 
   Returns canned responses based on tool_name:
   - "describe_library" → Python introspection response
-  - "call_dspy" → Fake Python execution result
+  - "call_python" → Fake Python execution result
   - etc.
   """
   def execute_in_session(_session_id, tool_name, args) do
@@ -113,7 +115,7 @@ defmodule SnakeBridge.SnakepitMock do
       "describe_library" ->
         {:ok, SnakeBridge.TestFixtures.sample_introspection_response()}
 
-      "call_dspy" ->
+      "call_python" ->
         case args do
           %{"function_name" => "__init__"} ->
             {:ok, %{"success" => true, "instance_id" => "test_instance_123"}}
@@ -147,7 +149,7 @@ test "discovers library and generates modules" do
   end)
 
   # Act: Run discovery (will call mocked Snakepit)
-  {:ok, schema} = SnakeBridge.Discovery.discover("dspy", snakepit: SnakeBridge.SnakepitMock)
+  {:ok, schema} = SnakeBridge.Discovery.discover("demo", snakepit: SnakeBridge.SnakepitMock)
 
   # Assert
   assert schema["library_version"] == "2.5.0"
@@ -165,7 +167,7 @@ end
 
 **What we test**:
 - **REAL** Snakepit + Python interaction
-- **REAL** DSPy library introspection
+- **REAL** Demo library introspection
 - **REAL** code execution and streaming
 
 **No mocking** - actual Python execution
@@ -176,9 +178,9 @@ end
 @moduletag :external     # Requires external services
 @moduletag :slow         # Takes >100ms
 
-test "actually introspects DSPy from Python" do
+test "actually introspects Demo from Python" do
   # Uses REAL Snakepit, REAL Python worker
-  {:ok, schema} = SnakeBridge.Discovery.discover_real("dspy")
+  {:ok, schema} = SnakeBridge.Discovery.discover_real("demo")
 
   assert schema["library_version"] =~ "2."
   assert Map.has_key?(schema["classes"], "Predict")
@@ -281,8 +283,8 @@ defmodule SnakeBridge.SnakepitMock do
       "describe_library" ->
         describe_library_response(args)
 
-      "call_dspy" ->
-        call_dspy_response(args)
+      "call_python" ->
+        call_python_response(args)
 
       "batch_execute" ->
         batch_execute_response(args)
@@ -303,14 +305,14 @@ defmodule SnakeBridge.SnakepitMock do
 
   # Private response generators
 
-  defp describe_library_response(%{"module_path" => "dspy"}) do
+  defp describe_library_response(%{"module_path" => "demo"}) do
     {:ok, %{
       "success" => true,
       "library_version" => "2.5.0",
       "classes" => %{
         "Predict" => %{
           "name" => "Predict",
-          "python_path" => "dspy.Predict",
+          "python_path" => "demo.Predict",
           "docstring" => "Basic prediction module",
           "methods" => [
             %{"name" => "__call__", "supports_streaming" => false}
@@ -326,21 +328,21 @@ defmodule SnakeBridge.SnakepitMock do
     {:error, "Module not found"}
   end
 
-  defp call_dspy_response(%{"function_name" => "__init__"}) do
+  defp call_python_response(%{"function_name" => "__init__"}) do
     {:ok, %{
       "success" => true,
       "instance_id" => "mock_instance_#{:rand.uniform(1000)}"
     }}
   end
 
-  defp call_dspy_response(%{"function_name" => "__call__"}) do
+  defp call_python_response(%{"function_name" => "__call__"}) do
     {:ok, %{
       "success" => true,
       "result" => %{"answer" => "Mocked response"}
     }}
   end
 
-  defp call_dspy_response(_) do
+  defp call_python_response(_) do
     {:ok, %{"success" => true, "result" => %{}}}
   end
 
@@ -396,9 +398,7 @@ import Config
 config :snakebridge,
   # Use mock in tests
   snakepit_adapter: SnakeBridge.SnakepitMock,
-  compilation_strategy: :runtime,
-  cache_enabled: false,
-  telemetry_enabled: false
+  compilation_mode: :runtime
 ```
 
 ```elixir
@@ -409,8 +409,7 @@ import Config
 config :snakebridge,
   # Use real Snakepit in dev
   snakepit_adapter: SnakeBridge.SnakepitAdapter,
-  compilation_strategy: :runtime,
-  cache_enabled: true
+  compilation_mode: :runtime
 ```
 
 ---
@@ -488,7 +487,7 @@ test "discovers library schema" do
   # Mock returns fake introspection data
   # No real Python execution
 
-  {:ok, schema} = SnakeBridge.Discovery.Introspector.discover("dspy")
+  {:ok, schema} = SnakeBridge.Discovery.Introspector.discover("demo")
 
   assert schema["library_version"] == "2.5.0"  # From mock
 end
@@ -519,22 +518,22 @@ defmodule SnakeBridge.Integration.RealPythonTest do
   @moduletag :slow
 
   setup do
-    # Ensure Python + DSPy are installed
-    case System.cmd("python3", ["-c", "import dspy"]) do
+    # Ensure Python + Demo are installed
+    case System.cmd("python3", ["-c", "import demo"]) do
       {_, 0} -> :ok
-      _ -> {:skip, "DSPy not installed"}
+      _ -> {:skip, "Demo not installed"}
     end
   end
 
-  test "actually introspects DSPy from Python" do
+  test "actually introspects Demo from Python" do
     # Override config to use REAL adapter
     Application.put_env(:snakebridge, :snakepit_adapter, SnakeBridge.SnakepitAdapter)
 
     # This will:
     # 1. Start real Snakepit worker
     # 2. Execute Python introspection script
-    # 3. Return real DSPy schema
-    {:ok, schema} = SnakeBridge.Discovery.discover("dspy")
+    # 3. Return real Demo schema
+    {:ok, schema} = SnakeBridge.Discovery.discover("demo")
 
     # Verify real Python data
     assert is_binary(schema["library_version"])
@@ -543,12 +542,12 @@ defmodule SnakeBridge.Integration.RealPythonTest do
     assert Map.has_key?(schema["classes"], "ChainOfThought")
   end
 
-  test "generates and executes real DSPy.Predict" do
+  test "generates and executes real Demo.Predict" do
     Application.put_env(:snakebridge, :snakepit_adapter, SnakeBridge.SnakepitAdapter)
 
     # Generate module from real schema
-    {:ok, schema} = SnakeBridge.Discovery.discover("dspy")
-    config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "dspy")
+    {:ok, schema} = SnakeBridge.Discovery.discover("demo")
+    config = SnakeBridge.Discovery.schema_to_config(schema, python_module: "demo")
     {:ok, [predictor_module | _]} = SnakeBridge.Generator.generate_all(config)
 
     # Actually call Python
@@ -608,7 +607,7 @@ mix test --only integration
 - [ ] Create `test/integration/real_python_test.exs`
 - [ ] Tag with `:integration`, `:external`, `:slow`
 - [ ] Add Python environment checks (skip if missing)
-- [ ] Document setup requirements (Python, DSPy, etc.)
+- [ ] Document setup requirements (Python, Demo, etc.)
 
 ### Phase 3: CI Configuration
 
@@ -632,7 +631,7 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - run: pip install dspy-ai  # Install Python deps
+      - run: pip install demo-ai  # Install Python deps
       - run: mix deps.get
       - run: mix test --only integration  # Integration tests
 ```
@@ -691,7 +690,7 @@ end
 # 3. Real integration broken? → Fix Python/Snakepit
 @tag :integration
 test "real Python fails" do
-  # Actual DSPy issue
+  # Actual Demo issue
 end
 ```
 
@@ -771,7 +770,7 @@ mix test                              # Default: excludes :integration
 mix test test/integration             # Uses mock
 
 # Real Python integration
-mix test --only integration           # Requires Python + DSPy
+mix test --only integration           # Requires Python + Demo
 mix test --only external
 
 # Coverage

@@ -11,7 +11,7 @@ defmodule SnakeBridge.Discovery.IntrospectorBehaviour do
 
   ## Parameters
 
-    * `module_path` - Python module path (e.g., "dspy")
+    * `module_path` - Python module path (e.g., "sympy")
     * `opts` - Options for discovery
       * `:depth` - Discovery depth for submodules
       * `:config_hash` - Config hash for cache validation

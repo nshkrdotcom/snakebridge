@@ -7,7 +7,7 @@ defmodule SnakeBridge.SnakepitAdapter do
   """
 
   @behaviour SnakeBridge.SnakepitBehaviour
-  alias SnakeBridge.Error
+  alias SnakeBridge.{Error, SnakepitLauncher}
 
   @impl true
   def execute_in_session(session_id, tool_name, args) do
@@ -40,16 +40,43 @@ defmodule SnakeBridge.SnakepitAdapter do
   defp ensure_snakepit_running do
     case Process.whereis(Snakepit.Pool) do
       nil ->
-        {:error,
-         %Error{
-           type: :snakepit_unavailable,
-           message: "Snakepit is not running (Snakepit.Pool not found)",
-           python_traceback: nil,
-           details: %{}
-         }}
+        if Application.get_env(:snakebridge, :auto_start_snakepit, true) do
+          start_snakepit_pool()
+        else
+          {:error,
+           %Error{
+             type: :snakepit_unavailable,
+             message: "Snakepit is not running (Snakepit.Pool not found)",
+             python_traceback: nil,
+             details: %{}
+           }}
+        end
 
       _pid ->
         :ok
     end
+  end
+
+  defp start_snakepit_pool do
+    SnakepitLauncher.ensure_pool_started!()
+    :ok
+  rescue
+    exception ->
+      {:error,
+       %Error{
+         type: :snakepit_unavailable,
+         message: "Snakepit failed to start: #{Exception.message(exception)}",
+         python_traceback: nil,
+         details: %{}
+       }}
+  catch
+    kind, reason ->
+      {:error,
+       %Error{
+         type: :snakepit_unavailable,
+         message: "Snakepit failed to start (#{kind}): #{inspect(reason)}",
+         python_traceback: nil,
+         details: %{}
+       }}
   end
 end

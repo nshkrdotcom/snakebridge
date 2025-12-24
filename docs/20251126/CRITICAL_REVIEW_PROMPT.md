@@ -79,7 +79,7 @@ Current state: v0.2.4, ~1,600 LOC Elixir, ~400 LOC Python, 164+ tests passing.
 A 14-week roadmap to:
 1. **Phase 1 (Weeks 1-2):** Strengthen foundation - streaming tests, security, type system enhancements
 2. **Phase 2 (Weeks 3-5):** Scientific computing adapters - NumPy, pandas, scikit-learn
-3. **Phase 3 (Weeks 6-9):** AI/ML adapters - Unsloth, DSPy, Transformers
+3. **Phase 3 (Weeks 6-9):** AI/ML adapters - Unsloth, Demo, Transformers
 4. **Phase 4 (Weeks 10-11):** Generalized streaming/async patterns
 5. **Phase 5 (Weeks 12-14):** Production hardening, docs, CI/CD
 

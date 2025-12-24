@@ -1,3 +1,5 @@
+> Update (2025-12-23): This example targets Snakepit 0.6.x and a legacy config-centric workflow. Current SnakeBridge targets Snakepit 0.7.0 with manifest-driven generation. Use this as historical reference.
+
 Nice, let’s make this concrete. Here’s a **“works-today” cluster demo** that uses:
 
 * **Plain OTP distribution** (`--sname`, `Node.connect/1`, `:rpc.call/4`)

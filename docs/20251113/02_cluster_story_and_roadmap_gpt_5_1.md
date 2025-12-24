@@ -1,3 +1,5 @@
+> Update (2025-12-23): This roadmap references Snakepit 0.6.x and a legacy config-centric workflow. Current SnakeBridge is manifest-driven on Snakepit 0.7.0. Use this as historical context.
+
 Nice. Let’s keep the “future history” of Snakepit/SnakeBridge rolling then 😄
 
 Below is something you can pretty much drop into a `docs/ROADMAP_SNAKEPIT_2_0.md` / `docs/CLUSTER_STORY.md` and iterate on.
@@ -186,16 +188,16 @@ Snakepit.execute_in_session(session_id, tool_name, args, opts)
 
 Once Snakepit is cluster-aware, SnakeBridge **automatically** benefits:
 
-* **Codegen modules** (e.g. `DSPy.Predict`) stay the same.
+* **Codegen modules** (e.g. `Demo.Predict`) stay the same.
 * Runtime (`SnakeBridge.Runtime`) doesn’t care where the workers live.
 * You can add cluster-aware options to config:
 
   ```elixir
   %SnakeBridge.Config{
-    python_module: "dspy",
+    python_module: "demo",
     grpc: %{
       enabled: true,
-      pool_name: :dspy_pool,
+      pool_name: :demo_pool,
       node_selector: {:any, role: :worker}
     }
   }
@@ -304,7 +306,7 @@ Deliverables:
 * Basic job API:
 
   ```elixir
-  {:ok, job_id} = Snakepit.Job.enqueue(:dspy_pool, "some_tool", args, opts)
+  {:ok, job_id} = Snakepit.Job.enqueue(:demo_pool, "some_tool", args, opts)
   {:ok, status} = Snakepit.Job.status(job_id)
   ```
 

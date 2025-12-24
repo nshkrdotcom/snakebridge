@@ -76,7 +76,7 @@ defmodule Mix.Tasks.Snakebridge.ValidateTest do
     end
 
     test "validates multiple configs and reports summary" do
-      write_valid_config("config/snakebridge/dspy.exs")
+      write_valid_config("config/snakebridge/demo.exs")
       write_valid_config("config/snakebridge/langchain.exs")
 
       output =
@@ -84,7 +84,7 @@ defmodule Mix.Tasks.Snakebridge.ValidateTest do
           Validate.run([])
         end)
 
-      assert output =~ "dspy.exs"
+      assert output =~ "demo.exs"
       assert output =~ "langchain.exs"
       assert output =~ "2 config(s) validated"
     end

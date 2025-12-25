@@ -65,13 +65,11 @@ defmodule SnakeBridge.TestHelpers do
   Skips test if Python is not available.
   """
   def skip_unless_python(context) do
-    try do
-      ensure_python!()
-      context
-    rescue
-      _ ->
-        %{context | skip: true}
-    end
+    ensure_python!()
+    context
+  rescue
+    _ ->
+      %{context | skip: true}
   end
 
   @doc """

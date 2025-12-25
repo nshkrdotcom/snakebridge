@@ -32,7 +32,7 @@ defmodule SnakeBridge.Types do
       {"ok", MapSet.new([1, 2, 3])}
   """
 
-  alias SnakeBridge.Types.{Encoder, Decoder}
+  alias SnakeBridge.Types.{Decoder, Encoder}
 
   @doc """
   Encodes an Elixir value into a JSON-compatible structure.

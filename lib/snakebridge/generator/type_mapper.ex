@@ -65,26 +65,26 @@ defmodule SnakeBridge.Generator.TypeMapper do
   def to_spec(nil), do: quote(do: any())
   def to_spec(%{} = python_type) when map_size(python_type) == 0, do: quote(do: any())
 
-  def to_spec(%{"type" => type} = python_type) do
-    case type do
-      "int" -> quote(do: integer())
-      "float" -> quote(do: float())
-      "str" -> quote(do: String.t())
-      "bool" -> quote(do: boolean())
-      "bytes" -> quote(do: binary())
-      "none" -> quote(do: nil)
-      "any" -> quote(do: any())
-      "list" -> map_list_type(python_type)
-      "dict" -> map_dict_type(python_type)
-      "tuple" -> map_tuple_type(python_type)
-      "set" -> map_set_type(python_type)
-      "optional" -> map_optional_type(python_type)
-      "union" -> map_union_type(python_type)
-      "class" -> map_class_type(python_type)
-      _ -> quote(do: any())
-    end
-  end
+  # Primitive types
+  def to_spec(%{"type" => "int"}), do: quote(do: integer())
+  def to_spec(%{"type" => "float"}), do: quote(do: float())
+  def to_spec(%{"type" => "str"}), do: quote(do: String.t())
+  def to_spec(%{"type" => "bool"}), do: quote(do: boolean())
+  def to_spec(%{"type" => "bytes"}), do: quote(do: binary())
+  def to_spec(%{"type" => "none"}), do: quote(do: nil)
+  def to_spec(%{"type" => "any"}), do: quote(do: any())
 
+  # Complex types - delegate to specialized mappers
+  def to_spec(%{"type" => "list"} = python_type), do: map_list_type(python_type)
+  def to_spec(%{"type" => "dict"} = python_type), do: map_dict_type(python_type)
+  def to_spec(%{"type" => "tuple"} = python_type), do: map_tuple_type(python_type)
+  def to_spec(%{"type" => "set"} = python_type), do: map_set_type(python_type)
+  def to_spec(%{"type" => "optional"} = python_type), do: map_optional_type(python_type)
+  def to_spec(%{"type" => "union"} = python_type), do: map_union_type(python_type)
+  def to_spec(%{"type" => "class"} = python_type), do: map_class_type(python_type)
+
+  # Fallback for unknown types
+  def to_spec(%{"type" => _}), do: quote(do: any())
   def to_spec(_), do: quote(do: any())
 
   # Private Functions

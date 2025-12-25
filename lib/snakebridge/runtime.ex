@@ -40,7 +40,7 @@ defmodule SnakeBridge.Runtime do
 
   """
 
-  alias SnakeBridge.Types.{Encoder, Decoder}
+  alias SnakeBridge.Types.{Decoder, Encoder}
 
   require Logger
 

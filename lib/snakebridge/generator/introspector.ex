@@ -2,9 +2,8 @@ defmodule SnakeBridge.Generator.Introspector do
   @moduledoc """
   Introspects Python libraries to extract their API information.
 
-  This module shells out to a Python script that uses the `inspect` module
-  to analyze a Python library and returns structured information about its
-  functions, classes, methods, and type signatures.
+  This module uses `uv` (if available) to automatically install Python packages
+  in temporary environments, or falls back to the system Python.
 
   ## Example
 
@@ -27,6 +26,40 @@ defmodule SnakeBridge.Generator.Introspector do
 
   require Logger
 
+  # Python standard library modules that don't need pip install
+  @stdlib_modules ~w(
+    abc aifc argparse array ast asynchat asyncio asyncore atexit audioop
+    base64 bdb binascii binhex bisect builtins bz2
+    calendar cgi cgitb chunk cmath cmd code codecs codeop collections
+    colorsys compileall concurrent configparser contextlib contextvars copy
+    copyreg crypt csv ctypes curses
+    dataclasses datetime dbm decimal difflib dis distutils doctest
+    email encodings enum errno
+    faulthandler fcntl filecmp fileinput fnmatch fractions ftplib functools
+    gc getopt getpass gettext glob graphlib grp gzip
+    hashlib heapq hmac html http
+    idlelib imaplib imghdr imp importlib inspect io ipaddress itertools
+    json keyword
+    lib2to3 linecache locale logging lzma
+    mailbox mailcap marshal math mimetypes mmap modulefinder msvcrt multiprocessing
+    netrc nis nntplib numbers
+    operator optparse os ossaudiodev
+    pathlib pdb pickle pickletools pipes pkgutil platform plistlib poplib posix
+    posixpath pprint profile pstats pty pwd py_compile pyclbr pydoc
+    queue quopri
+    random re readline reprlib resource rlcompleter runpy
+    sched secrets select selectors shelve shlex shutil signal site smtpd
+    smtplib sndhdr socket socketserver spwd sqlite3 ssl stat statistics string
+    stringprep struct subprocess sunau symtable sys sysconfig syslog
+    tabnanny tarfile telnetlib tempfile termios test textwrap threading time
+    timeit tkinter token tokenize trace traceback tracemalloc tty turtle
+    turtledemo types typing
+    unicodedata unittest urllib uu uuid
+    venv warnings wave weakref webbrowser winreg winsound wsgiref
+    xdrlib xml xmlrpc
+    zipapp zipfile zipimport zlib
+  )
+
   @type introspection_result :: %{
           required(String.t()) => String.t() | list(map()) | map(),
           optional(String.t()) => any()
@@ -35,25 +68,27 @@ defmodule SnakeBridge.Generator.Introspector do
   @doc """
   Introspects a Python library and returns its API information.
 
-  This function shells out to `priv/python/introspect.py` which uses Python's
-  inspect module to analyze the specified library.
+  For standard library modules (json, math, etc.), uses system Python directly.
+  For third-party packages, uses `uv run --with <package>` to automatically
+  install the package in a temporary environment.
 
   ## Parameters
 
-    * `library` - The name of the Python library to introspect (e.g., "math", "json")
+    * `library` - The name of the Python library to introspect (e.g., "math", "sympy")
 
   ## Returns
 
     * `{:ok, introspection}` - Successfully introspected the library
-    * `{:error, reason}` - Failed to introspect (library not found, parse error, etc.)
+    * `{:error, reason}` - Failed to introspect
 
   ## Examples
 
       iex> SnakeBridge.Generator.Introspector.introspect("json")
       {:ok, %{"module" => "json", "functions" => [...], "classes" => [...]}}
 
-      iex> SnakeBridge.Generator.Introspector.introspect("nonexistent_module")
-      {:error, "Failed to import module: No module named 'nonexistent_module'"}
+      iex> SnakeBridge.Generator.Introspector.introspect("sympy")
+      # Automatically installs sympy via uv, then introspects
+      {:ok, %{"module" => "sympy", "functions" => [...], "classes" => [...]}}
 
   """
   @spec introspect(String.t()) :: {:ok, introspection_result()} | {:error, term()}
@@ -106,14 +141,25 @@ defmodule SnakeBridge.Generator.Introspector do
   @spec run_introspection(String.t(), String.t()) ::
           {:ok, introspection_result()} | {:error, term()}
   defp run_introspection(script_path, library) do
-    # Use python3 explicitly to ensure compatibility
+    # Determine the base module name (e.g., "sympy.core" -> "sympy")
+    base_module = library |> String.split(".") |> List.first()
+
+    if stdlib_module?(base_module) do
+      run_with_system_python(script_path, library)
+    else
+      run_with_uv(script_path, library, base_module)
+    end
+  rescue
+    error ->
+      {:error, "Exception during introspection: #{Exception.message(error)}"}
+  end
+
+  defp stdlib_module?(module), do: module in @stdlib_modules
+
+  defp run_with_system_python(script_path, library) do
     python_cmd = System.find_executable("python3") || System.find_executable("python")
 
-    unless python_cmd do
-      {:error, "Python executable not found in PATH"}
-    else
-      # Run the introspection script
-      # Use --flat for v2.0 format compatibility with SourceWriter
+    if python_cmd do
       case System.cmd(python_cmd, [script_path, library, "--flat"], stderr_to_stdout: true) do
         {output, 0} ->
           parse_introspection_output(output)
@@ -122,10 +168,45 @@ defmodule SnakeBridge.Generator.Introspector do
           Logger.debug("Introspection failed with exit code #{exit_code}: #{output}")
           {:error, "Introspection failed: #{String.trim(output)}"}
       end
+    else
+      {:error, "Python executable not found in PATH"}
     end
-  rescue
-    error ->
-      {:error, "Exception during introspection: #{Exception.message(error)}"}
+  end
+
+  defp run_with_uv(script_path, library, package) do
+    uv_cmd = System.find_executable("uv")
+
+    if uv_cmd do
+      # Use uv run --with <package> to auto-install in temp environment
+      Logger.debug("Using uv to install #{package} temporarily...")
+
+      case System.cmd(
+             uv_cmd,
+             ["run", "--with", package, "python", script_path, library, "--flat"],
+             stderr_to_stdout: true
+           ) do
+        {output, 0} ->
+          parse_introspection_output(output)
+
+        {output, exit_code} ->
+          Logger.debug("uv introspection failed with exit code #{exit_code}: #{output}")
+
+          # If uv failed, try falling back to system python
+          Logger.debug("Falling back to system Python...")
+          run_with_system_python(script_path, library)
+      end
+    else
+      # No uv available, try system python and give helpful error if it fails
+      case run_with_system_python(script_path, library) do
+        {:ok, _} = success ->
+          success
+
+        {:error, _reason} ->
+          {:error,
+           "Package '#{package}' not found. Install it with: pip install #{package}\n" <>
+             "Or install 'uv' for automatic dependency management: curl -LsSf https://astral.sh/uv/install.sh | sh"}
+      end
+    end
   end
 
   @spec parse_introspection_output(String.t()) ::

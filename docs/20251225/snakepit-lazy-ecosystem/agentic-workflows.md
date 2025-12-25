@@ -38,13 +38,14 @@ Snakepit.signature("sympy.integrate")
 Snakepit.ensure_adapter("sympy.integrate")
 ```
 
-This call checks the manifest, generates the wrapper if missing, and returns a stable module/function handle.
+This call checks the generated source set and triggers a deterministic prepass if missing. In `strict: true`, it fails with guidance instead of generating.
 
 ## Safety and Guardrails
 
 - Enforce library allowlists from `mix.exs` configuration
 - Rate limit dynamic calls
 - Provide structured error messages for missing symbols
+- Keep ledger promotion explicit so agent behavior is reproducible
 
 ## Example Agent Loop
 
@@ -54,4 +55,3 @@ This call checks the manifest, generates the wrapper if missing, and returns a s
 4. Agent calls the function using the generated wrapper.
 
 This is a clean, deterministic loop that fits well into long-running agentic tasks.
-

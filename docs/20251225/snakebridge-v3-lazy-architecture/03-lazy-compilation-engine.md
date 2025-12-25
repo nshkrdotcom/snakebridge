@@ -2,244 +2,422 @@
 
 ## The Core Innovation
 
-The lazy compilation engine intercepts unresolved function calls during compilation, determines if they're Python library calls, and generates just-in-time bindings for only those specific functions.
+The lazy compilation engine detects Python library calls in your source code and generates just-in-time bindings for only those specific functions—BEFORE the Elixir compiler runs.
+
+**Key Insight:** This is a **pre-compilation pass**, not mid-compilation injection. Generated code exists as real `.ex` source files that the Elixir compiler processes normally.
 
 ## Architecture Overview
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                           Elixir Compiler                                │
+│                           mix compile                                     │
 │                                                                          │
-│   defmodule MyApp do                                                     │
-│     def calc do                                                          │
-│       Numpy.array([1,2,3])  ◄──── Unresolved: Numpy.array/1             │
-│     end                                                                  │
-│   end                                                                    │
-└──────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    │ @on_definition callback
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                     SnakeBridge.Compiler.Tracer                          │
-│                                                                          │
-│   1. Detect unresolved remote call to configured library                 │
-│   2. Check if Numpy.array/1 exists in cache                              │
-│   3. If cached: inject cached module                                     │
-│   4. If not: trigger generation pipeline                                 │
-└──────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    │ Cache miss
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                     Generation Pipeline                                   │
-│                                                                          │
-│   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐              │
-│   │  Introspect  │───►│   Generate   │───►│    Cache     │              │
-│   │  numpy.array │    │  Numpy.array │    │    Result    │              │
-│   └──────────────┘    └──────────────┘    └──────────────┘              │
-│                                                                          │
-│   Time: ~50-100ms for single function                                    │
+│   Compilers: [:snakebridge, :elixir, :app]                              │
+│              ─────────────                                               │
+│                   │                                                      │
+│                   │ SnakeBridge runs FIRST                               │
+│                   ▼                                                      │
 └──────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                     Compilation Continues                                 │
+│                    SnakeBridge Compiler Task                             │
 │                                                                          │
-│   Numpy.array/1 now available, code compiles successfully               │
+│   ┌────────────────┐    ┌────────────────┐    ┌────────────────┐        │
+│   │  1. AST Scan   │───►│  2. Resolve    │───►│  3. Generate   │        │
+│   │  project src   │    │  vs manifest   │    │  missing .ex   │        │
+│   └────────────────┘    └────────────────┘    └────────────────┘        │
+│                                                       │                  │
+│   ┌────────────────┐    ┌────────────────┐           │                  │
+│   │  5. Done       │◄───│  4. Update     │◄──────────┘                  │
+│   │  (normal elixir│    │  manifest+lock │                              │
+│   │   compile next)│    └────────────────┘                              │
+│   └────────────────┘                                                     │
+└──────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                    Elixir Compiler (normal)                              │
+│                                                                          │
+│   Compiles lib/*.ex INCLUDING lib/snakebridge_generated/*.ex            │
+│   All standard tooling works: Dialyzer, ExDoc, IDE, etc.                │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
+
+## Why Pre-Pass, Not Mid-Injection?
+
+The alternative approach—intercepting undefined function calls during compilation and injecting code on the fly—was rejected because:
+
+| Problem | Pre-Pass Solution |
+|---------|-------------------|
+| Compilation concurrency races | Files generated before compilation starts |
+| Dialyzer sees undefined functions | Generated source exists, normal analysis |
+| ExDoc misses generated code | Generated source is normal `.ex` |
+| IDE "go to definition" fails | Points to real file in `lib/` |
+| Hot code reload confusion | Standard Elixir semantics |
+| Complex debugging | Standard Elixir debugging |
+
+**The pre-pass model generates real `.ex` source files that become part of your project.** The Elixir compiler never knows they were generated—they're just more source files to compile.
 
 ## Implementation Components
 
-### 1. Compiler Tracer
+### 1. Mix Compiler Task
 
-The tracer hooks into Elixir's compilation process:
+The SnakeBridge compiler runs before the Elixir compiler:
 
 ```elixir
-defmodule SnakeBridge.Compiler.Tracer do
-  @behaviour Mix.Tasks.Compile.Elixir.Tracer
-
-  # Called for every remote function call during compilation
-  def trace({:remote_function, meta, module, function, arity}, env) do
-    if snakebridge_library?(module) do
-      ensure_function_available(module, function, arity, env)
-    end
-    :ok
-  end
-
-  defp snakebridge_library?(module) do
-    # Check if module is a configured SnakeBridge library
-    SnakeBridge.Registry.library?(module)
-  end
-
-  defp ensure_function_available(module, function, arity, env) do
-    case SnakeBridge.Cache.get(module, function, arity) do
-      {:ok, _} ->
-        # Already cached, nothing to do
-        :ok
-
-      :not_found ->
-        # Generate on demand
-        SnakeBridge.Generator.generate_function(module, function, arity)
-    end
-  end
+# mix.exs
+def project do
+  [
+    app: :my_app,
+    compilers: [:snakebridge] ++ Mix.compilers(),  # SnakeBridge FIRST
+    deps: deps()
+  ]
 end
 ```
 
-### 2. Dynamic Module Injection
-
-When a function is generated, it must be made available to the ongoing compilation:
-
 ```elixir
-defmodule SnakeBridge.Compiler.Injector do
-  @doc """
-  Injects a generated function into the compilation environment.
+# lib/mix/tasks/compile/snakebridge.ex
+defmodule Mix.Tasks.Compile.Snakebridge do
+  @moduledoc """
+  Scans project for Python library usage and generates bindings.
+  Runs before the Elixir compiler.
   """
-  def inject_function(module, function, arity, ast) do
-    # Check if module already exists
-    if Code.ensure_loaded?(module) do
-      # Module exists, add function via hot code loading
-      inject_into_existing(module, function, ast)
+  use Mix.Task.Compiler
+
+  @impl true
+  def run(_args) do
+    config = SnakeBridge.Config.load()
+
+    # Skip if no libraries configured
+    if config.libraries == [] do
+      {:ok, []}
     else
-      # Module doesn't exist, create minimal module
-      create_module_with_function(module, function, ast)
-    end
-  end
+      # 1. Scan project for library calls
+      detected = SnakeBridge.Scanner.scan_project()
 
-  defp create_module_with_function(module, function, ast) do
-    module_ast = quote do
-      defmodule unquote(module) do
-        use SnakeBridge.LazyModule
+      # 2. Load current manifest
+      manifest = SnakeBridge.Manifest.load()
 
-        unquote(ast)
+      # 3. Determine what needs generation
+      to_generate = SnakeBridge.Manifest.missing(manifest, detected)
+
+      # 4. Generate source files
+      if to_generate != [] do
+        SnakeBridge.Generator.generate(to_generate, config)
       end
-    end
 
-    # Compile and load immediately
-    Code.compile_quoted(module_ast)
+      # 5. Update manifest and lock
+      SnakeBridge.Manifest.update(manifest, detected)
+      SnakeBridge.Lock.update()
+
+      {:ok, []}
+    end
   end
 
-  defp inject_into_existing(module, function, ast) do
-    # Use Module.create to add functions dynamically
-    # This requires careful handling of module state
-    SnakeBridge.DynamicModule.add_function(module, function, ast)
+  @impl true
+  def manifests do
+    [SnakeBridge.Manifest.path()]
   end
 end
 ```
 
-### 3. Targeted Introspection
+### 2. AST Scanner
 
-Instead of introspecting entire libraries, we query only what's needed:
+The scanner finds all calls to configured library modules:
 
 ```elixir
-defmodule SnakeBridge.Introspector.Targeted do
-  @doc """
-  Introspect a single function from a Python library.
+defmodule SnakeBridge.Scanner do
+  @moduledoc """
+  Scans project source files for Python library function calls.
   """
-  def introspect_function(library, function_name) do
-    script = """
-    import #{library}
-    import inspect
-    import json
 
-    func = getattr(#{library}, '#{function_name}', None)
-    if func is None:
-        print(json.dumps({"error": "not_found"}))
-    else:
-        sig = inspect.signature(func)
-        doc = inspect.getdoc(func) or ""
-        params = [
-            {"name": p.name, "default": str(p.default) if p.default != inspect.Parameter.empty else None}
-            for p in sig.parameters.values()
-        ]
-        print(json.dumps({
-            "name": '#{function_name}',
-            "parameters": params,
-            "docstring": doc,
-            "module": "#{library}"
-        }))
-    """
+  def scan_project do
+    source_files()
+    |> Enum.flat_map(&scan_file/1)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
 
-    case run_python(script, library) do
-      {:ok, json} ->
-        Jason.decode!(json)
+  defp source_files do
+    Mix.Project.config()[:elixirc_paths]
+    |> Enum.flat_map(&Path.wildcard(Path.join(&1, "**/*.ex")))
+    |> Enum.reject(&String.contains?(&1, "snakebridge_generated"))
+  end
+
+  defp scan_file(path) do
+    {:ok, ast} = path |> File.read!() |> Code.string_to_quoted()
+    extract_library_calls(ast)
+  end
+
+  defp extract_library_calls(ast) do
+    libraries = SnakeBridge.Config.library_modules()
+
+    Macro.prewalk(ast, [], fn
+      # Remote call: Numpy.array(x)
+      {{:., _, [{:__aliases__, _, module_parts}, function]}, _, args}, acc
+      when is_atom(function) and is_list(args) ->
+        module = Module.concat(module_parts)
+        if module in libraries do
+          {ast, [{module, function, length(args)} | acc]}
+        else
+          {ast, acc}
+        end
+
+      # Module attribute that references library
+      {:@, _, [{name, _, [{:__aliases__, _, module_parts}]}]}, acc ->
+        {ast, acc}
+
+      other, acc ->
+        {other, acc}
+    end)
+    |> elem(1)
+  end
+end
+```
+
+### 3. Python Introspection
+
+Targeted introspection queries only the functions we need:
+
+```elixir
+defmodule SnakeBridge.Introspector do
+  @moduledoc """
+  Introspects Python functions using UV.
+  """
+
+  def introspect(library, functions) when is_list(functions) do
+    # Batch introspection for efficiency
+    script = batch_introspection_script(library, functions)
+
+    case run_python(library, script) do
+      {:ok, output} ->
+        {:ok, Jason.decode!(output)}
       {:error, reason} ->
         {:error, reason}
     end
   end
 
-  defp run_python(script, library) do
-    # Use UV for non-stdlib libraries
-    if SnakeBridge.Registry.stdlib?(library) do
-      System.cmd("python3", ["-c", script])
+  defp batch_introspection_script(library, functions) do
+    functions_json = Jason.encode!(Enum.map(functions, &to_string/1))
+
+    """
+    import #{library.python_name}
+    import inspect
+    import json
+
+    functions = json.loads('#{functions_json}')
+    results = []
+
+    for func_name in functions:
+        obj = getattr(#{library.python_name}, func_name, None)
+        if obj is None:
+            results.append({"name": func_name, "error": "not_found"})
+            continue
+
+        try:
+            sig = inspect.signature(obj)
+            params = [
+                {
+                    "name": p.name,
+                    "kind": str(p.kind),
+                    "default": repr(p.default) if p.default != inspect.Parameter.empty else None,
+                    "annotation": str(p.annotation) if p.annotation != inspect.Parameter.empty else None
+                }
+                for p in sig.parameters.values()
+            ]
+        except (ValueError, TypeError):
+            params = []
+
+        doc = inspect.getdoc(obj) or ""
+
+        results.append({
+            "name": func_name,
+            "parameters": params,
+            "docstring": doc[:2000],
+            "callable": callable(obj)
+        })
+
+    print(json.dumps(results))
+    """
+  end
+
+  defp run_python(library, script) do
+    if library.version == :stdlib do
+      case System.cmd("python3", ["-c", script], stderr_to_stdout: true) do
+        {output, 0} -> {:ok, output}
+        {error, _} -> {:error, error}
+      end
     else
-      version = SnakeBridge.Registry.version(library)
-      System.cmd("uv", ["run", "--with", "#{library}#{version}", "python", "-c", script])
+      version_spec = "#{library.python_name}#{library.version}"
+      case System.cmd("uv", ["run", "--with", version_spec, "python", "-c", script],
+             stderr_to_stdout: true) do
+        {output, 0} -> {:ok, output}
+        {error, _} -> {:error, error}
+      end
     end
   end
 end
 ```
 
-### 4. Lazy Module Base
+### 4. Source Generator
 
-Generated modules include lazy-loading infrastructure:
+Generates real `.ex` source files:
 
 ```elixir
-defmodule SnakeBridge.LazyModule do
+defmodule SnakeBridge.Generator do
   @moduledoc """
-  Base module for lazily-generated library bindings.
+  Generates Elixir source files from introspection data.
   """
 
-  defmacro __using__(_opts) do
-    quote do
-      @before_compile SnakeBridge.LazyModule
+  @generated_dir "lib/snakebridge_generated"
 
-      # Track which functions are defined
-      Module.register_attribute(__MODULE__, :snakebridge_functions, accumulate: true)
+  def generate(calls_by_library, config) do
+    File.mkdir_p!(@generated_dir)
 
-      # Allow dynamic function addition
-      def __snakebridge_add_function__(name, arity, ast) do
-        SnakeBridge.DynamicModule.add_function(__MODULE__, name, arity, ast)
+    Enum.each(calls_by_library, fn {library, calls} ->
+      # Get function names
+      functions = Enum.map(calls, fn {_mod, func, _arity} -> func end)
+
+      # Introspect Python
+      {:ok, introspection} = SnakeBridge.Introspector.introspect(library, functions)
+
+      # Generate source
+      source = generate_module_source(library, introspection)
+
+      # Write file (sorted, deterministic)
+      path = Path.join(@generated_dir, "#{library.name}.ex")
+      write_atomic(path, source)
+
+      Mix.shell().info("SnakeBridge: Generated #{path}")
+    end)
+  end
+
+  defp generate_module_source(library, introspection) do
+    functions = introspection
+    |> Enum.reject(&Map.has_key?(&1, "error"))
+    |> Enum.sort_by(& &1["name"])  # Deterministic order
+    |> Enum.map(&generate_function/1)
+    |> Enum.join("\n\n")
+
+    """
+    # Generated by SnakeBridge - DO NOT EDIT
+    # Regenerate with: mix snakebridge.generate
+    #
+    # Library: #{library.python_name} #{library.version}
+    # Generated: #{DateTime.utc_now() |> DateTime.to_iso8601()}
+
+    defmodule #{library.module_name} do
+      @moduledoc \"\"\"
+      SnakeBridge bindings for #{library.python_name}.
+
+      These functions call Python through the SnakeBridge runtime.
+      \"\"\"
+
+      #{functions}
+    end
+    """
+  end
+
+  defp generate_function(info) do
+    name = String.to_atom(info["name"])
+    params = info["parameters"]
+    doc = info["docstring"]
+
+    # Generate parameter list
+    param_names = Enum.map(params, fn p -> String.to_atom(p["name"]) end)
+    param_vars = Enum.map(param_names, fn n -> Macro.var(n, nil) end)
+
+    """
+      @doc \"\"\"
+      #{escape_doc(doc)}
+      \"\"\"
+      def #{name}(#{Enum.join(param_names, ", ")}) do
+        SnakeBridge.Runtime.call(__MODULE__, :#{name}, [#{Enum.join(param_names, ", ")}])
       end
+    """
+  end
+
+  defp escape_doc(doc) do
+    doc
+    |> String.replace("\"\"\"", "\\\"\\\"\\\"")
+    |> String.trim()
+  end
+
+  defp write_atomic(path, content) do
+    temp_path = path <> ".tmp"
+    File.write!(temp_path, content)
+    File.rename!(temp_path, path)
+  end
+end
+```
+
+### 5. Manifest and Lock
+
+Track what's been generated for incremental updates:
+
+```elixir
+defmodule SnakeBridge.Manifest do
+  @manifest_path ".snakebridge/manifest.json"
+
+  defstruct [:version, :generated_at, :symbols]
+
+  def path, do: @manifest_path
+
+  def load do
+    case File.read(@manifest_path) do
+      {:ok, content} -> Jason.decode!(content, keys: :atoms)
+      {:error, :enoent} -> %{version: "3.0.0", symbols: %{}}
     end
   end
 
-  defmacro __before_compile__(_env) do
-    quote do
-      # Generate __functions__ discovery at compile time
-      def __functions__ do
-        @snakebridge_functions
-        |> Enum.map(fn {name, arity} ->
-          {name, arity, __MODULE__, doc_for(name, arity)}
-        end)
-      end
+  def missing(manifest, detected) do
+    existing = Map.keys(manifest.symbols) |> MapSet.new()
+    detected_set = MapSet.new(detected, fn {mod, func, arity} ->
+      "#{mod}.#{func}/#{arity}"
+    end)
 
-      defp doc_for(name, arity) do
-        SnakeBridge.Docs.get(__MODULE__, name, arity)
-      end
-    end
+    MapSet.difference(detected_set, existing)
+    |> MapSet.to_list()
+    |> Enum.map(&parse_symbol/1)
+  end
+
+  def update(manifest, detected) do
+    symbols = Enum.reduce(detected, manifest.symbols, fn {mod, func, arity}, acc ->
+      key = "#{mod}.#{func}/#{arity}"
+      Map.put_new(acc, key, %{
+        generated_at: DateTime.utc_now() |> DateTime.to_iso8601()
+      })
+    end)
+
+    new_manifest = %{
+      version: "3.0.0",
+      generated_at: DateTime.utc_now() |> DateTime.to_iso8601(),
+      symbols: symbols |> Enum.sort() |> Map.new()  # Sorted for determinism
+    }
+
+    File.mkdir_p!(Path.dirname(@manifest_path))
+    File.write!(@manifest_path, Jason.encode!(new_manifest, pretty: true))
   end
 end
 ```
 
 ## Generation Flow
 
-### Step 1: Detection
+### Step 1: Detection (AST Scan)
 
 ```
 Developer code:          result = Numpy.dot(a, b)
                                     │
-Compiler sees:           Numpy.dot/2 (unresolved)
+Scanner finds:           {Numpy, :dot, 2}
                                     │
-Tracer checks:           Is Numpy a SnakeBridge library? → Yes
-                                    │
-Cache lookup:            Numpy.dot/2 cached? → No
+Manifest check:          Numpy.dot/2 in manifest? → No
 ```
 
-### Step 2: Introspection
+### Step 2: Introspection (Python Query)
 
 ```
-UV call:                 uv run --with numpy python -c "introspect numpy.dot"
+UV call:                 uv run --with numpy python -c "introspect"
                                     │
 Python returns:          {
                            "name": "dot",
@@ -247,194 +425,134 @@ Python returns:          {
                              {"name": "a", "default": null},
                              {"name": "b", "default": null}
                            ],
-                           "docstring": "Dot product of two arrays...",
-                           "return_type": "ndarray"
+                           "docstring": "Dot product of two arrays..."
                          }
 ```
 
-### Step 3: Generation
+### Step 3: Generation (Source Output)
 
 ```elixir
-# Generated AST
-quote do
+# lib/snakebridge_generated/numpy.ex
+
+defmodule Numpy do
+  @moduledoc "SnakeBridge bindings for numpy."
+
   @doc """
   Dot product of two arrays...
-
-  ## Parameters
-    * `a` - First array
-    * `b` - Second array
   """
-  @spec dot(any(), any()) :: {:ok, any()} | {:error, term()}
   def dot(a, b) do
-    SnakeBridge.Runtime.call("numpy", "dot", [a, b])
+    SnakeBridge.Runtime.call(__MODULE__, :dot, [a, b])
   end
 end
 ```
 
-### Step 4: Injection & Caching
+### Step 4: Normal Compilation
 
 ```
-1. AST compiled to BEAM bytecode
-2. Module Numpy loaded/updated with new function
-3. Cache entry created:
-   - Key: {Numpy, :dot, 2}
-   - Value: {ast, bytecode, introspection_data}
-   - Metadata: {generated_at, source_version}
-4. Compilation continues
+Elixir compiler:         Compiles lib/snakebridge_generated/numpy.ex
+                                    │
+Result:                  _build/dev/lib/my_app/ebin/Elixir.Numpy.beam
+                                    │
+Status:                  Normal compiled module, all tooling works
 ```
 
 ## Performance Characteristics
 
-### First-Time Generation
+### First-Time Generation (per library)
 
 | Operation | Time |
 |-----------|------|
+| AST scanning (all project files) | 50-100ms |
 | UV + Python startup | 30-50ms |
-| Introspection | 10-20ms |
-| Code generation | 5-10ms |
-| Compilation | 10-20ms |
-| Cache write | 1-5ms |
+| Batch introspection (10 functions) | 50-100ms |
+| Source generation | 10-20ms |
+| File write | 1-5ms |
+| **Total (10 functions)** | **~150-250ms** |
+
+### Incremental (no new functions)
+
+| Operation | Time |
+|-----------|------|
+| AST scanning | 50-100ms |
+| Manifest check | <1ms |
+| No generation needed | 0ms |
 | **Total** | **~50-100ms** |
 
-### Cached Function
+### Already Generated (subsequent compiles)
 
 | Operation | Time |
 |-----------|------|
-| Cache lookup | <1ms |
-| Module injection | 1-5ms |
-| **Total** | **~5ms** |
+| Mix dependency check | ~10ms |
+| Manifest unchanged | 0ms |
+| **Total** | **~10ms** |
 
-### Batch Generation
+## Batch Optimization
 
-When multiple functions are detected in a single file:
+When multiple functions from the same library are detected, they're batched:
 
 ```elixir
-# This file uses 5 numpy functions
-Numpy.array(...)
-Numpy.zeros(...)
-Numpy.dot(...)
-Numpy.sum(...)
-Numpy.reshape(...)
+# Detected calls
+[{Numpy, :array, 1}, {Numpy, :zeros, 1}, {Numpy, :dot, 2}]
+
+# Grouped by library
+%{numpy_lib => [{Numpy, :array, 1}, {Numpy, :zeros, 1}, {Numpy, :dot, 2}]}
+
+# Single introspection call
+introspect(numpy_lib, [:array, :zeros, :dot])
+
+# Result: ~150ms for 3 functions, not 450ms for 3 separate calls
 ```
 
-The engine batches these into a single introspection call:
+## Handling Edge Cases
 
-```
-UV call:    uv run --with numpy python -c "introspect_batch numpy [array, zeros, dot, sum, reshape]"
-Time:       ~100ms (vs. 500ms for 5 separate calls)
-```
-
-## Edge Cases
-
-### Function Not Found
+### Function Not Found in Python
 
 ```elixir
 # Developer writes:
 Numpy.nonexistent_function(x)
 
 # Introspection returns:
-{"error": "not_found"}
+{"name": "nonexistent_function", "error": "not_found"}
 
-# Compiler produces:
-** (CompileError) undefined function Numpy.nonexistent_function/1
-   Hint: This function does not exist in numpy 1.26.4
+# Compilation produces warning:
+warning: Numpy.nonexistent_function/1 not found in numpy 1.26.4
+  lib/my_app.ex:15
+
+# No binding generated, Elixir compiler will error normally
 ```
 
-### Version Mismatch
+### Dynamic Dispatch
 
 ```elixir
-# numpy 2.0 removed oldfunction
-Numpy.oldfunction(x)
-
-# Detection:
-warning: Numpy.oldfunction/1 not found in numpy 2.0.0
-         This function may have been removed or renamed.
-         See: https://numpy.org/doc/stable/release/2.0.0-notes.html
+# Cannot detect this statically:
+apply(Numpy, some_var, args)
 ```
 
-### Circular Dependencies
+See [11-engineering-decisions.md](./11-engineering-decisions.md#decision-6-dynamic-dispatch-handling) for the runtime ledger solution.
 
-Rare but possible when Python modules cross-reference:
+### Circular Imports (Rare)
+
+Circular imports between Python libraries are detected and reported:
 
 ```
-scipy.stats uses numpy
-numpy.polynomial uses scipy (hypothetically)
+warning: Circular import detected: scipy -> numpy -> scipy
+  Generating stubs; full introspection may fail
 ```
 
-The engine detects cycles and generates stubs:
+## File Layout
 
-```elixir
-# Stub generated first
-defmodule Numpy.Polynomial do
-  def problematic_function(x), do: raise "Circular dependency detected"
-end
-
-# Then replaced with real implementation after resolution
 ```
-
-## Compiler Integration
-
-### Mix Compiler Hook
-
-```elixir
-# lib/mix/tasks/compile/snakebridge.ex
-defmodule Mix.Tasks.Compile.Snakebridge do
-  use Mix.Task.Compiler
-
-  def run(_args) do
-    # Register the tracer
-    Mix.Task.Compiler.after_compiler(:elixir, &after_elixir_compile/1)
-
-    # Initialize cache
-    SnakeBridge.Cache.init()
-
-    # Pre-create module stubs for configured libraries
-    for {library, _opts} <- SnakeBridge.Config.libraries() do
-      SnakeBridge.ModuleStub.create(library)
-    end
-
-    {:ok, []}
-  end
-
-  defp after_elixir_compile(status) do
-    # Report what was generated
-    generated = SnakeBridge.Cache.new_this_compile()
-    if generated != [] do
-      IO.puts("SnakeBridge: Generated #{length(generated)} bindings")
-    end
-    status
-  end
-end
-```
-
-### Module Stubs
-
-Before compilation, we create minimal stubs so the compiler knows these modules exist:
-
-```elixir
-defmodule SnakeBridge.ModuleStub do
-  def create(library) do
-    module_name = SnakeBridge.Config.module_name(library)
-
-    unless Code.ensure_loaded?(module_name) do
-      # Create empty module with __missing__ handler
-      Code.compile_quoted(quote do
-        defmodule unquote(module_name) do
-          use SnakeBridge.LazyModule
-
-          # Fallback for any undefined function
-          def unquote(:__missing__)(function, args) do
-            SnakeBridge.Generator.generate_and_call(
-              unquote(module_name),
-              function,
-              args
-            )
-          end
-        end
-      end)
-    end
-  end
-end
+my_app/
+├── lib/
+│   ├── my_app.ex                 # Your code
+│   └── snakebridge_generated/    # Generated code (committed to git)
+│       ├── numpy.ex              # All Numpy functions, sorted
+│       ├── pandas.ex             # All Pandas functions, sorted
+│       └── sympy.ex              # All Sympy functions, sorted
+├── .snakebridge/
+│   └── manifest.json             # What's been generated
+├── snakebridge.lock              # Environment identity + symbols
+└── mix.exs
 ```
 
 ## Debugging
@@ -442,83 +560,52 @@ end
 ### Verbose Mode
 
 ```elixir
+# config/dev.exs
 config :snakebridge, verbose: true
 ```
 
-Output:
 ```
-[SnakeBridge] Cache miss: Numpy.array/1
-[SnakeBridge] Introspecting numpy.array...
-[SnakeBridge] Generated Numpy.array/1 in 87ms
-[SnakeBridge] Cache hit: Numpy.zeros/1
-[SnakeBridge] Compilation complete. Generated: 1, Cached: 1
+$ mix compile
+SnakeBridge: Scanning 42 source files...
+SnakeBridge: Detected 5 library calls
+SnakeBridge: Cache hit: Numpy.array/1
+SnakeBridge: Cache hit: Numpy.zeros/1
+SnakeBridge: Generating: Numpy.reshape/2
+SnakeBridge: Introspecting numpy.reshape...
+SnakeBridge: Generated lib/snakebridge_generated/numpy.ex
+Compiling 1 file (.ex)
+```
+
+### Manual Regeneration
+
+```bash
+# Force regeneration of all bindings
+$ mix snakebridge.generate --force
+
+# Regenerate specific library
+$ mix snakebridge.generate numpy
+
+# Clear cache and regenerate
+$ rm -rf lib/snakebridge_generated .snakebridge
+$ mix compile
 ```
 
 ### Inspection
 
 ```elixir
-# IEx
-iex> SnakeBridge.Cache.stats()
+iex> SnakeBridge.Manifest.load()
 %{
-  hits: 45,
-  misses: 3,
-  total_entries: 48,
-  libraries: %{
-    Numpy: 35,
-    Pandas: 10,
-    Json: 3
+  version: "3.0.0",
+  symbols: %{
+    "Numpy.array/1" => %{generated_at: "2025-12-25T10:30:00Z"},
+    "Numpy.zeros/1" => %{generated_at: "2025-12-25T10:30:00Z"}
   }
 }
 
-iex> SnakeBridge.Cache.list(Numpy)
-[
-  {:array, 1, ~U[2025-12-25 10:30:00Z]},
-  {:zeros, 2, ~U[2025-12-25 10:30:05Z]},
-  ...
-]
-```
-
-## Future Optimizations
-
-### 1. Parallel Introspection
-
-When multiple libraries are used, introspect concurrently:
-
-```elixir
-Task.async_stream(libraries, &introspect/1, max_concurrency: 4)
-```
-
-### 2. Persistent Python Process
-
-Keep a Python process warm for faster introspection:
-
-```
-First call:   100ms (cold start)
-Subsequent:   10-20ms (warm)
-```
-
-### 3. Predictive Generation
-
-Analyze import patterns to predict what will be needed:
-
-```elixir
-# If developer uses Numpy.array, they probably need:
-# - Numpy.zeros
-# - Numpy.ones
-# - Numpy.reshape
-# Pre-generate in background
-```
-
-### 4. Shared Team Cache
-
-Fetch pre-generated bindings from team server:
-
-```
-Developer A generates Numpy.array/1
-             │
-             ▼
-      Team Cache Server
-             │
-             ▼
-Developer B gets instant cache hit
+iex> SnakeBridge.Lock.environment()
+%{
+  python_version: "3.11.5",
+  platform: "linux-x86_64",
+  libraries: %{numpy: "1.26.4"}
+}
 ```

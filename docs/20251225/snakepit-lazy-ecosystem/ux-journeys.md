@@ -6,7 +6,7 @@ This document describes the expected developer experience across the most common
 
 1. Add dependency and libraries to `mix.exs`.
 2. Run `mix deps.get`.
-3. `mix compile` detects usage and generates adapters.
+3. `mix compile` runs a prepass, generates adapters, and updates `snakebridge.lock`.
 4. Use `Library.__functions__/0` to explore.
 5. Call functions with normal Elixir syntax.
 
@@ -29,7 +29,7 @@ Expected feelings:
 ## Journey 3: Incremental Growth
 
 1. Add new calls in code (`Sympy.integrate/2`).
-2. Compile. Adapters are extended.
+2. Compile. Adapters are extended and the lockfile stays deterministic.
 3. Previously generated wrappers remain unchanged.
 
 Expected feelings:
@@ -52,9 +52,8 @@ Expected feelings:
 
 1. Agent searches for symbols.
 2. Agent requests docs and signatures.
-3. Agent calls functions through generated wrappers.
+3. Agent ensures adapters or uses explicit `Snakepit.dynamic_call/4`.
 
 Expected feelings:
 
 - "The agent can use the same safe surface as I do."
-

@@ -28,10 +28,10 @@ The lazy architecture depends on durable caches and explicit pruning. This docum
 
 Each library maintains:
 
-- **Manifest**: list of generated symbols
+- **Manifest**: list of generated symbols (derivable from generated source)
 - **Ledger**: record of symbol usage (compile or runtime)
 
-The ledger is append-only; the manifest is the source of truth for what exists in the generated code.
+The ledger is append-only and dev-focused; the manifest can be rebuilt from `lib/snakebridge_generated/` to avoid merge conflicts. The lockfile is the authoritative environment identity.
 
 ## Pruning Policy
 
@@ -56,7 +56,7 @@ When `prune: :auto` is set, unused wrappers are removed during compile. This is 
 ## Cache Sharing (CI and Teams)
 
 - Metadata and docs caches can be stored in a shared cache dir
-- Adapter source may be checked into git for deterministic builds
+- Adapter source is recommended to be checked into git for deterministic builds
 - Usage ledger should be considered local and ephemeral
 
 ## Failure Modes
@@ -64,4 +64,4 @@ When `prune: :auto` is set, unused wrappers are removed during compile. This is 
 - **Missing cache**: regenerate from metadata or re-introspect
 - **Stale metadata**: regenerate and update manifest hash
 - **Library version change**: invalidate manifest and regenerate
-
+- **Lockfile mismatch**: regenerate adapters or update `snakebridge.lock`

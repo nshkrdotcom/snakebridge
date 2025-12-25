@@ -20,6 +20,7 @@ Each package contains:
 - `metadata.json` (symbols, docstrings, signatures)
 - `types.json` (type hints and mapping)
 - `docs_index.json` (summary search data)
+- `metadata.sha256` (integrity hash)
 
 ### Resolution Priority
 
@@ -32,6 +33,7 @@ Each package contains:
 - `mix snakepit.pack sympy` generates metadata package
 - The package is published to Hex under `snakepit_libs_*`
 - Consumers resolve it automatically on compile
+- The resolved metadata hash is recorded in `snakebridge.lock`
 
 ## Why This Matters
 
@@ -40,10 +42,11 @@ The registry allows:
 - Fast setup for common libraries
 - Deterministic builds in CI
 - Minimal Python execution in build pipelines
+- Offline builds once metadata and adapters are committed
 
 ## Governance
 
 - Curated core libraries (SymPy, NumPy, Pandas, Torch, etc)
 - Community packages with trust metadata
 - Optional signed metadata for enterprise use
-
+- Policy: unsigned metadata is allowed only in dev by default

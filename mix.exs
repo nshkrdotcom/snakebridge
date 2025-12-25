@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.3.2"
+  @version "0.4.0"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -16,24 +16,15 @@ defmodule SnakeBridge.MixProject do
 
       # Docs
       name: "SnakeBridge",
-      description: "Configuration-driven Python library integration for Elixir",
+      description: "Generate type-safe Elixir bindings for Python libraries",
       source_url: @source_url,
       homepage_url: @source_url,
       docs: docs(),
       package: package(),
 
-      # Testing
-      test_coverage: [tool: ExCoveralls],
-      preferred_cli_env: [
-        coveralls: :test,
-        "coveralls.detail": :test,
-        "coveralls.post": :test,
-        "coveralls.html": :test
-      ],
-
       # Dialyzer
       dialyzer: [
-        plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
+        plt_file: {:no_warn, "priv_old/plts/dialyzer.plt"},
         plt_add_apps: [:mix, :ex_unit]
       ]
     ]
@@ -41,7 +32,7 @@ defmodule SnakeBridge.MixProject do
 
   def application do
     [
-      extra_applications: [:logger, :crypto, :inets, :ssl],
+      extra_applications: [:logger],
       mod: {SnakeBridge.Application, []}
     ]
   end
@@ -51,32 +42,17 @@ defmodule SnakeBridge.MixProject do
 
   defp deps do
     [
-      # Core dependencies
-      # Optional for now during dev
+      # Core - Python bridge
       {:snakepit, "~> 0.7.1"},
-      # For config schemas
-      {:ecto, "~> 3.11"},
       # JSON encoding
       {:jason, "~> 1.4"},
-
-      # Optional AI SDKs for adapter.create task
-      # These enable AI-powered library analysis
-      {:claude_agent_sdk, "~> 0.6.9", optional: true},
-      {:codex_sdk, "~> 0.4", optional: true},
 
       # Development & Testing
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:excoveralls, "~> 0.18", only: :test},
-      # Property-based testing
-      {:stream_data, "~> 1.0", only: :test},
-      # Mocking
       {:mox, "~> 1.1", only: :test},
-      # Runtime mocking
-      {:mimic, "~> 1.7", only: :test},
-      # OTP testing toolkit
-      {:supertester, "~> 0.3.1", only: :test}
+      {:mimic, "~> 1.7", only: :test}
     ]
   end
 
@@ -86,61 +62,25 @@ defmodule SnakeBridge.MixProject do
       name: "SnakeBridge",
       source_ref: "v#{@version}",
       source_url: @source_url,
-      homepage_url: @source_url,
-      assets: %{"assets" => "assets"},
-      logo: "assets/snakebridge.svg",
-      extras: [
-        "README.md",
-        "CHANGELOG.md",
-        "docs/PYTHON_SETUP.md",
-        "examples/QUICKSTART.md"
-      ],
-      groups_for_extras: [
-        Guides: [
-          "README.md",
-          "docs/PYTHON_SETUP.md",
-          "examples/QUICKSTART.md"
-        ],
-        "Release Notes": ["CHANGELOG.md"]
-      ],
+      extras: ["README.md", "CHANGELOG.md"],
       groups_for_modules: [
         Core: [
           SnakeBridge,
-          SnakeBridge.Config,
-          SnakeBridge.Generator,
-          SnakeBridge.Runtime
-        ],
-        Discovery: [
-          SnakeBridge.Discovery,
-          SnakeBridge.Discovery.Introspector,
-          SnakeBridge.Discovery.Parser
-        ],
-        Schema: [
-          SnakeBridge.Schema,
-          SnakeBridge.Schema.Descriptor,
-          SnakeBridge.Schema.Validator,
-          SnakeBridge.Schema.Differ
+          SnakeBridge.Runtime,
+          SnakeBridge.Types
         ],
         "Type System": [
-          SnakeBridge.TypeSystem,
-          SnakeBridge.TypeSystem.Mapper,
-          SnakeBridge.TypeSystem.Inference,
-          SnakeBridge.TypeSystem.Validator
+          SnakeBridge.Types.Encoder,
+          SnakeBridge.Types.Decoder
         ],
-        "Developer Tools": [
-          Mix.Tasks.Snakebridge.Discover,
-          Mix.Tasks.Snakebridge.Validate,
-          Mix.Tasks.Snakebridge.Diff,
-          Mix.Tasks.Snakebridge.Generate,
-          Mix.Tasks.Snakebridge.Clean
+        Generator: [
+          SnakeBridge.Generator.Introspector,
+          SnakeBridge.Generator.TypeMapper,
+          SnakeBridge.Generator.DocFormatter,
+          SnakeBridge.Generator.SourceWriter
         ],
-        "Adapter Creator": [
-          SnakeBridge.Adapter.Creator,
-          SnakeBridge.Adapter.AgentOrchestrator,
-          SnakeBridge.Adapter.Fetcher,
-          SnakeBridge.Adapter.Generator,
-          SnakeBridge.Adapter.Validator,
-          Mix.Tasks.Snakebridge.Adapter.Create
+        "Mix Tasks": [
+          Mix.Tasks.Snakebridge.Gen
         ]
       ]
     ]
@@ -149,36 +89,16 @@ defmodule SnakeBridge.MixProject do
   defp package do
     [
       name: "snakebridge",
-      description: description(),
-      files: ~w(lib priv .formatter.exs mix.exs README.md LICENSE CHANGELOG.md assets),
+      files: ~w(lib priv .formatter.exs mix.exs README.md LICENSE CHANGELOG.md),
       licenses: ["MIT"],
       links: %{
         "GitHub" => @source_url,
-        "Online documentation" => "https://hexdocs.pm/snakebridge",
-        "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"
-      },
-      maintainers: ["nshkrdotcom"]
+        "Docs" => "https://hexdocs.pm/snakebridge"
+      }
     ]
-  end
-
-  defp description do
-    """
-    Configuration-driven Python library integration for Elixir. Automatically generate
-    type-safe Elixir modules from declarative configs, enabling seamless integration with
-    any Python library. Built on Snakepit for high-performance Python orchestration.
-    """
   end
 
   defp aliases do
-    [
-      test: ["test --trace"],
-      "test.watch": ["test.watch --stale"],
-      quality: ["format", "credo --strict", "dialyzer"],
-      "quality.ci": [
-        "format --check-formatted",
-        "credo --strict",
-        "dialyzer"
-      ]
-    ]
+    []
   end
 end

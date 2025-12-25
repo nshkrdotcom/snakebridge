@@ -1,0 +1,41 @@
+{
+  "category": "utilities",
+  "description": "SnakeBridge adapter for string",
+  "elixir_module": "SnakeBridge.String",
+  "functions": [
+    {
+      "args": [
+        "s",
+        "sep"
+      ],
+      "doc": "capwords(s [,sep]) -> string\n\nSplit the argument into words using split, capitalize each\nword using capitalize, and join the capitalized words using\njoin.  If the optional second argument sep is absen",
+      "name": "capwords",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "s",
+          "required": true
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "sep",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    }
+  ],
+  "name": "string",
+  "pypi_package": "string",
+  "python_module": "string",
+  "python_path_prefix": "string",
+  "status": "experimental",
+  "types": {
+    "s": "any",
+    "sep": "any"
+  },
+  "version": null
+}

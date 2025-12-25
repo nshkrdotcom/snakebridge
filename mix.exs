@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.3.1"
+  @version "0.3.2"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -41,7 +41,7 @@ defmodule SnakeBridge.MixProject do
 
   def application do
     [
-      extra_applications: [:logger, :crypto],
+      extra_applications: [:logger, :crypto, :inets, :ssl],
       mod: {SnakeBridge.Application, []}
     ]
   end
@@ -53,11 +53,16 @@ defmodule SnakeBridge.MixProject do
     [
       # Core dependencies
       # Optional for now during dev
-      {:snakepit, "~> 0.7.0"},
+      {:snakepit, "~> 0.7.1"},
       # For config schemas
       {:ecto, "~> 3.11"},
       # JSON encoding
       {:jason, "~> 1.4"},
+
+      # Optional AI SDKs for adapter.create task
+      # These enable AI-powered library analysis
+      {:claude_agent_sdk, "~> 0.6.9", optional: true},
+      {:codex_sdk, "~> 0.4", optional: true},
 
       # Development & Testing
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
@@ -128,6 +133,14 @@ defmodule SnakeBridge.MixProject do
           Mix.Tasks.Snakebridge.Diff,
           Mix.Tasks.Snakebridge.Generate,
           Mix.Tasks.Snakebridge.Clean
+        ],
+        "Adapter Creator": [
+          SnakeBridge.Adapter.Creator,
+          SnakeBridge.Adapter.AgentOrchestrator,
+          SnakeBridge.Adapter.Fetcher,
+          SnakeBridge.Adapter.Generator,
+          SnakeBridge.Adapter.Validator,
+          Mix.Tasks.Snakebridge.Adapter.Create
         ]
       ]
     ]

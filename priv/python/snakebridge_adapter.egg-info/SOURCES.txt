@@ -1,9 +1,4 @@
 setup.py
-bridges/__init__.py
-bridges/math_verify_bridge.py
-bridges/numpy_bridge.py
-bridges/pylatexenc_bridge.py
-bridges/sympy_bridge.py
 snakebridge_adapter/__init__.py
 snakebridge_adapter/adapter.py
 snakebridge_adapter/bridge_base.py

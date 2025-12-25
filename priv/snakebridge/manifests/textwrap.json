@@ -1,0 +1,161 @@
+{
+  "category": "utilities",
+  "description": "SnakeBridge adapter for textwrap",
+  "elixir_module": "SnakeBridge.Textwrap",
+  "functions": [
+    {
+      "args": [
+        "text"
+      ],
+      "doc": "Remove any common leading whitespace from every line in `text`.\n\nThis can be used to make triple-quoted strings line up with the left\nedge of the display, while still presenting them in the source cod",
+      "name": "dedent",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "text",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "text",
+        "width",
+        "kwargs"
+      ],
+      "doc": "Fill a single paragraph of text, returning a new string.\n\nReformat the single paragraph in 'text' to fit in lines of no more\nthan 'width' columns, and return a new string containing the entire\nwrapped",
+      "name": "fill",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "text",
+          "required": true
+        },
+        {
+          "default": "70",
+          "kind": "positional_or_keyword",
+          "name": "width",
+          "required": false
+        },
+        {
+          "default": null,
+          "kind": "var_keyword",
+          "name": "kwargs",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "text",
+        "prefix",
+        "predicate"
+      ],
+      "doc": "Adds 'prefix' to the beginning of selected lines in 'text'.\n\nIf 'predicate' is provided, 'prefix' will only be added to the lines\nwhere 'predicate(line)' is True. If 'predicate' is not provided,\nit wi",
+      "name": "indent",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "text",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "prefix",
+          "required": true
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "predicate",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "text",
+        "width",
+        "kwargs"
+      ],
+      "doc": "Collapse and truncate the given text to fit in the given width.\n\nThe text first has its whitespace collapsed.  If it then fits in\nthe *width*, it is returned as is.  Otherwise, as many words\nas possib",
+      "name": "shorten",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "text",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "width",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "var_keyword",
+          "name": "kwargs",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "text",
+        "width",
+        "kwargs"
+      ],
+      "doc": "Wrap a single paragraph of text, returning a list of wrapped lines.\n\nReformat the single paragraph in 'text' so it fits in lines of no\nmore than 'width' columns, and return a list of wrapped lines.  B",
+      "name": "wrap",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "text",
+          "required": true
+        },
+        {
+          "default": "70",
+          "kind": "positional_or_keyword",
+          "name": "width",
+          "required": false
+        },
+        {
+          "default": null,
+          "kind": "var_keyword",
+          "name": "kwargs",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    }
+  ],
+  "name": "textwrap",
+  "pypi_package": "textwrap",
+  "python_module": "textwrap",
+  "python_path_prefix": "textwrap",
+  "status": "experimental",
+  "types": {
+    "kwargs": "any",
+    "predicate": "any",
+    "prefix": "any",
+    "text": "any",
+    "width": "any"
+  },
+  "version": null
+}

@@ -12,6 +12,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - [ ] LSP server for config authoring
 - [ ] Auto-generated test suites from schemas
 
+## [0.3.2] - 2025-12-23
+
+### Added
+- **Zero-Friction Python Integration** - no manual setup required
+  - Python venv auto-created on first use
+  - Pip packages auto-installed from manifests
+  - Manifests auto-discovered and loaded (no config needed)
+  - PYTHONPATH configured internally
+- **Automated Adapter Creation** with `mix snakebridge.adapter.create`
+  - Two-phase approach: deterministic introspection first, agent fallback if needed
+  - Supports GitHub URLs, PyPI package names, and local paths
+  - Auto-generates manifest JSON and Python bridge files
+  - Auto-installs pip package after creation
+  - Filters to stateless functions (avoids file I/O, network, GUI, threading, etc.)
+- `SnakeBridge.Python.ensure_environment!/1` - auto-setup venv and core deps
+- `SnakeBridge.Python.ensure_package!/3` - install package if not present
+- `SnakeBridge.Adapter.Deterministic` module for fast, free adapter generation
+- `SnakeBridge.Adapter.CodingAgent` module for AI-assisted adapter generation
+- `SnakeBridge.Adapter.Fetcher` module for cloning libraries from GitHub/PyPI
+
+### Changed
+- Manifest loader defaults to `:all` (auto-scan) instead of requiring explicit config
+- `SnakepitLauncher` auto-creates venv if Python is available but venv doesn't exist
+- Introspector schema handling now supports both map and list formats
+- Bridge generation includes base64 encoding for bytes/bytearray types
+
+### Fixed
+- Schema parsing for libraries that return functions as maps instead of lists
+- Class method counting when classes are returned as tuples
+
 ## [0.3.1] - 2025-12-23
 
 ### Changed

@@ -81,23 +81,30 @@ defmodule SnakeBridge.SnakepitLauncher do
 
     python_exec =
       cond do
+        # Explicit python path takes precedence
         python = Keyword.get(opts, :python) ->
           python
 
+        # Config python_path
         config_python = Application.get_env(:snakebridge, :python_path) ->
           config_python
 
+        # Environment variable
         env_python = System.get_env("SNAKEPIT_PYTHON") ->
           env_python
 
+        # Venv exists - use it
         File.exists?(venv_python) ->
           venv_python
 
-        python = System.find_executable("python3") ->
+        # Auto-create venv if we can find a base Python
+        System.find_executable("python3") || System.find_executable("python") ->
+          # Auto-setup: create venv and install deps
+          {python, _pip} = Python.ensure_environment!(venv: venv_path, quiet: false)
           python
 
         true ->
-          raise "Python executable not found. Run mix snakebridge.setup or set SNAKEPIT_PYTHON."
+          raise "Python not found. Please install Python 3.8+ and ensure it's in PATH."
       end
 
     venv_used? = File.exists?(venv_python) and Path.expand(python_exec) == venv_python

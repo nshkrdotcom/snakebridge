@@ -16,6 +16,7 @@ SnakeBridge is a small, declarative layer on top of [Snakepit](https://hex.pm/pa
 
 ## Features
 
+- **Automated adapter creation** via `mix snakebridge.adapter.create` (two-phase: deterministic + agent fallback)
 - Data-only JSON manifests for curated, stateless Python functions
 - Built-in manifests for `sympy`, `pylatexenc`, and `math-verify`
 - Manifest allowlist enforcement (explicit `allow_unsafe: true` to bypass)
@@ -30,69 +31,32 @@ SnakeBridge is a small, declarative layer on top of [Snakepit](https://hex.pm/pa
 
 ## Installation
 
-### 1. Add to mix.exs
-
 ```elixir
+# mix.exs
 def deps do
   [
-    {:snakebridge, "~> 0.3.1"},
+    {:snakebridge, "~> 0.3.2"},
     {:snakepit, "~> 0.7.0"}
   ]
 end
 ```
 
-### 2. Install Elixir deps
-
 ```bash
 mix deps.get
 ```
 
-### 3. Python setup (required for real Python execution)
+**That's it.** Python environments are created and managed automatically on first use. No manual venv setup, no exports, no pip commands needed.
 
-SnakeBridge uses a Python adapter via Snakepit. For live Python calls, you need a venv and packages installed.
-
-```bash
-mix snakebridge.setup --venv .venv
-
-# Export environment for runtime (or let SnakepitLauncher resolve it)
-export SNAKEPIT_PYTHON=$(pwd)/.venv/bin/python3
-export PYTHONPATH=$(pwd)/priv/python:$(pwd)/priv/python/bridges:$(pwd)/deps/snakepit/priv/python:$PYTHONPATH
-```
-
-This installs:
-- Snakepit core requirements (gRPC, protobuf, numpy, telemetry)
-- SnakeBridge adapter
-- Built-in manifest libs (sympy, pylatexenc, math-verify)
-
-Docs:
-- Python setup: `docs/PYTHON_SETUP.md`
-- Example walkthrough: `examples/QUICKSTART.md`
-
-## Quick Start (Built-in Manifests)
-
-### Configure manifests
+## Quick Start
 
 ```elixir
-# config/config.exs
-config :snakebridge,
-  load: [:sympy, :pylatexenc, :math_verify],
-  custom_manifests: ["config/snakebridge/*.json"],
-  compilation_mode: :runtime,
-  auto_start_snakepit: true,
-  allow_unsafe: false,
-  python_path: ".venv/bin/python3",
-  pool_size: 4
-```
-
-SnakeBridge loads configured manifests at application start (unless `compilation_mode: :compile_time`).
-
-### Use the generated modules
-
-```elixir
+# Use built-in manifests immediately - no config needed
 {:ok, roots} = SnakeBridge.SymPy.solve(%{expr: "x**2 - 1", symbol: "x"})
 {:ok, nodes} = SnakeBridge.PyLatexEnc.parse(%{latex: "\\frac{1}{2}"})
 {:ok, ok?} = SnakeBridge.MathVerify.verify(%{gold: "x**2", answer: "x*x"})
 ```
+
+Built-in manifests (sympy, pylatexenc, math_verify) are auto-loaded. Python packages are auto-installed on first use.
 
 ## Allowlist and Unsafe Calls
 
@@ -226,9 +190,58 @@ List them:
 mix snakebridge.manifests
 ```
 
-## Creating a New Integration
+## Creating Adapters (Zero-Friction)
 
-Adding a new Python library integration requires **1-2 files**:
+Add any Python library with a single command:
+
+```bash
+mix snakebridge.adapter.create chardet
+```
+
+Then immediately use it:
+
+```elixir
+{:ok, result} = SnakeBridge.Chardet.detect(%{
+  byte_str: Base.encode64("Hello, 世界!"),
+  should_rename_legacy: false
+})
+# => {:ok, %{"confidence" => 0.75, "encoding" => "utf-8", "language" => ""}}
+```
+
+**That's it.** No venv setup, no pip install, no config editing. Everything is automatic:
+
+- Python venv created on first use
+- Pip packages installed automatically
+- Manifests auto-discovered and loaded
+- PYTHONPATH configured internally
+
+### How It Works
+
+The adapter creator uses a **two-phase approach**:
+
+1. **Phase 1: Deterministic** (fast, free)
+   - Introspects the Python library
+   - Filters to stateless functions
+   - Generates manifest + bridge
+   - Installs pip package
+
+2. **Phase 2: Agent Fallback** (if needed)
+   - Falls back to AI agent if Phase 1 fails
+   - Requires `claude_agent_sdk` or `codex_sdk`
+
+### Options
+
+```bash
+mix snakebridge.adapter.create chardet              # From PyPI
+mix snakebridge.adapter.create https://github.com/user/repo  # From GitHub
+mix snakebridge.adapter.create chardet --max-functions 10    # Limit functions
+mix snakebridge.adapter.create chardet --agent               # Force AI agent
+mix snakebridge.adapter.create --status                      # Show backends
+```
+
+## Creating Integrations Manually
+
+For full control, create the files manually:
 
 ### Minimal: Manifest Only (1 file)
 
@@ -264,16 +277,32 @@ config :snakebridge, load: [:my_library]
 
 ### With Bridge: Custom Serialization (2 files)
 
-If the library returns complex objects (custom classes, numpy arrays, etc.), add a bridge:
+If the library returns complex objects (custom classes, bytes, etc.), add a bridge:
 
 ```bash
 # priv/python/bridges/my_library_bridge.py
 ```
 
 ```python
+import base64
+import my_library
+
 def do_something(input):
     result = my_library.do_something(input)
-    return str(result)  # Or custom serialization
+    return _serialize(result)
+
+def _serialize(obj):
+    if obj is None:
+        return None
+    if isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, bytes):
+        return base64.b64encode(obj).decode('ascii')
+    if isinstance(obj, (list, tuple)):
+        return [_serialize(x) for x in obj]
+    if isinstance(obj, dict):
+        return {str(k): _serialize(v) for k, v in obj.items()}
+    return str(obj)
 ```
 
 Update manifest to point to bridge:
@@ -292,13 +321,19 @@ Update manifest to point to bridge:
 | Simple library (JSON-safe returns) | 1 | 0 | **1 file** |
 | Complex library (custom objects) | 1 | 1 | **2 files** |
 
-No changes needed to core SnakeBridge code, `_index.json`, catalogs, or adapters.
+No changes needed to core SnakeBridge code.
 
 ## Mix Tasks
 
 ```bash
 # Setup
 mix snakebridge.setup --venv .venv
+
+# Adapter Creation (NEW)
+mix snakebridge.adapter.create https://github.com/user/repo  # From GitHub
+mix snakebridge.adapter.create package_name                  # From PyPI
+mix snakebridge.adapter.create package_name --agent          # Force agent mode
+mix snakebridge.adapter.create --status                      # Show backends
 
 # Manifests
 mix snakebridge.manifest.validate priv/snakebridge/manifests/sympy.json

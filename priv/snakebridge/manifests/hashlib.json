@@ -1,0 +1,83 @@
+{
+  "category": "utilities",
+  "description": "SnakeBridge adapter for hashlib",
+  "elixir_module": "SnakeBridge.Hashlib",
+  "functions": [
+    {
+      "args": [
+        "fileobj",
+        "digest",
+        "_bufsize"
+      ],
+      "doc": "Hash the contents of a file-like object. Returns a digest object.\n\n*fileobj* must be a file-like object opened for reading in binary mode.\nIt accepts file objects from open(), io.BytesIO(), and Socket",
+      "name": "file_digest",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_only",
+          "name": "fileobj",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_only",
+          "name": "digest",
+          "required": true
+        },
+        {
+          "default": "262144",
+          "kind": "keyword_only",
+          "name": "_bufsize",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "name",
+        "data",
+        "kwargs"
+      ],
+      "doc": "new(name, data=b'') - Return a new hashing object using the named algorithm;\noptionally initialized with data (which must be a bytes-like object).",
+      "name": "new",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "name",
+          "required": true
+        },
+        {
+          "default": "b''",
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": false
+        },
+        {
+          "default": null,
+          "kind": "var_keyword",
+          "name": "kwargs",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    }
+  ],
+  "name": "hashlib",
+  "pypi_package": "hashlib",
+  "python_module": "hashlib",
+  "python_path_prefix": "bridges.hashlib_bridge",
+  "status": "experimental",
+  "types": {
+    "_bufsize": "any",
+    "data": "any",
+    "digest": "any",
+    "fileobj": "any",
+    "kwargs": "any",
+    "name": "any"
+  },
+  "version": null
+}

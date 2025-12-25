@@ -1,9 +1,15 @@
 defmodule SnakeBridge.Manifest.Loader do
   @moduledoc """
   Loads built-in and custom manifests and generates modules at runtime.
+
+  Zero-friction behavior: if no `:load` config is set, automatically loads
+  all manifests found in `priv/snakebridge/manifests/`. Also auto-installs
+  Python packages for each manifest.
   """
 
-  alias SnakeBridge.{Generator, Manifest}
+  require Logger
+
+  alias SnakeBridge.{Generator, Manifest, Python}
   alias SnakeBridge.Manifest.{Reader, Registry}
 
   @doc """
@@ -11,15 +17,20 @@ defmodule SnakeBridge.Manifest.Loader do
 
   ## Config
 
-  - `:load` - list of built-in manifest names or `:all`
+  - `:load` - list of built-in manifest names, `:all`, or omit for auto-scan
   - `:custom_manifests` - list of file globs for user manifests
+  - `:auto_install_packages` - install pip packages from manifests (default: true)
+
+  When `:load` is not set, defaults to `:all` (auto-scan all manifests).
   """
   @spec load_configured() :: {:ok, [module()]} | {:error, list()}
   def load_configured do
-    load_setting = Application.get_env(:snakebridge, :load, [])
+    # Default to :all if not configured (zero-friction)
+    load_setting = Application.get_env(:snakebridge, :load, :all)
     custom_paths = Application.get_env(:snakebridge, :custom_manifests, [])
+    auto_install? = Application.get_env(:snakebridge, :auto_install_packages, true)
 
-    load(load_setting, custom_paths)
+    load(load_setting, custom_paths, auto_install: auto_install?)
   end
 
   @doc """
@@ -42,9 +53,16 @@ defmodule SnakeBridge.Manifest.Loader do
   @doc """
   Load manifests by name and custom paths.
   """
-  @spec load(:all | [atom()], list() | String.t()) :: {:ok, [module()]} | {:error, list()}
-  def load(load_setting, custom_paths) do
+  @spec load(:all | [atom()], list() | String.t(), keyword()) ::
+          {:ok, [module()]} | {:error, list()}
+  def load(load_setting, custom_paths, opts \\ []) do
+    auto_install? = Keyword.get(opts, :auto_install, true)
     {files, builtin_errors} = resolve_manifest_files(load_setting, custom_paths)
+
+    # Auto-install pip packages before loading
+    if auto_install? and files != [] do
+      ensure_packages_installed(files)
+    end
 
     results = Enum.map(files, &load_file/1)
 
@@ -80,22 +98,53 @@ defmodule SnakeBridge.Manifest.Loader do
     end
   end
 
+  # Auto-install pip packages from manifests
+  defp ensure_packages_installed(manifest_files) do
+    packages =
+      manifest_files
+      |> Enum.map(&Reader.read_file/1)
+      |> Enum.flat_map(fn
+        {:ok, %{"pypi_package" => pkg}} when is_binary(pkg) and pkg != "" -> [pkg]
+        {:ok, %{pypi_package: pkg}} when is_binary(pkg) and pkg != "" -> [pkg]
+        _ -> []
+      end)
+      |> Enum.uniq()
+
+    if packages != [] do
+      try do
+        {python, _pip} = Python.ensure_environment!(quiet: true)
+
+        Enum.each(packages, fn pkg ->
+          Python.ensure_package!(python, pkg, quiet: true)
+        end)
+      rescue
+        e ->
+          Logger.warning("Failed to auto-install packages: #{Exception.message(e)}")
+      end
+    end
+  end
+
   @doc """
   Generate a simple manifest load report.
   """
   @spec report(:all | [atom()], [String.t()], [module()], list()) :: :ok
   def report(load_setting, files, modules, errors) do
-    require Logger
-
     cond do
       load_setting in [nil, [], false] ->
-        Logger.debug("SnakeBridge: no manifests configured to load")
+        Logger.debug("SnakeBridge: manifest loading disabled")
+
+      files == [] and load_setting == :all ->
+        # Silent when auto-scan finds nothing - this is fine
+        Logger.debug("SnakeBridge: no manifests found in priv/snakebridge/manifests/")
 
       files == [] ->
         Logger.warning("SnakeBridge: manifest load configured, but no files resolved")
 
       true ->
-        Logger.info("SnakeBridge: loaded manifests=#{length(files)} modules=#{length(modules)}")
+        Logger.info(
+          "SnakeBridge: loaded #{length(modules)} modules from #{length(files)} manifests"
+        )
+
         Logger.debug("SnakeBridge: generated modules=#{inspect(modules)}")
     end
 

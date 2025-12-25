@@ -1,0 +1,479 @@
+{
+  "category": "utilities",
+  "description": "SnakeBridge adapter for statistics",
+  "elixir_module": "SnakeBridge.Statistics",
+  "functions": [
+    {
+      "args": [
+        "x",
+        "y",
+        "method"
+      ],
+      "doc": "Pearson's correlation coefficient\n\nReturn the Pearson's correlation coefficient for two inputs. Pearson's\ncorrelation coefficient *r* takes values between -1 and +1. It measures\nthe strength and direc",
+      "name": "correlation",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_only",
+          "name": "x",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_only",
+          "name": "y",
+          "required": true
+        },
+        {
+          "default": "'linear'",
+          "kind": "keyword_only",
+          "name": "method",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "x",
+        "y"
+      ],
+      "doc": "Covariance\n\nReturn the sample covariance of two inputs *x* and *y*. Covariance\nis a measure of the joint variability of two inputs.\n\n>>> x = [1, 2, 3, 4, 5, 6, 7, 8, 9]\n>>> y = [1, 2, 3, 1, 2, 3, 1, 2",
+      "name": "covariance",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_only",
+          "name": "x",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_only",
+          "name": "y",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "data",
+        "weights"
+      ],
+      "doc": "Convert data to floats and compute the arithmetic mean.\n\nThis runs faster than the mean() function and it always returns a float.\nIf the input dataset is empty, it raises a StatisticsError.\n\n>>> fmean",
+      "name": "fmean",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "weights",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "data"
+      ],
+      "doc": "Convert data to floats and compute the geometric mean.\n\nRaises a StatisticsError if the input dataset is empty,\nif it contains a zero, or if it contains a negative value.\n\nNo special efforts are made ",
+      "name": "geometric_mean",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "data",
+        "weights"
+      ],
+      "doc": "Return the harmonic mean of data.\n\nThe harmonic mean is the reciprocal of the arithmetic mean of the\nreciprocals of the data.  It can be used for averaging ratios or\nrates, for example speeds.\n\nSuppos",
+      "name": "harmonic_mean",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "weights",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "x",
+        "y",
+        "proportional"
+      ],
+      "doc": "Slope and intercept for simple linear regression.\n\nReturn the slope and intercept of simple linear regression\nparameters estimated using ordinary least squares. Simple linear\nregression describes rela",
+      "name": "linear_regression",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_only",
+          "name": "x",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_only",
+          "name": "y",
+          "required": true
+        },
+        {
+          "default": "False",
+          "kind": "keyword_only",
+          "name": "proportional",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "data"
+      ],
+      "doc": "Return the sample arithmetic mean of data.\n\n>>> mean([1, 2, 3, 4, 4])\n2.8\n\n>>> from fractions import Fraction as F\n>>> mean([F(3, 7), F(1, 21), F(5, 3), F(1, 3)])\nFraction(13, 21)\n\n>>> from decimal im",
+      "name": "mean",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "data"
+      ],
+      "doc": "Return the median (middle value) of numeric data.\n\nWhen the number of data points is odd, return the middle data point.\nWhen the number of data points is even, the median is interpolated by\ntaking the",
+      "name": "median",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "data",
+        "interval"
+      ],
+      "doc": "Estimates the median for numeric data binned around the midpoints\nof consecutive, fixed-width intervals.\n\nThe *data* can be any iterable of numeric data with each value being\nexactly the midpoint of a",
+      "name": "median_grouped",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        },
+        {
+          "default": "1.0",
+          "kind": "positional_or_keyword",
+          "name": "interval",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "data"
+      ],
+      "doc": "Return the high median of data.\n\nWhen the number of data points is odd, the middle value is returned.\nWhen it is even, the larger of the two middle values is returned.\n\n>>> median_high([1, 3, 5])\n3\n>>",
+      "name": "median_high",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "data"
+      ],
+      "doc": "Return the low median of numeric data.\n\nWhen the number of data points is odd, the middle value is returned.\nWhen it is even, the smaller of the two middle values is returned.\n\n>>> median_low([1, 3, 5",
+      "name": "median_low",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "data"
+      ],
+      "doc": "Return the most common data point from discrete or nominal data.\n\n``mode`` assumes discrete data, and returns a single value. This is the\nstandard treatment of the mode as commonly taught in schools:\n",
+      "name": "mode",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "data"
+      ],
+      "doc": "Return a list of the most frequently occurring values.\n\nWill return more than one result if there are multiple modes\nor an empty list if *data* is empty.\n\n>>> multimode('aabbbbbbbbcc')\n['b']\n>>> multi",
+      "name": "multimode",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "typename",
+        "field_names",
+        "rename",
+        "defaults",
+        "module"
+      ],
+      "doc": "Returns a new subclass of tuple with named fields.\n\n>>> Point = namedtuple('Point', ['x', 'y'])\n>>> Point.__doc__                   # docstring for the new class\n'Point(x, y)'\n>>> p = Point(11, y=22) ",
+      "name": "namedtuple",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "typename",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "field_names",
+          "required": true
+        },
+        {
+          "default": "False",
+          "kind": "keyword_only",
+          "name": "rename",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "defaults",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "module",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "data",
+        "mu"
+      ],
+      "doc": "Return the square root of the population variance.\n\nSee ``pvariance`` for arguments and other details.\n\n>>> pstdev([1.5, 2.5, 2.5, 2.75, 3.25, 4.75])\n0.986893273527251",
+      "name": "pstdev",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "mu",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "data",
+        "mu"
+      ],
+      "doc": "Return the population variance of ``data``.\n\ndata should be a sequence or iterable of Real-valued numbers, with at least one\nvalue. The optional argument mu, if given, should be the mean of\nthe data. ",
+      "name": "pvariance",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "mu",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "data",
+        "n",
+        "method"
+      ],
+      "doc": "Divide *data* into *n* continuous intervals with equal probability.\n\nReturns a list of (n - 1) cut points separating the intervals.\n\nSet *n* to 4 for quartiles (the default).  Set *n* to 10 for decile",
+      "name": "quantiles",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        },
+        {
+          "default": "4",
+          "kind": "keyword_only",
+          "name": "n",
+          "required": false
+        },
+        {
+          "default": "'exclusive'",
+          "kind": "keyword_only",
+          "name": "method",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "data",
+        "xbar"
+      ],
+      "doc": "Return the square root of the sample variance.\n\nSee ``variance`` for arguments and other details.\n\n>>> stdev([1.5, 2.5, 2.5, 2.75, 3.25, 4.75])\n1.0810874155219827",
+      "name": "stdev",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "xbar",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "data",
+        "xbar"
+      ],
+      "doc": "Return the sample variance of data.\n\ndata should be an iterable of Real-valued numbers, with at least two\nvalues. The optional argument xbar, if given, should be the mean of\nthe data. If it is missing",
+      "name": "variance",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "data",
+          "required": true
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "xbar",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    }
+  ],
+  "name": "statistics",
+  "pypi_package": "statistics",
+  "python_module": "statistics",
+  "python_path_prefix": "statistics",
+  "status": "experimental",
+  "types": {
+    "data": "any",
+    "defaults": "any",
+    "field_names": "any",
+    "interval": "any",
+    "method": "any",
+    "module": "any",
+    "mu": "any",
+    "n": "any",
+    "proportional": "any",
+    "rename": "any",
+    "typename": "any",
+    "weights": "any",
+    "x": "any",
+    "xbar": "any",
+    "y": "any"
+  },
+  "version": null
+}

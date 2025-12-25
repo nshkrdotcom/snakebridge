@@ -1,0 +1,388 @@
+{
+  "category": "utilities",
+  "description": "SnakeBridge adapter for difflib",
+  "elixir_module": "SnakeBridge.Difflib",
+  "functions": [
+    {
+      "args": [
+        "ch",
+        "ws"
+      ],
+      "doc": "Return True for ignorable character: iff `ch` is a space or tab.\n\nExamples:\n\n>>> IS_CHARACTER_JUNK(' ')\nTrue\n>>> IS_CHARACTER_JUNK('\\t')\nTrue\n>>> IS_CHARACTER_JUNK('\\n')\nFalse\n>>> IS_CHARACTER_JUNK('x",
+      "name": "IS_CHARACTER_JUNK",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "ch",
+          "required": true
+        },
+        {
+          "default": "' \\t'",
+          "kind": "positional_or_keyword",
+          "name": "ws",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "line",
+        "pat"
+      ],
+      "doc": "Return True for ignorable line: iff `line` is blank or contains a single '#'.\n\nExamples:\n\n>>> IS_LINE_JUNK('\\n')\nTrue\n>>> IS_LINE_JUNK('  #   \\n')\nTrue\n>>> IS_LINE_JUNK('hello\\n')\nFalse",
+      "name": "IS_LINE_JUNK",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "line",
+          "required": true
+        },
+        {
+          "default": "<built-in method match of re.Pattern object at 0x7990219d9040>",
+          "kind": "positional_or_keyword",
+          "name": "pat",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "a",
+        "b",
+        "fromfile",
+        "tofile",
+        "fromfiledate",
+        "tofiledate",
+        "n",
+        "lineterm"
+      ],
+      "doc": "Compare two sequences of lines; generate the delta as a context diff.\n\nContext diffs are a compact way of showing line changes and a few\nlines of context.  The number of context lines is set by 'n' wh",
+      "name": "context_diff",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "a",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "b",
+          "required": true
+        },
+        {
+          "default": "''",
+          "kind": "positional_or_keyword",
+          "name": "fromfile",
+          "required": false
+        },
+        {
+          "default": "''",
+          "kind": "positional_or_keyword",
+          "name": "tofile",
+          "required": false
+        },
+        {
+          "default": "''",
+          "kind": "positional_or_keyword",
+          "name": "fromfiledate",
+          "required": false
+        },
+        {
+          "default": "''",
+          "kind": "positional_or_keyword",
+          "name": "tofiledate",
+          "required": false
+        },
+        {
+          "default": "3",
+          "kind": "positional_or_keyword",
+          "name": "n",
+          "required": false
+        },
+        {
+          "default": "'\\n'",
+          "kind": "positional_or_keyword",
+          "name": "lineterm",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "dfunc",
+        "a",
+        "b",
+        "fromfile",
+        "tofile",
+        "fromfiledate",
+        "tofiledate",
+        "n",
+        "lineterm"
+      ],
+      "doc": "Compare `a` and `b`, two sequences of lines represented as bytes rather\nthan str. This is a wrapper for `dfunc`, which is typically either\nunified_diff() or context_diff(). Inputs are losslessly conve",
+      "name": "diff_bytes",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "dfunc",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "a",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "b",
+          "required": true
+        },
+        {
+          "default": "b''",
+          "kind": "positional_or_keyword",
+          "name": "fromfile",
+          "required": false
+        },
+        {
+          "default": "b''",
+          "kind": "positional_or_keyword",
+          "name": "tofile",
+          "required": false
+        },
+        {
+          "default": "b''",
+          "kind": "positional_or_keyword",
+          "name": "fromfiledate",
+          "required": false
+        },
+        {
+          "default": "b''",
+          "kind": "positional_or_keyword",
+          "name": "tofiledate",
+          "required": false
+        },
+        {
+          "default": "3",
+          "kind": "positional_or_keyword",
+          "name": "n",
+          "required": false
+        },
+        {
+          "default": "b'\\n'",
+          "kind": "positional_or_keyword",
+          "name": "lineterm",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "word",
+        "possibilities",
+        "n",
+        "cutoff"
+      ],
+      "doc": "Use SequenceMatcher to return list of the best \"good enough\" matches.\n\nword is a sequence for which close matches are desired (typically a\nstring).\n\npossibilities is a list of sequences against which ",
+      "name": "get_close_matches",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "word",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "possibilities",
+          "required": true
+        },
+        {
+          "default": "3",
+          "kind": "positional_or_keyword",
+          "name": "n",
+          "required": false
+        },
+        {
+          "default": "0.6",
+          "kind": "positional_or_keyword",
+          "name": "cutoff",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "a",
+        "b",
+        "linejunk",
+        "charjunk"
+      ],
+      "doc": "Compare `a` and `b` (lists of strings); return a `Differ`-style delta.\n\nOptional keyword parameters `linejunk` and `charjunk` are for filter\nfunctions, or can be None:\n\n- linejunk: A function that sho",
+      "name": "ndiff",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "a",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "b",
+          "required": true
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "linejunk",
+          "required": false
+        },
+        {
+          "default": "<function IS_CHARACTER_JUNK at 0x7990219f77e0>",
+          "kind": "positional_or_keyword",
+          "name": "charjunk",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "delta",
+        "which"
+      ],
+      "doc": "Generate one of the two sequences that generated a delta.\n\nGiven a `delta` produced by `Differ.compare()` or `ndiff()`, extract\nlines originating from file 1 or 2 (parameter `which`), stripping off li",
+      "name": "restore",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "delta",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "which",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "a",
+        "b",
+        "fromfile",
+        "tofile",
+        "fromfiledate",
+        "tofiledate",
+        "n",
+        "lineterm"
+      ],
+      "doc": "Compare two sequences of lines; generate the delta as a unified diff.\n\nUnified diffs are a compact way of showing line changes and a few\nlines of context.  The number of context lines is set by 'n' wh",
+      "name": "unified_diff",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "a",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "b",
+          "required": true
+        },
+        {
+          "default": "''",
+          "kind": "positional_or_keyword",
+          "name": "fromfile",
+          "required": false
+        },
+        {
+          "default": "''",
+          "kind": "positional_or_keyword",
+          "name": "tofile",
+          "required": false
+        },
+        {
+          "default": "''",
+          "kind": "positional_or_keyword",
+          "name": "fromfiledate",
+          "required": false
+        },
+        {
+          "default": "''",
+          "kind": "positional_or_keyword",
+          "name": "tofiledate",
+          "required": false
+        },
+        {
+          "default": "3",
+          "kind": "positional_or_keyword",
+          "name": "n",
+          "required": false
+        },
+        {
+          "default": "'\\n'",
+          "kind": "positional_or_keyword",
+          "name": "lineterm",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    }
+  ],
+  "name": "difflib",
+  "pypi_package": "difflib",
+  "python_module": "difflib",
+  "python_path_prefix": "bridges.difflib_bridge",
+  "status": "experimental",
+  "types": {
+    "a": "any",
+    "b": "any",
+    "ch": "any",
+    "charjunk": "any",
+    "cutoff": "any",
+    "delta": "any",
+    "dfunc": "any",
+    "fromfile": "any",
+    "fromfiledate": "any",
+    "line": "any",
+    "linejunk": "any",
+    "lineterm": "any",
+    "n": "any",
+    "pat": "any",
+    "possibilities": "any",
+    "tofile": "any",
+    "tofiledate": "any",
+    "which": "any",
+    "word": "any",
+    "ws": "any"
+  },
+  "version": null
+}

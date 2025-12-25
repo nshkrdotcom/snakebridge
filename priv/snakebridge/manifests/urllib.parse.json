@@ -1,0 +1,768 @@
+{
+  "category": "utilities",
+  "description": "SnakeBridge adapter for urllib.parse",
+  "elixir_module": "SnakeBridge.UrllibParse",
+  "functions": [
+    {
+      "args": [],
+      "doc": "Clear internal performance caches. Undocumented; some tests want it.",
+      "name": "clear_cache",
+      "params": [],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "typename",
+        "field_names",
+        "rename",
+        "defaults",
+        "module"
+      ],
+      "doc": "Returns a new subclass of tuple with named fields.\n\n>>> Point = namedtuple('Point', ['x', 'y'])\n>>> Point.__doc__                   # docstring for the new class\n'Point(x, y)'\n>>> p = Point(11, y=22) ",
+      "name": "namedtuple",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "typename",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "field_names",
+          "required": true
+        },
+        {
+          "default": "False",
+          "kind": "keyword_only",
+          "name": "rename",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "defaults",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "module",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "qs",
+        "keep_blank_values",
+        "strict_parsing",
+        "encoding",
+        "errors",
+        "max_num_fields",
+        "separator"
+      ],
+      "doc": "Parse a query given as a string argument.\n\nArguments:\n\nqs: percent-encoded query string to be parsed\n\nkeep_blank_values: flag indicating whether blank values in\n    percent-encoded queries should be t",
+      "name": "parse_qs",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "qs",
+          "required": true
+        },
+        {
+          "default": "False",
+          "kind": "positional_or_keyword",
+          "name": "keep_blank_values",
+          "required": false
+        },
+        {
+          "default": "False",
+          "kind": "positional_or_keyword",
+          "name": "strict_parsing",
+          "required": false
+        },
+        {
+          "default": "'utf-8'",
+          "kind": "positional_or_keyword",
+          "name": "encoding",
+          "required": false
+        },
+        {
+          "default": "'replace'",
+          "kind": "positional_or_keyword",
+          "name": "errors",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "max_num_fields",
+          "required": false
+        },
+        {
+          "default": "'&'",
+          "kind": "positional_or_keyword",
+          "name": "separator",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "qs",
+        "keep_blank_values",
+        "strict_parsing",
+        "encoding",
+        "errors",
+        "max_num_fields",
+        "separator"
+      ],
+      "doc": "Parse a query given as a string argument.\n\nArguments:\n\nqs: percent-encoded query string to be parsed\n\nkeep_blank_values: flag indicating whether blank values in\n    percent-encoded queries should be t",
+      "name": "parse_qsl",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "qs",
+          "required": true
+        },
+        {
+          "default": "False",
+          "kind": "positional_or_keyword",
+          "name": "keep_blank_values",
+          "required": false
+        },
+        {
+          "default": "False",
+          "kind": "positional_or_keyword",
+          "name": "strict_parsing",
+          "required": false
+        },
+        {
+          "default": "'utf-8'",
+          "kind": "positional_or_keyword",
+          "name": "encoding",
+          "required": false
+        },
+        {
+          "default": "'replace'",
+          "kind": "positional_or_keyword",
+          "name": "errors",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "max_num_fields",
+          "required": false
+        },
+        {
+          "default": "'&'",
+          "kind": "positional_or_keyword",
+          "name": "separator",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "string",
+        "safe",
+        "encoding",
+        "errors"
+      ],
+      "doc": "quote('abc def') -> 'abc%20def'\n\nEach part of a URL, e.g. the path info, the query, etc., has a\ndifferent set of reserved characters that must be quoted. The\nquote function offers a cautious (not mini",
+      "name": "quote",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "string",
+          "required": true
+        },
+        {
+          "default": "'/'",
+          "kind": "positional_or_keyword",
+          "name": "safe",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "encoding",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "errors",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "bs",
+        "safe"
+      ],
+      "doc": "Like quote(), but accepts a bytes object rather than a str, and does\nnot perform string-to-bytes encoding.  It always returns an ASCII string.\nquote_from_bytes(b'abc def?') -> 'abc%20def%3f'",
+      "name": "quote_from_bytes",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "bs",
+          "required": true
+        },
+        {
+          "default": "'/'",
+          "kind": "positional_or_keyword",
+          "name": "safe",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "string",
+        "safe",
+        "encoding",
+        "errors"
+      ],
+      "doc": "Like quote(), but also replace ' ' with '+', as required for quoting\nHTML form values. Plus signs in the original string are escaped unless\nthey are included in safe. It also does not have safe defaul",
+      "name": "quote_plus",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "string",
+          "required": true
+        },
+        {
+          "default": "''",
+          "kind": "positional_or_keyword",
+          "name": "safe",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "encoding",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "errors",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "url"
+      ],
+      "doc": "",
+      "name": "splitattr",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "url",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "url"
+      ],
+      "doc": "",
+      "name": "splithost",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "url",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "host",
+        "defport"
+      ],
+      "doc": "",
+      "name": "splitnport",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "host",
+          "required": true
+        },
+        {
+          "default": "-1",
+          "kind": "positional_or_keyword",
+          "name": "defport",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "user"
+      ],
+      "doc": "",
+      "name": "splitpasswd",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "user",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "host"
+      ],
+      "doc": "",
+      "name": "splitport",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "host",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "url"
+      ],
+      "doc": "",
+      "name": "splitquery",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "url",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "url"
+      ],
+      "doc": "",
+      "name": "splittag",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "url",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "url"
+      ],
+      "doc": "",
+      "name": "splittype",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "url",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "host"
+      ],
+      "doc": "",
+      "name": "splituser",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "host",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "attr"
+      ],
+      "doc": "",
+      "name": "splitvalue",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "attr",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "url"
+      ],
+      "doc": "",
+      "name": "to_bytes",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "url",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "string",
+        "encoding",
+        "errors"
+      ],
+      "doc": "Replace %xx escapes by their single-character equivalent. The optional\nencoding and errors parameters specify how to decode percent-encoded\nsequences into Unicode characters, as accepted by the bytes.",
+      "name": "unquote",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "string",
+          "required": true
+        },
+        {
+          "default": "'utf-8'",
+          "kind": "positional_or_keyword",
+          "name": "encoding",
+          "required": false
+        },
+        {
+          "default": "'replace'",
+          "kind": "positional_or_keyword",
+          "name": "errors",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "string",
+        "encoding",
+        "errors"
+      ],
+      "doc": "Like unquote(), but also replace plus signs by spaces, as required for\nunquoting HTML form values.\n\nunquote_plus('%7e/abc+def') -> '~/abc def'",
+      "name": "unquote_plus",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "string",
+          "required": true
+        },
+        {
+          "default": "'utf-8'",
+          "kind": "positional_or_keyword",
+          "name": "encoding",
+          "required": false
+        },
+        {
+          "default": "'replace'",
+          "kind": "positional_or_keyword",
+          "name": "errors",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "string"
+      ],
+      "doc": "unquote_to_bytes('abc%20def') -> b'abc def'.",
+      "name": "unquote_to_bytes",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "string",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "url"
+      ],
+      "doc": "Transform a string like '<URL:scheme://host/path>' into 'scheme://host/path'.\n\nThe string is returned unchanged if it's not a wrapped URL.",
+      "name": "unwrap",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "url",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "url"
+      ],
+      "doc": "Removes any existing fragment from URL.\n\nReturns a tuple of the defragmented URL and the fragment.  If\nthe URL contained no fragments, the second element is the\nempty string.",
+      "name": "urldefrag",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "url",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "query",
+        "doseq",
+        "safe",
+        "encoding",
+        "errors",
+        "quote_via"
+      ],
+      "doc": "Encode a dict or sequence of two-element tuples into a URL query string.\n\nIf any values in the query arg are sequences and doseq is true, each\nsequence element is converted to a separate parameter.\n\nI",
+      "name": "urlencode",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "query",
+          "required": true
+        },
+        {
+          "default": "False",
+          "kind": "positional_or_keyword",
+          "name": "doseq",
+          "required": false
+        },
+        {
+          "default": "''",
+          "kind": "positional_or_keyword",
+          "name": "safe",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "encoding",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "positional_or_keyword",
+          "name": "errors",
+          "required": false
+        },
+        {
+          "default": "<function quote_plus at 0x79902ae674c0>",
+          "kind": "positional_or_keyword",
+          "name": "quote_via",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "base",
+        "url",
+        "allow_fragments"
+      ],
+      "doc": "Join a base URL and a possibly relative URL to form an absolute\ninterpretation of the latter.",
+      "name": "urljoin",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "base",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "url",
+          "required": true
+        },
+        {
+          "default": "True",
+          "kind": "positional_or_keyword",
+          "name": "allow_fragments",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "url",
+        "scheme",
+        "allow_fragments"
+      ],
+      "doc": "Parse a URL into 6 components:\n<scheme>://<netloc>/<path>;<params>?<query>#<fragment>\n\nThe result is a named 6-tuple with fields corresponding to the\nabove. It is either a ParseResult or ParseResultBy",
+      "name": "urlparse",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "url",
+          "required": true
+        },
+        {
+          "default": "''",
+          "kind": "positional_or_keyword",
+          "name": "scheme",
+          "required": false
+        },
+        {
+          "default": "True",
+          "kind": "positional_or_keyword",
+          "name": "allow_fragments",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "components"
+      ],
+      "doc": "Put a parsed URL back together again.  This may result in a\nslightly different, but equivalent URL, if the URL that was parsed\noriginally had redundant delimiters, e.g. a ? with an empty query\n(the dr",
+      "name": "urlunparse",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "components",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "components"
+      ],
+      "doc": "Combine the elements of a tuple as returned by urlsplit() into a\ncomplete URL as a string. The data argument can be any five-item iterable.\nThis may result in a slightly different, but equivalent URL,",
+      "name": "urlunsplit",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "components",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    }
+  ],
+  "name": "urllib.parse",
+  "pypi_package": "urllib",
+  "python_module": "urllib.parse",
+  "python_path_prefix": "bridges.urllib_parse_bridge",
+  "status": "experimental",
+  "types": {
+    "allow_fragments": "any",
+    "attr": "any",
+    "base": "any",
+    "bs": "any",
+    "components": "any",
+    "defaults": "any",
+    "defport": "any",
+    "doseq": "any",
+    "encoding": "any",
+    "errors": "any",
+    "field_names": "any",
+    "host": "any",
+    "keep_blank_values": "any",
+    "max_num_fields": "any",
+    "module": "any",
+    "qs": "any",
+    "query": "any",
+    "quote_via": "any",
+    "rename": "any",
+    "safe": "any",
+    "scheme": "any",
+    "separator": "any",
+    "strict_parsing": "any",
+    "string": "any",
+    "typename": "any",
+    "url": "any",
+    "user": "any"
+  },
+  "version": null
+}

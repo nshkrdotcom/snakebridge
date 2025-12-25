@@ -1,0 +1,364 @@
+{
+  "category": "utilities",
+  "description": "SnakeBridge adapter for json",
+  "elixir_module": "SnakeBridge.Json",
+  "functions": [
+    {
+      "args": [
+        "b"
+      ],
+      "doc": "",
+      "name": "detect_encoding",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "b",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "obj",
+        "fp",
+        "skipkeys",
+        "ensure_ascii",
+        "check_circular",
+        "allow_nan",
+        "cls",
+        "indent",
+        "separators",
+        "default",
+        "sort_keys",
+        "kw"
+      ],
+      "doc": "Serialize ``obj`` as a JSON formatted stream to ``fp`` (a\n``.write()``-supporting file-like object).\n\nIf ``skipkeys`` is true then ``dict`` keys that are not basic types\n(``str``, ``int``, ``float``, ",
+      "name": "dump",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "obj",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "fp",
+          "required": true
+        },
+        {
+          "default": "False",
+          "kind": "keyword_only",
+          "name": "skipkeys",
+          "required": false
+        },
+        {
+          "default": "True",
+          "kind": "keyword_only",
+          "name": "ensure_ascii",
+          "required": false
+        },
+        {
+          "default": "True",
+          "kind": "keyword_only",
+          "name": "check_circular",
+          "required": false
+        },
+        {
+          "default": "True",
+          "kind": "keyword_only",
+          "name": "allow_nan",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "cls",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "indent",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "separators",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "default",
+          "required": false
+        },
+        {
+          "default": "False",
+          "kind": "keyword_only",
+          "name": "sort_keys",
+          "required": false
+        },
+        {
+          "default": null,
+          "kind": "var_keyword",
+          "name": "kw",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "obj",
+        "skipkeys",
+        "ensure_ascii",
+        "check_circular",
+        "allow_nan",
+        "cls",
+        "indent",
+        "separators",
+        "default",
+        "sort_keys",
+        "kw"
+      ],
+      "doc": "Serialize ``obj`` to a JSON formatted ``str``.\n\nIf ``skipkeys`` is true then ``dict`` keys that are not basic types\n(``str``, ``int``, ``float``, ``bool``, ``None``) will be skipped\ninstead of raising",
+      "name": "dumps",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "obj",
+          "required": true
+        },
+        {
+          "default": "False",
+          "kind": "keyword_only",
+          "name": "skipkeys",
+          "required": false
+        },
+        {
+          "default": "True",
+          "kind": "keyword_only",
+          "name": "ensure_ascii",
+          "required": false
+        },
+        {
+          "default": "True",
+          "kind": "keyword_only",
+          "name": "check_circular",
+          "required": false
+        },
+        {
+          "default": "True",
+          "kind": "keyword_only",
+          "name": "allow_nan",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "cls",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "indent",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "separators",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "default",
+          "required": false
+        },
+        {
+          "default": "False",
+          "kind": "keyword_only",
+          "name": "sort_keys",
+          "required": false
+        },
+        {
+          "default": null,
+          "kind": "var_keyword",
+          "name": "kw",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "fp",
+        "cls",
+        "object_hook",
+        "parse_float",
+        "parse_int",
+        "parse_constant",
+        "object_pairs_hook",
+        "kw"
+      ],
+      "doc": "Deserialize ``fp`` (a ``.read()``-supporting file-like object containing\na JSON document) to a Python object.\n\n``object_hook`` is an optional function that will be called with the\nresult of any object",
+      "name": "load",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "fp",
+          "required": true
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "cls",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "object_hook",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "parse_float",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "parse_int",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "parse_constant",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "object_pairs_hook",
+          "required": false
+        },
+        {
+          "default": null,
+          "kind": "var_keyword",
+          "name": "kw",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "s",
+        "cls",
+        "object_hook",
+        "parse_float",
+        "parse_int",
+        "parse_constant",
+        "object_pairs_hook",
+        "kw"
+      ],
+      "doc": "Deserialize ``s`` (a ``str``, ``bytes`` or ``bytearray`` instance\ncontaining a JSON document) to a Python object.\n\n``object_hook`` is an optional function that will be called with the\nresult of any ob",
+      "name": "loads",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "s",
+          "required": true
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "cls",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "object_hook",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "parse_float",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "parse_int",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "parse_constant",
+          "required": false
+        },
+        {
+          "default": "None",
+          "kind": "keyword_only",
+          "name": "object_pairs_hook",
+          "required": false
+        },
+        {
+          "default": null,
+          "kind": "var_keyword",
+          "name": "kw",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    }
+  ],
+  "name": "json",
+  "pypi_package": "json",
+  "python_module": "json",
+  "python_path_prefix": "bridges.json_bridge",
+  "status": "experimental",
+  "types": {
+    "allow_nan": "any",
+    "b": "any",
+    "check_circular": "any",
+    "cls": "any",
+    "default": "any",
+    "ensure_ascii": "any",
+    "fp": "any",
+    "indent": "any",
+    "kw": "any",
+    "obj": "any",
+    "object_hook": "any",
+    "object_pairs_hook": "any",
+    "parse_constant": "any",
+    "parse_float": "any",
+    "parse_int": "any",
+    "s": "any",
+    "separators": "any",
+    "skipkeys": "any",
+    "sort_keys": "any"
+  },
+  "version": null
+}

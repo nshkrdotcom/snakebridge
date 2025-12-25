@@ -1,0 +1,377 @@
+{
+  "category": "utilities",
+  "description": "SnakeBridge adapter for re",
+  "elixir_module": "SnakeBridge.Re",
+  "functions": [
+    {
+      "args": [
+        "pattern",
+        "flags"
+      ],
+      "doc": "Compile a regular expression pattern, returning a Pattern object.",
+      "name": "compile",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "pattern",
+          "required": true
+        },
+        {
+          "default": "0",
+          "kind": "positional_or_keyword",
+          "name": "flags",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    },
+    {
+      "args": [
+        "pattern"
+      ],
+      "doc": "Escape special characters in a string.",
+      "name": "escape",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "pattern",
+          "required": true
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "pattern",
+        "string",
+        "flags"
+      ],
+      "doc": "Return a list of all non-overlapping matches in the string.\n\nIf one or more capturing groups are present in the pattern, return\na list of groups; this will be a list of tuples if the pattern\nhas more ",
+      "name": "findall",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "pattern",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "string",
+          "required": true
+        },
+        {
+          "default": "0",
+          "kind": "positional_or_keyword",
+          "name": "flags",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "pattern",
+        "string",
+        "flags"
+      ],
+      "doc": "Return an iterator over all non-overlapping matches in the\nstring.  For each match, the iterator returns a Match object.\n\nEmpty matches are included in the result.",
+      "name": "finditer",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "pattern",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "string",
+          "required": true
+        },
+        {
+          "default": "0",
+          "kind": "positional_or_keyword",
+          "name": "flags",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "pattern",
+        "string",
+        "flags"
+      ],
+      "doc": "Try to apply the pattern to all of the string, returning\na Match object, or None if no match was found.",
+      "name": "fullmatch",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "pattern",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "string",
+          "required": true
+        },
+        {
+          "default": "0",
+          "kind": "positional_or_keyword",
+          "name": "flags",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "pattern",
+        "string",
+        "flags"
+      ],
+      "doc": "Try to apply the pattern at the start of the string, returning\na Match object, or None if no match was found.",
+      "name": "match",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "pattern",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "string",
+          "required": true
+        },
+        {
+          "default": "0",
+          "kind": "positional_or_keyword",
+          "name": "flags",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [],
+      "doc": "Clear the regular expression caches",
+      "name": "purge",
+      "params": [],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "pattern",
+        "string",
+        "flags"
+      ],
+      "doc": "Scan through string looking for a match to the pattern, returning\na Match object, or None if no match was found.",
+      "name": "search",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "pattern",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "string",
+          "required": true
+        },
+        {
+          "default": "0",
+          "kind": "positional_or_keyword",
+          "name": "flags",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "pattern",
+        "string",
+        "maxsplit",
+        "flags"
+      ],
+      "doc": "Split the source string by the occurrences of the pattern,\nreturning a list containing the resulting substrings.  If\ncapturing parentheses are used in pattern, then the text of all\ngroups in the patte",
+      "name": "split",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "pattern",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "string",
+          "required": true
+        },
+        {
+          "default": "0",
+          "kind": "positional_or_keyword",
+          "name": "maxsplit",
+          "required": false
+        },
+        {
+          "default": "0",
+          "kind": "positional_or_keyword",
+          "name": "flags",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "pattern",
+        "repl",
+        "string",
+        "count",
+        "flags"
+      ],
+      "doc": "Return the string obtained by replacing the leftmost\nnon-overlapping occurrences of the pattern in string by the\nreplacement repl.  repl can be either a string or a callable;\nif a string, backslash es",
+      "name": "sub",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "pattern",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "repl",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "string",
+          "required": true
+        },
+        {
+          "default": "0",
+          "kind": "positional_or_keyword",
+          "name": "count",
+          "required": false
+        },
+        {
+          "default": "0",
+          "kind": "positional_or_keyword",
+          "name": "flags",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "pattern",
+        "repl",
+        "string",
+        "count",
+        "flags"
+      ],
+      "doc": "Return a 2-tuple containing (new_string, number).\nnew_string is the string obtained by replacing the leftmost\nnon-overlapping occurrences of the pattern in the source\nstring by the replacement repl.  ",
+      "name": "subn",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "pattern",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "repl",
+          "required": true
+        },
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "string",
+          "required": true
+        },
+        {
+          "default": "0",
+          "kind": "positional_or_keyword",
+          "name": "count",
+          "required": false
+        },
+        {
+          "default": "0",
+          "kind": "positional_or_keyword",
+          "name": "flags",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": true
+    },
+    {
+      "args": [
+        "pattern",
+        "flags"
+      ],
+      "doc": "Compile a template pattern, returning a Pattern object, deprecated",
+      "name": "template",
+      "params": [
+        {
+          "default": null,
+          "kind": "positional_or_keyword",
+          "name": "pattern",
+          "required": true
+        },
+        {
+          "default": "0",
+          "kind": "positional_or_keyword",
+          "name": "flags",
+          "required": false
+        }
+      ],
+      "returns": "any",
+      "stateless": false
+    }
+  ],
+  "name": "re",
+  "pypi_package": "re",
+  "python_module": "re",
+  "python_path_prefix": "re",
+  "status": "experimental",
+  "types": {
+    "count": "any",
+    "flags": "any",
+    "maxsplit": "any",
+    "pattern": "any",
+    "repl": "any",
+    "string": "any"
+  },
+  "version": null
+}

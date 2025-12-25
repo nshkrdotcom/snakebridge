@@ -5,15 +5,19 @@ This plan assumes a staged rollout with high-value features first.
 ## Phase 0: Alignment (Now)
 
 - Finalize config schema in mix.exs
-- Define manifest and ledger format
+- Pick the canonical execution model (deterministic prepass)
+- Define lockfile format and environment identity
+- Define manifest/ledger formats and file locking rules
 - Lock down file locations and cache strategy
 
 ## Phase 1: Lazy Generation MVP
 
 - AST scanner for symbol usage
+- Stub module generation
 - Incremental generator updates
-- Manifest storage per library
+- Deterministic `snakebridge.lock` updates
 - `mix snakepit.prune` (manual only)
+- `mix snakepit.promote_ledger` (manual ledger promotion)
 
 **Success criteria**: For SymPy, initial compile produces a few dozen files, not thousands.
 
@@ -39,4 +43,4 @@ This plan assumes a staged rollout with high-value features first.
 - Agent-first APIs for programmatic usage
 - Per-library pool tuning
 - Multi-project cache sharing
-
+- Experimental tracer (only if it can be made deterministic)

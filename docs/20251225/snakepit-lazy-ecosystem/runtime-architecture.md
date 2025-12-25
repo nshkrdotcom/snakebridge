@@ -13,6 +13,7 @@ Snakepit starts automatically and is invisible to the developer by default. User
 3. Python environment is created or reused.
 4. Workers are started with the correct library set.
 5. Generated adapters call `Snakepit.execute/3`.
+6. Optional runtime ledger records dynamic calls in dev.
 
 ## Runtime API
 
@@ -28,6 +29,19 @@ end
 ```
 
 `__python_call__` resolves to a Snakepit client call that uses the current library context.
+
+## Dynamic Dispatch
+
+Dynamic calls are explicit:
+
+```
+Snakepit.dynamic_call(:sympy, :integrate, [expr, x])
+```
+
+- In dev, dynamic calls can be recorded to a ledger.
+- In CI/prod, `strict: true` disables dynamic generation and requires adapters to exist.
+
+To promote ledger entries into real adapters, run `mix snakepit.promote_ledger`.
 
 ## Pooling and Performance
 
@@ -56,4 +70,4 @@ For teams that need it:
 - Optional sandboxed worker mode for untrusted code
 - Strict dependency pinning for production
 - Hash-based validation of metadata and adapters
-
+- `strict: true` enables offline builds with no runtime generation

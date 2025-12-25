@@ -17,6 +17,15 @@ Large Python libraries make full docs generation slow and noisy. The new system 
 
 The docs portal is a minimal ExDoc site with dynamic links to cached pages.
 
+## Source of Truth
+
+Docs can come from two sources:
+
+- **Metadata snapshot** (default): deterministic, CI-friendly, no Python needed
+- **Live Python** (dev-only): freshest docstrings, may vary by environment
+
+The default `docs_source: :metadata` avoids non-deterministic output. Developers can opt into live docs in dev via `docs_source: :python` or `:hybrid`.
+
 ## User Interfaces
 
 ### IEx
@@ -79,4 +88,3 @@ The search index is lightweight and built quickly, even for large libraries.
 - `mix docs` should only document Snakepit and Snakebridge core modules
 - Library docs live in `doc/snakepit/`
 - A link from the main ExDoc homepage points to the Snakepit docs portal
-

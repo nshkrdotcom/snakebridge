@@ -6,11 +6,11 @@
 
 The previous architecture attempted to mirror entire Python libraries into Elixir adapters and full documentation. That is a powerful idea, but it breaks down at scale. SymPy alone can generate thousands of modules and tens of thousands of docs. Generating everything up front is the wrong default.
 
-The new vision is an **elastic bridge**:
+The new vision is an **elastic bridge** with a deterministic core:
 
 - It starts light and precise, only building what you actually use.
 - It grows as your usage grows, and never shrinks unless you ask.
-- It keeps tooling benefits by generating real `.ex` source files.
+- It keeps tooling benefits by generating real `.ex` source files before compilation.
 
 ## Why This Matters (Product View)
 
@@ -20,10 +20,10 @@ AI and ML teams need three things at once:
 2. **Repeatable builds**: they need deterministic outcomes and versioned adapters.
 3. **Exploration at speed**: they need instant access to docs and discovery.
 
-The lazy architecture hits all three:
+The lazy architecture hits all three, but only if the execution model stays deterministic:
 
 - Minimal initial generation keeps iteration fast.
-- Cached generation and pinned versions keep builds stable.
+- Cached generation, lockfiles, and pinned versions keep builds stable.
 - On-demand docs keep exploration fast without building everything.
 
 ## The Innovation Signals
@@ -44,9 +44,9 @@ The best UX is a 2-line change:
  snakebridge: [libraries: [sympy: "1.12", numpy: "1.26"], docs: :on_demand]}
 ```
 
-From there, everything feels automatic:
+From there, everything feels automatic and repeatable:
 
-- `mix compile` detects used symbols and generates adapters.
+- `mix compile` runs a prepass that detects used symbols and generates adapters.
 - `Sympy.__functions__/0` and `Sympy.__search__/1` let you explore.
 - `mix snakepit.docs sympy.integrate` gives a full HTML page on demand.
 
@@ -55,14 +55,15 @@ From there, everything feels automatic:
 - We do not generate an entire library just to produce docs.
 - We do not require users to create Python venvs or run pip manually.
 - We do not delete adapters unless explicitly asked.
+- We do not mutate modules mid-compilation; generation happens before compile.
 
 ## The Resulting Ecosystem
 
 Snakepit becomes the runtime substrate. Snakebridge becomes the introspection and codegen layer. Together they provide:
 
-- Deterministic, cached adapter generation
+- Deterministic, cached adapter generation with a lockfile
 - On-demand docs that scale to giant libraries
 - A strong UX loop for exploration and growth
+- A path to shared metadata and curated packages
 
 This is the architecture we should ship and defend.
-

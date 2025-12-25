@@ -7,12 +7,13 @@ This document set defines the 2025-12-25 vision for a new Snakepit + Snakebridge
 
 ## Executive Summary
 
-The current model generates full adapters and full docs for every library. That is accurate but expensive and heavy, especially for large libraries like SymPy or SciPy. The new model flips the default:
+The current model generates full adapters and full docs for every library. That is accurate but expensive and heavy, especially for large libraries like SymPy or SciPy. The new model flips the default and removes compile-time magic:
 
 - **Only generate what you use** (incrementally, cached, never pruning unless asked)
 - **Configure libraries where you already configure Snakepit** (mix.exs dependency block)
 - **Make runtime setup automatic** (Python environment, uv installs, worker lifecycle)
 - **Provide docs on demand** (searchable, cached, partial HTML and IEx-first)
+- **Deterministic build identity** (lockfile, environment identity, reproducible adapters)
 
 The result is a faster, lighter developer experience that still grows into completeness as real usage expands.
 
@@ -35,28 +36,32 @@ User mix.exs
      libraries: [sympy: "1.12", numpy: "1.26"],
      lazy_generation: :on,
      prune: :manual,
-     docs: :on_demand
+     docs: :on_demand,
+     lockfile: "snakebridge.lock"
    ]}
 
-mix compile
-  - Scan project AST for calls -> used_symbols.json
-  - Update per-library cache
-  - Generate only missing wrappers
-  - Keep previously generated modules
+mix compile (prepass)
+  - Create library stubs so modules exist
+  - Scan project AST for calls
+  - Resolve symbols via metadata snapshot
+  - Generate missing wrappers to lib/snakebridge_generated/
+  - Update snakebridge.lock deterministically
 
 Runtime
   - Snakepit starts automatically
   - Generated wrappers call Snakepit.execute/3
+  - Dynamic calls go through Snakepit.dynamic_call/4
 
 Docs
-  - Search index built from metadata
-  - Per-function docs rendered on demand
+  - Search index built from metadata snapshot
+  - Optional live-doc query in dev
+  - Per-symbol HTML rendered on demand
 ```
 
 ## Developer Journey (60-second view)
 
 1. Add Snakepit dependency with libraries list in `mix.exs`.
-2. `mix compile` generates minimal adapters for actual calls in your codebase.
+2. `mix compile` runs a prepass that generates only the adapters you used.
 3. Use `Library.__functions__/0` and `Library.__search__/1` during exploration.
 4. Need docs? `mix snakepit.docs sympy.integrate` or `Snakepit.doc/1`.
 5. When you intentionally want to shrink, run `mix snakepit.prune`.
@@ -66,8 +71,10 @@ Docs
 - `vision.md`: high-level narrative and product posture
 - `ux-journeys.md`: developer workflows and experience targets
 - `config-spec.md`: mix.exs schema and library configuration details
+- `compiler-strategy.md`: deterministic prepass, stubs, and generation lifecycle
 - `lazy-generation.md`: how usage detection and incremental generation work
 - `cache-prune.md`: caching model, invalidation, pruning policies
+- `determinism-lockfile.md`: environment identity, lockfile format, merge strategy
 - `docs-experience.md`: on-demand docs system and HTML rendering strategy
 - `agentic-workflows.md`: programmatic discovery and adapter generation for agents
 - `runtime-architecture.md`: Snakepit startup, worker pool, and runtime API
@@ -82,6 +89,7 @@ Docs
 - **On-demand docs** with search-first access and per-symbol HTML rendering.
 - **Pruning is explicit**, not implicit, to avoid surprising deletions.
 - **Agentic workflows** can programmatically ask for symbol docs or adapters.
+- **Lockfile and environment identity** make adapter generation reproducible.
 
 ## Success Metrics
 

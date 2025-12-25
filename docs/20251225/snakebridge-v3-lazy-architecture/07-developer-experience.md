@@ -594,3 +594,188 @@ defmodule MyAppWeb.Telemetry do
   end
 end
 ```
+
+## Agentic Workflows
+
+SnakeBridge is designed to be usable by AI agents and automation without extra glue. This section describes how agents can use discovery and docs to plan and execute Python calls safely.
+
+### The Agent Problem
+
+AI agents need to:
+1. Explore APIs without prior knowledge
+2. Understand types and signatures
+3. Call functions with minimal overhead
+4. Handle errors gracefully
+
+A full adapter generation pass is too slow for iterative agent loops. SnakeBridge's lazy architecture solves this naturally.
+
+### Discovery APIs
+
+```elixir
+# List available libraries
+SnakeBridge.list_libraries()
+# => [:numpy, :pandas, :sympy]
+
+# List symbols in a library
+Numpy.functions()
+# => [:abs, :add, :all, :allclose, :amax, ...]
+
+# Search by keyword
+Numpy.search("matrix multiply")
+# => [
+#   %{name: :matmul, summary: "Matrix product of two arrays.", relevance: 0.95},
+#   %{name: :dot, summary: "Dot product of two arrays.", relevance: 0.87}
+# ]
+```
+
+### Doc and Signature Fetch
+
+```elixir
+# Get documentation
+Numpy.doc(:array)
+# => "Create an array.\n\nParameters\n----------\nobject : array_like..."
+
+# Get signature details
+SnakeBridge.signature(Numpy, :array)
+# => %{
+#   name: :array,
+#   parameters: [
+#     %{name: "object", required: true},
+#     %{name: "dtype", required: false, default: "None"}
+#   ],
+#   return_type: "ndarray"
+# }
+```
+
+### On-Demand Adapter Generation
+
+```elixir
+# Ensure adapter exists before calling
+SnakeBridge.ensure_adapter(Numpy, :array)
+# => :ok (generates if needed, no-op if exists)
+
+# Then call safely
+Numpy.array([1, 2, 3])
+# => {:ok, [1, 2, 3]}
+```
+
+### Example Agent Loop
+
+```elixir
+defmodule MyAgent do
+  @doc """
+  Agent loop for exploring and using Python libraries.
+  """
+  def run(task) do
+    # 1. Search for relevant functions
+    candidates = search_for_task(task)
+
+    # 2. Get docs and signatures for top candidates
+    detailed = Enum.map(candidates, fn func ->
+      %{
+        name: func.name,
+        doc: Numpy.doc(func.name),
+        sig: SnakeBridge.signature(Numpy, func.name)
+      }
+    end)
+
+    # 3. Select best function based on task
+    selected = select_best(detailed, task)
+
+    # 4. Ensure adapter exists
+    SnakeBridge.ensure_adapter(Numpy, selected.name)
+
+    # 5. Build arguments and call
+    args = build_args(selected, task)
+    apply(Numpy, selected.name, args)
+  end
+
+  defp search_for_task(task) do
+    # Extract keywords from task
+    keywords = extract_keywords(task)
+
+    # Search across configured libraries
+    SnakeBridge.list_libraries()
+    |> Enum.flat_map(fn lib ->
+      module = SnakeBridge.module_for(lib)
+      module.search(keywords)
+    end)
+    |> Enum.sort_by(& &1.relevance, :desc)
+    |> Enum.take(5)
+  end
+end
+```
+
+### Safety and Guardrails
+
+```elixir
+# Library allowlist enforced from mix.exs
+# Only configured libraries can be accessed
+
+# Rate limiting for dynamic calls (configurable)
+config :snakebridge,
+  agent_rate_limit: 100,  # calls per second
+  agent_timeout: 5000     # ms per call
+
+# Structured errors for agent consumption
+case Numpy.nonexistent_function([1, 2, 3]) do
+  {:ok, result} ->
+    result
+
+  {:error, %SnakeBridge.Error{
+    type: :function_not_found,
+    message: "Function 'nonexistent_function' not found in numpy",
+    suggestions: [:array, :zeros, :ones]
+  }} ->
+    # Agent can retry with suggestions
+end
+```
+
+### Programmatic Generation
+
+For agents that know what they need ahead of time:
+
+```elixir
+# Generate specific functions
+SnakeBridge.generate([
+  {Numpy, :array},
+  {Numpy, :dot},
+  {Numpy, :linalg_solve}
+])
+# => :ok
+
+# Generate from a list of function names
+SnakeBridge.generate_from_spec(%{
+  numpy: [:array, :zeros, :dot, :matmul],
+  pandas: [:DataFrame, :read_csv]
+})
+# => :ok
+```
+
+### Agent-Friendly Error Messages
+
+```elixir
+# Instead of cryptic Python tracebacks:
+{:error, %SnakeBridge.Error{
+  type: :python_error,
+  python_type: "ValueError",
+  message: "shapes (2,3) and (4,5) not aligned",
+  context: %{
+    function: :dot,
+    args: [[[1,2,3],[4,5,6]], [[1,2],[3,4],[5,6],[7,8]]]
+  },
+  suggestion: "Matrix dimensions must be compatible for dot product. " <>
+              "First matrix columns (3) must equal second matrix rows (4)."
+}}
+```
+
+### Deterministic Behavior
+
+The agent-friendly APIs are designed for predictable behavior:
+
+1. **Idempotent generation**: `ensure_adapter/2` is safe to call multiple times
+2. **Stable search results**: Same query returns same results (cached)
+3. **Consistent errors**: Error types are well-defined and parseable
+4. **No side effects**: Discovery functions don't modify state
+
+This makes agents more reliable and easier to test.

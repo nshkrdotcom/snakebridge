@@ -478,28 +478,26 @@ defmodule SnakeBridge.Registry do
 
   # Deserializes a registry entry from JSON
   defp deserialize_entry(entry) when is_map(entry) do
-    try do
-      {:ok, generated_at, _offset} = DateTime.from_iso8601(entry["generated_at"])
+    {:ok, generated_at, _offset} = DateTime.from_iso8601(entry["generated_at"])
 
-      parsed = %{
-        python_module: entry["python_module"],
-        python_version: entry["python_version"],
-        elixir_module: entry["elixir_module"],
-        generated_at: generated_at,
-        path: entry["path"],
-        files: entry["files"],
-        stats: %{
-          functions: entry["stats"]["functions"],
-          classes: entry["stats"]["classes"],
-          submodules: entry["stats"]["submodules"]
-        }
+    parsed = %{
+      python_module: entry["python_module"],
+      python_version: entry["python_version"],
+      elixir_module: entry["elixir_module"],
+      generated_at: generated_at,
+      path: entry["path"],
+      files: entry["files"],
+      stats: %{
+        functions: entry["stats"]["functions"],
+        classes: entry["stats"]["classes"],
+        submodules: entry["stats"]["submodules"]
       }
+    }
 
-      {:ok, parsed}
-    rescue
-      e ->
-        {:error, "Failed to deserialize entry: #{inspect(e)}"}
-    end
+    {:ok, parsed}
+  rescue
+    e ->
+      {:error, "Failed to deserialize entry: #{inspect(e)}"}
   end
 
   defp deserialize_entry(_entry) do

@@ -43,7 +43,7 @@ defmodule SnakeBridge.MixProject do
   defp deps do
     [
       # Core - Python bridge
-      {:snakepit, "~> 0.7.1"},
+      {:snakepit, "~> 0.7.3"},
       # JSON encoding
       {:jason, "~> 1.4"},
 
@@ -62,7 +62,7 @@ defmodule SnakeBridge.MixProject do
       name: "SnakeBridge",
       source_ref: "v#{@version}",
       source_url: @source_url,
-      extras: ["README.md", "CHANGELOG.md"],
+      extras: ["README.md", "CHANGELOG.md", "LICENSE"],
       groups_for_modules: [
         Core: [
           SnakeBridge,

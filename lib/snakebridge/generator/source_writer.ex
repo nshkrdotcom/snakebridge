@@ -50,7 +50,7 @@ defmodule SnakeBridge.Generator.SourceWriter do
 
   """
 
-  alias SnakeBridge.Generator.{TypeMapper, DocFormatter, MetaGenerator}
+  alias SnakeBridge.Generator.{DocFormatter, MetaGenerator, TypeMapper}
 
   @default_opts [
     module_name: nil,
@@ -278,8 +278,7 @@ defmodule SnakeBridge.Generator.SourceWriter do
           %{"module" => python_module} ->
             python_module
             |> String.split(".")
-            |> Enum.map(&Macro.camelize/1)
-            |> Enum.join(".")
+            |> Enum.map_join(".", &Macro.camelize/1)
             |> parse_module_name()
 
           _ ->
@@ -422,16 +421,33 @@ defmodule SnakeBridge.Generator.SourceWriter do
     method_asts =
       methods
       |> Enum.reject(fn m -> m["name"] |> String.starts_with?("__") end)
+      |> deduplicate_methods()
       |> Enum.map(&build_function_ast(&1, opts))
 
+    use_snakebridge = Keyword.get(opts, :use_snakebridge, true)
+
+    # Include `use SnakeBridge.Adapter` if class has methods that need __python_call__
     module_ast =
-      quote do
-        defmodule unquote(full_module_name) do
-          @moduledoc unquote(doc_string)
+      if use_snakebridge and length(method_asts) > 0 do
+        quote do
+          defmodule unquote(full_module_name) do
+            @moduledoc unquote(doc_string)
+            use SnakeBridge.Adapter
 
-          @type t() :: reference()
+            @type t() :: reference()
 
-          unquote_splicing(method_asts)
+            unquote_splicing(method_asts)
+          end
+        end
+      else
+        quote do
+          defmodule unquote(full_module_name) do
+            @moduledoc unquote(doc_string)
+
+            @type t() :: reference()
+
+            unquote_splicing(method_asts)
+          end
         end
       end
 
@@ -447,7 +463,7 @@ defmodule SnakeBridge.Generator.SourceWriter do
   end
 
   defp module_to_string({:__aliases__, _, parts}) do
-    parts |> Enum.map(&Atom.to_string/1) |> Enum.join(".")
+    Enum.map_join(parts, ".", &Atom.to_string/1)
   end
 
   # Legacy function for backward compatibility
@@ -483,6 +499,29 @@ defmodule SnakeBridge.Generator.SourceWriter do
     else
       []
     end
+  end
+
+  # Remove duplicate method definitions (keep first occurrence of each name+arity)
+  # This handles Python method overloads that would cause duplicate @doc warnings
+  # Important: We deduplicate by ELIXIR function name, not Python name, because
+  # methods like "cofactorMatrix" and "cofactor_matrix" both become "cofactor_matrix" in Elixir
+  @spec deduplicate_methods(list(map())) :: list(map())
+  defp deduplicate_methods(methods) do
+    methods
+    |> Enum.reduce({[], MapSet.new()}, fn method, {acc, seen} ->
+      # Use the Elixir function name for deduplication (after snake_case conversion)
+      elixir_name = method["name"] |> to_elixir_function_name()
+      arity = length(Map.get(method, "parameters", []))
+      key = {elixir_name, arity}
+
+      if MapSet.member?(seen, key) do
+        {acc, seen}
+      else
+        {[method | acc], MapSet.put(seen, key)}
+      end
+    end)
+    |> elem(0)
+    |> Enum.reverse()
   end
 
   @spec build_function_ast(map(), keyword()) :: Macro.t()
@@ -589,9 +628,12 @@ defmodule SnakeBridge.Generator.SourceWriter do
 
     doc_string = DocFormatter.function_doc(class_info)
 
+    # Group methods by name and only emit @doc for the first occurrence
+    # This prevents "redefining @doc" warnings for overloaded methods
     method_asts =
       methods
       |> Enum.reject(fn m -> m["name"] |> String.starts_with?("__") end)
+      |> deduplicate_methods()
       |> Enum.map(&build_function_ast(&1, opts))
 
     quote do

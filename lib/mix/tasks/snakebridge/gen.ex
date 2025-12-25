@@ -106,56 +106,64 @@ defmodule Mix.Tasks.Snakebridge.Gen do
   defp generate_adapter(library, opts) do
     output_dir = opts[:output] || default_output_dir(library)
 
-    # Handle --force flag: remove existing library first
+    handle_force_option(library, output_dir, opts)
+    check_directory_overwrite(output_dir, opts)
+
+    Mix.shell().info("Introspecting Python library: #{library}...")
+
+    case Introspector.introspect(library) do
+      {:ok, introspection} ->
+        handle_successful_introspection(library, introspection, output_dir, opts)
+
+      {:error, reason} ->
+        handle_introspection_error(library, reason)
+    end
+  end
+
+  defp handle_force_option(library, output_dir, opts) do
     if opts[:force] && library_exists?(library, output_dir) do
       remove_existing_library(library, output_dir)
     end
+  end
 
-    # Check if directory exists (and is not empty)
+  defp check_directory_overwrite(output_dir, opts) do
     if directory_exists_and_not_empty?(output_dir) && !opts[:force] do
       unless confirm_overwrite(output_dir) do
         Mix.shell().info("Cancelled.")
         exit({:shutdown, 0})
       end
     end
+  end
 
-    Mix.shell().info("Introspecting Python library: #{library}...")
+  defp handle_successful_introspection(library, introspection, output_dir, opts) do
+    introspection = filter_functions(introspection, opts)
+    show_introspection_summary(introspection)
 
-    case Introspector.introspect(library) do
-      {:ok, introspection} ->
-        introspection = filter_functions(introspection, opts)
+    Mix.shell().info("")
+    Mix.shell().info("Generating Elixir adapters...")
 
-        # Show introspection summary
-        show_introspection_summary(introspection)
+    result = SourceWriter.generate_files(introspection, output_dir, opts)
 
+    case result do
+      {:ok, files, stats} ->
         Mix.shell().info("")
-        Mix.shell().info("Generating Elixir adapters...")
-
-        # Generate files using SourceWriter
-        result = SourceWriter.generate_files(introspection, output_dir, opts)
-
-        case result do
-          {:ok, files, stats} ->
-            Mix.shell().info("")
-            show_success(library, output_dir, files, stats, introspection)
-
-            # Register the library
-            register_library(library, output_dir, files, stats, introspection)
-
-          {:error, reason} ->
-            Mix.shell().error("Failed to generate files: #{reason}")
-            exit({:shutdown, 1})
-        end
+        show_success(library, output_dir, files, stats, introspection)
+        register_library(library, output_dir, files, stats, introspection)
 
       {:error, reason} ->
-        Mix.shell().error("Failed to introspect library: #{reason}")
-        Mix.shell().info("")
-        Mix.shell().info("Troubleshooting:")
-        Mix.shell().info("  - Ensure Python 3.7+ is in PATH")
-        Mix.shell().info("  - Verify the library is installed: pip install #{library}")
-        Mix.shell().info("  - Try importing in Python: python -c 'import #{library}'")
+        Mix.shell().error("Failed to generate files: #{reason}")
         exit({:shutdown, 1})
     end
+  end
+
+  defp handle_introspection_error(library, reason) do
+    Mix.shell().error("Failed to introspect library: #{reason}")
+    Mix.shell().info("")
+    Mix.shell().info("Troubleshooting:")
+    Mix.shell().info("  - Ensure Python 3.7+ is in PATH")
+    Mix.shell().info("  - Verify the library is installed: pip install #{library}")
+    Mix.shell().info("  - Try importing in Python: python -c 'import #{library}'")
+    exit({:shutdown, 1})
   end
 
   defp default_output_dir(library) do
@@ -172,15 +180,13 @@ defmodule Mix.Tasks.Snakebridge.Gen do
 
   defp registry_has_library?(library) do
     # Try to check registry, but don't fail if it doesn't exist
-    try do
-      if Code.ensure_loaded?(SnakeBridge.Registry) do
-        SnakeBridge.Registry.generated?(library)
-      else
-        false
-      end
-    rescue
-      _ -> false
+    if Code.ensure_loaded?(SnakeBridge.Registry) do
+      SnakeBridge.Registry.generated?(library)
+    else
+      false
     end
+  rescue
+    _ -> false
   end
 
   defp remove_existing_library(library, output_dir) do
@@ -271,11 +277,21 @@ defmodule Mix.Tasks.Snakebridge.Gen do
   defp show_success(library, output_dir, _files, stats, introspection) do
     module_name = get_module_name(introspection)
 
+    show_generation_summary(library, output_dir, module_name, stats)
+    show_quick_start(module_name, stats, introspection)
+    show_discovery_commands(module_name)
+  end
+
+  defp show_generation_summary(library, output_dir, module_name, stats) do
     Mix.shell().info("Success! Generated #{library} adapter:")
     Mix.shell().info("  Path: #{output_dir}/")
     Mix.shell().info("  Module: #{module_name}")
     Mix.shell().info("  Functions: #{stats[:functions] || 0}")
 
+    show_optional_stats(stats)
+  end
+
+  defp show_optional_stats(stats) do
     if stats[:classes] && stats[:classes] > 0 do
       Mix.shell().info("  Classes: #{stats[:classes]}")
     end
@@ -284,23 +300,33 @@ defmodule Mix.Tasks.Snakebridge.Gen do
       submodule_names = Enum.join(stats[:submodules], ", ")
       Mix.shell().info("  Submodules: #{submodule_names}")
     end
+  end
 
+  defp show_quick_start(module_name, stats, introspection) do
     Mix.shell().info("")
     Mix.shell().info("Quick start:")
     Mix.shell().info("  iex> alias #{module_name}")
 
-    # Show example function call
+    show_example_function_call(module_name, stats, introspection)
+  end
+
+  defp show_example_function_call(module_name, stats, introspection) do
     if stats[:functions] && stats[:functions] > 0 do
       first_fn = List.first(introspection["functions"] || [])
-
-      if first_fn do
-        fn_name = first_fn["name"]
-        param_count = length(first_fn["parameters"] || [])
-        args = if param_count > 0, do: "(...)", else: "()"
-        Mix.shell().info("  iex> #{module_name}.#{fn_name}#{args}")
-      end
+      show_function_example(module_name, first_fn)
     end
+  end
 
+  defp show_function_example(module_name, first_fn) when is_map(first_fn) do
+    fn_name = first_fn["name"]
+    param_count = length(first_fn["parameters"] || [])
+    args = if param_count > 0, do: "(...)", else: "()"
+    Mix.shell().info("  iex> #{module_name}.#{fn_name}#{args}")
+  end
+
+  defp show_function_example(_module_name, _first_fn), do: :ok
+
+  defp show_discovery_commands(module_name) do
     Mix.shell().info("")
     Mix.shell().info("Discovery:")
     Mix.shell().info("  iex> #{module_name}.__functions__()")
@@ -313,46 +339,49 @@ defmodule Mix.Tasks.Snakebridge.Gen do
 
     python_module
     |> String.split(".")
-    |> Enum.map(&Macro.camelize/1)
-    |> Enum.join(".")
+    |> Enum.map_join(".", &Macro.camelize/1)
   end
 
   defp register_library(library, output_dir, files, stats, introspection) do
     # Only register if Registry module is available
-    try do
-      if Code.ensure_loaded?(SnakeBridge.Registry) do
-        python_module = introspection["module"] || library
-        elixir_module = get_module_name(introspection)
-        version = introspection["version"] || "unknown"
+    if Code.ensure_loaded?(SnakeBridge.Registry) do
+      registry_data = build_registry_data(library, output_dir, files, stats, introspection)
+      perform_registration(library, registry_data)
+    end
+  rescue
+    error ->
+      Mix.shell().info("Warning: Registry not available: #{inspect(error)}")
+  end
 
-        # Ensure stats has required fields
-        normalized_stats = %{
-          functions: stats[:functions] || 0,
-          classes: stats[:classes] || 0,
-          submodules: length(stats[:submodules] || [])
-        }
+  defp build_registry_data(library, output_dir, files, stats, introspection) do
+    python_module = introspection["module"] || library
+    elixir_module = get_module_name(introspection)
+    version = introspection["version"] || "unknown"
 
-        registry_data = %{
-          python_module: python_module,
-          python_version: version,
-          elixir_module: elixir_module,
-          generated_at: DateTime.utc_now(),
-          path: output_dir,
-          files: files,
-          stats: normalized_stats
-        }
+    normalized_stats = %{
+      functions: stats[:functions] || 0,
+      classes: stats[:classes] || 0,
+      submodules: length(stats[:submodules] || [])
+    }
 
-        case SnakeBridge.Registry.register(library, registry_data) do
-          :ok ->
-            :ok
+    %{
+      python_module: python_module,
+      python_version: version,
+      elixir_module: elixir_module,
+      generated_at: DateTime.utc_now(),
+      path: output_dir,
+      files: files,
+      stats: normalized_stats
+    }
+  end
 
-          {:error, reason} ->
-            Mix.shell().info("Warning: Failed to register library: #{inspect(reason)}")
-        end
-      end
-    rescue
-      error ->
-        Mix.shell().info("Warning: Registry not available: #{inspect(error)}")
+  defp perform_registration(library, registry_data) do
+    case SnakeBridge.Registry.register(library, registry_data) do
+      :ok ->
+        SnakeBridge.Registry.save()
+
+      {:error, reason} ->
+        Mix.shell().info("Warning: Failed to register library: #{inspect(reason)}")
     end
   end
 end

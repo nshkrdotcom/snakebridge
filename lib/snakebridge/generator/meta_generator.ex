@@ -147,24 +147,28 @@ defmodule SnakeBridge.Generator.MetaGenerator do
     function_tuples =
       functions_by_module
       |> Enum.flat_map(fn {module, functions} ->
-        Enum.map(functions, fn func_info ->
-          func_name = func_info["name"] |> to_elixir_function_name() |> String.to_atom()
-          params = Map.get(func_info, "parameters", [])
-          arity = length(params)
-
-          doc =
-            case func_info["docstring"] do
-              %{"summary" => summary} when is_binary(summary) -> summary
-              _ -> func_info["name"]
-            end
-
-          module_atom = module_name_to_atom(module)
-
-          {func_name, arity, module_atom, doc}
-        end)
+        Enum.map(functions, &build_function_tuple(&1, module))
       end)
 
     Macro.escape(function_tuples)
+  end
+
+  @spec build_function_tuple(map(), String.t() | atom() | Macro.t()) ::
+          {atom(), non_neg_integer(), atom(), String.t()}
+  defp build_function_tuple(func_info, module) do
+    func_name = func_info["name"] |> to_elixir_function_name() |> String.to_atom()
+    params = Map.get(func_info, "parameters", [])
+    arity = length(params)
+
+    doc =
+      case func_info["docstring"] do
+        %{"summary" => summary} when is_binary(summary) -> summary
+        _ -> func_info["name"]
+      end
+
+    module_atom = module_name_to_atom(module)
+
+    {func_name, arity, module_atom, doc}
   end
 
   @spec build_classes_list(String.t(), list(map())) :: Macro.t()
@@ -206,7 +210,7 @@ defmodule SnakeBridge.Generator.MetaGenerator do
   end
 
   defp module_to_string({:__aliases__, _, parts}) do
-    parts |> Enum.map(&Atom.to_string/1) |> Enum.join(".")
+    Enum.map_join(parts, ".", &Atom.to_string/1)
   end
 
   @spec module_name_to_atom(String.t() | atom() | Macro.t()) :: atom()

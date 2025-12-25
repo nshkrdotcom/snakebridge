@@ -24,6 +24,10 @@ defmodule SnakeBridge.Adapter do
     quote do
       import SnakeBridge.Adapter, only: [__python_call__: 2]
 
+      # Register @python_function as an accumulating attribute for metadata
+      # This prevents "set but never used" warnings in generated code
+      Module.register_attribute(__MODULE__, :python_function, accumulate: true)
+
       # Store the Python module name derived from the Elixir module name
       @python_module __MODULE__
                      |> Module.split()

@@ -4,16 +4,78 @@
 [![Hex.pm](https://img.shields.io/hexpm/v/snakebridge.svg)](https://hex.pm/packages/snakebridge)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Generate type-safe Elixir bindings for Python libraries. SnakeBridge introspects Python modules and generates Elixir adapter code with full `@spec` declarations and documentation.
+Generate type-safe Elixir adapters for Python libraries with full IDE support.
 
 Built on [Snakepit](https://hex.pm/packages/snakepit) for Python runtime management.
+
+## Quick Start
+
+### 1. Add Dependency
+
+```elixir
+# mix.exs
+def deps do
+  [
+    {:snakebridge, "~> 0.4"}
+  ]
+end
+```
+
+### 2. Add Compiler
+
+```elixir
+# mix.exs
+def project do
+  [
+    compilers: [:snakebridge] ++ Mix.compilers(),
+    # ...
+  ]
+end
+```
+
+### 3. Configure Adapters
+
+```elixir
+# config/config.exs
+config :snakebridge,
+  adapters: [:json, :math, :sympy]
+```
+
+### 4. Compile
+
+```bash
+$ mix compile
+SnakeBridge: Generating json adapter...
+  Generated 4 functions, 3 classes
+SnakeBridge: Generating math adapter...
+  Generated 56 functions, 0 classes
+SnakeBridge: Generating sympy adapter...
+  Generated 481 functions, 392 classes
+```
+
+### 5. Use
+
+```elixir
+iex> Math.sqrt(2)
+{:ok, 1.4142135623730951}
+
+iex> Json.dumps(%{"hello" => "world"}, false, true, true, true, nil, nil, nil, nil, false, %{})
+{:ok, "{\"hello\": \"world\"}"}
+
+iex> Math.__functions__() |> Enum.take(3)
+[
+  {:acos, 1, Math, "Return the arc cosine..."},
+  {:acosh, 1, Math, "Return the inverse hyperbolic cosine..."},
+  {:asin, 1, Math, "Return the arc sine..."}
+]
+```
 
 ## How It Works
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  Python Module  │────>│  mix snakebridge │────>│  Elixir Adapter │
-│  (e.g., json)   │     │      .gen        │     │  (json/*.ex)    │
+│  Python Module  │────>│   mix compile    │────>│  Elixir Adapter │
+│  (e.g., json)   │     │  :snakebridge    │     │  (Json module)  │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
                               │
                     Introspects Python:
@@ -23,191 +85,76 @@ Built on [Snakepit](https://hex.pm/packages/snakepit) for Python runtime managem
                     - Classes
 ```
 
-**SnakeBridge generates source files, not runtime code.** The generated `.ex` files are committed to YOUR project and compiled like any other Elixir code.
+1. **Compile-time generation**: The `:snakebridge` compiler runs before Elixir compilation
+2. **Python introspection**: Each configured library is introspected for functions, classes, and types
+3. **Elixir code generation**: Type-safe modules with `@doc`, `@spec`, and discovery functions
+4. **Auto-gitignore**: Generated code goes to `lib/snakebridge_generated/` with a self-contained `.gitignore`
 
-## Installation
+Your repo stays clean - generated code is excluded from git but visible to your IDE.
 
-```elixir
-# mix.exs
-def deps do
-  [
-    {:snakebridge, "~> 0.4.0"}
-  ]
-end
-```
-
-## Quick Start
-
-### 1. Generate an Adapter
-
-```bash
-$ mix snakebridge.gen json
-
-Introspecting Python library: json...
-  Found 4 functions in 1 namespaces
-  Found 3 classes with 9 methods
-
-Generating Elixir adapters...
-  Writing lib/snakebridge/adapters/json/_meta.ex
-  Writing lib/snakebridge/adapters/json/json.ex
-  Writing lib/snakebridge/adapters/json/classes/json_decoder.ex
-  ...
-
-Success! Generated json adapter:
-  Path: lib/snakebridge/adapters/json/
-  Module: Json
-  Functions: 4
-  Classes: 3
-
-Quick start:
-  iex> alias Json
-  iex> Json.dump(...)
-
-Discovery:
-  iex> Json.__functions__()
-  iex> h Json
-```
-
-### 2. Use the Generated Module
-
-```elixir
-# The generated adapter is now available
-alias Json
-
-# Discover what's available
-Json.__functions__()
-# => [{:dump, 12, Json, "Serialize obj..."}, {:dumps, 11, Json, "..."}, ...]
-
-Json.__search__("serialize")
-# => [{:dump, 12, Json, "Serialize..."}, {:dumps, 11, Json, "Serialize..."}]
-
-# Call Python functions
-{:ok, result} = Json.dumps(my_data, false, true, true, true, nil, nil, nil, nil, nil, false)
-```
-
-## Generated File Structure
-
-For a Python module like `json`, SnakeBridge generates a **directory structure**:
+## Generated Structure
 
 ```
-lib/snakebridge/adapters/json/
-├── _meta.ex                    # Discovery functions
-├── json.ex                     # Main module with functions
-└── classes/
-    ├── json_decoder.ex         # JSONDecoder class
-    ├── json_encoder.ex         # JSONEncoder class
-    └── json_decode_error.ex    # JSONDecodeError class
-```
-
-### Main Module (`json.ex`)
-
-```elixir
-defmodule Json do
-  @moduledoc "JSON (JavaScript Object Notation) encoder/decoder..."
-  use SnakeBridge.Adapter
-
-  # Discovery functions (delegated to Meta)
-  defdelegate __functions__, to: Json.Meta, as: :functions
-  defdelegate __classes__, to: Json.Meta, as: :classes
-  defdelegate __search__(query), to: Json.Meta, as: :search
-
-  @doc "Serialize obj to a JSON formatted str..."
-  @spec dumps(any(), any(), ...) :: any()
-  @python_function "dumps"
-  def dumps(obj, skipkeys, ...) do
-    __python_call__("dumps", [obj, skipkeys, ...])
-  end
-end
-```
-
-### Meta Module (`_meta.ex`)
-
-```elixir
-defmodule Json.Meta do
-  @moduledoc false
-
-  @functions [
-    {:dump, 12, Json, "Serialize obj as a JSON formatted stream..."},
-    {:dumps, 11, Json, "Serialize obj to a JSON formatted str..."},
-    {:load, 8, Json, "Deserialize fp to a Python object..."},
-    {:loads, 8, Json, "Deserialize s to a Python object..."}
-  ]
-
-  def functions, do: @functions
-  def classes, do: @classes
-  def search(query), do: # filters functions by name/doc
-end
+lib/snakebridge_generated/
+├── .gitignore              # Contains "* !.gitignore" (self-ignoring)
+├── json/
+│   └── json/
+│       ├── _meta.ex        # Discovery functions
+│       ├── json.ex         # Main module
+│       └── classes/
+│           ├── json_encoder.ex
+│           └── json_decoder.ex
+├── math/
+│   └── math/
+│       ├── _meta.ex
+│       └── math.ex
+└── sympy/
+    └── sympy/
+        ├── _meta.ex
+        ├── sympy.ex
+        └── classes/
+            └── ... (392 class modules)
 ```
 
 ## Discovery Functions
 
-Every generated module includes discovery helpers:
+Every generated module includes:
 
 ```elixir
-# List all functions with their arities and documentation
+# List all functions with arities and documentation
 Json.__functions__()
-# => [{:dump, 12, Json, "Serialize obj..."}, ...]
+# => [{:dump, 12, Json, "Serialize obj..."}, {:dumps, 11, Json, "..."}, ...]
 
 # List all classes
 Json.__classes__()
-# => [{Json.JSONDecoder, "Simple JSON decoder..."}, ...]
+# => [{:JSONEncoder, Json.JSONEncoder, "Extensible JSON encoder..."}, ...]
 
 # Search functions by name or documentation
-Json.__search__("serialize")
-# => [{:dump, 12, Json, "Serialize obj..."}, {:dumps, 11, Json, "..."}]
+Json.__search__("decode")
+# => [{:loads, 8, Json, "Deserialize s to a Python object..."}, ...]
 
 # Standard IEx help works
 iex> h Json.dumps
 ```
 
-## Generator Options
+## Configuration Options
 
-```bash
-mix snakebridge.gen <library> [options]
+```elixir
+config :snakebridge,
+  adapters: [
+    # Simple - just the library name
+    :json,
+    :math,
 
-Options:
-  --output <path>      Output directory (default: lib/snakebridge/adapters/<lib>/)
-  --module <name>      Custom Elixir module name (default: CamelCase of library)
-  --force              Remove existing and regenerate
-  --functions <list>   Comma-separated list of functions to include
-  --exclude <list>     Comma-separated list of functions to exclude
-```
-
-### Examples
-
-```bash
-# Generate only specific functions
-mix snakebridge.gen numpy --functions array,zeros,ones,linspace
-
-# Exclude certain functions
-mix snakebridge.gen os --exclude system,exec,popen
-
-# Generate to custom location with custom module
-mix snakebridge.gen requests --output lib/my_app/http/ --module MyApp.Http
-
-# Regenerate existing library
-mix snakebridge.gen json --force
-```
-
-## Mix Tasks
-
-```bash
-# Generate adapter for a Python library
-mix snakebridge.gen <library>
-
-# List all generated adapters
-mix snakebridge.list
-
-# Show info about a generated adapter
-mix snakebridge.info <library>
-
-# Remove a generated adapter
-mix snakebridge.clean <library>
+    # With options
+    {:numpy, functions: ["array", "zeros", "ones"]},
+    {:sympy, exclude: ["init_printing"]}
+  ]
 ```
 
 ## Type System
 
-SnakeBridge handles the impedance mismatch between Python and Elixir types using tagged JSON serialization:
+SnakeBridge handles the impedance mismatch between Python and Elixir types:
 
 | Python Type | Elixir Type | Serialization |
 |-------------|-------------|---------------|
@@ -224,55 +171,69 @@ SnakeBridge handles the impedance mismatch between Python and Elixir types using
 | `bytes` | `binary()` | Tagged: `{"__type__": "bytes", ...}` |
 | `inf/-inf/nan` | `:infinity/:neg_infinity/:nan` | Tagged |
 
-## Large Libraries
+## Manual Generation
 
-For large libraries like sympy (900+ items), consider:
+For cases where you want to commit generated code:
 
 ```bash
-# Generate specific submodules
-mix snakebridge.gen sympy.solvers --module Sympy.Solvers
+# Generate an adapter manually
+mix snakebridge.gen numpy
 
-# Filter to needed functions only
-mix snakebridge.gen sympy --functions solve,simplify,expand,factor
+# Options
+mix snakebridge.gen numpy --functions array,zeros,ones
+mix snakebridge.gen os --exclude system,exec
+mix snakebridge.gen requests --output lib/my_app/http/
+mix snakebridge.gen json --force  # Regenerate existing
+
+# Management
+mix snakebridge.list   # List generated adapters
+mix snakebridge.info json  # Show adapter details
+mix snakebridge.clean json  # Remove an adapter
 ```
 
-## Registry
+## Example Project
 
-SnakeBridge tracks all generated adapters in `priv/snakebridge/registry.json`:
+See `examples/math_demo/` for a complete working example:
 
-```elixir
-# Check what's generated
-SnakeBridge.Registry.list_libraries()
-# => ["json", "math", "numpy"]
-
-SnakeBridge.Registry.get("json")
-# => %{elixir_module: "Json", functions: 4, classes: 3, ...}
-
-SnakeBridge.Registry.generated?("json")
-# => true
+```bash
+cd examples/math_demo
+mix deps.get
+mix compile           # Generates adapters automatically
+mix run -e Demo.run   # Run the demo
 ```
+
+## Requirements
+
+- Elixir 1.14+
+- Python 3.7+
+- **Recommended**: [`uv`](https://github.com/astral-sh/uv) for automatic Python package management
+
+### Automatic Dependency Management
+
+If you have `uv` installed, SnakeBridge automatically installs Python packages in temporary environments during generation:
+
+```bash
+# Install uv (one-time setup)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Now just use SnakeBridge - no pip install needed!
+mix compile
+# => SnakeBridge: Generating sympy adapter...
+#    (uv automatically installs sympy in temp environment)
+```
+
+Without `uv`, you'll need to install packages manually: `pip install numpy sympy`
 
 ## Direct Runtime API
 
 For one-off calls without generating an adapter:
 
 ```elixir
-alias SnakeBridge.Runtime
-
-{:ok, result} = Runtime.call("math", "sqrt", [16])
+{:ok, result} = SnakeBridge.call("math", "sqrt", %{x: 16})
 # => {:ok, 4.0}
 
-{:ok, data} = Runtime.call("json", "loads", [~s({"key": "value"})])
+{:ok, data} = SnakeBridge.call("json", "loads", %{s: ~s({"key": "value"})})
 # => {:ok, %{"key" => "value"}}
-```
-
-## Configuration
-
-```elixir
-# config/config.exs
-config :snakebridge,
-  python_executable: "python3",
-  auto_start_snakepit: true
 ```
 
 ## Testing
@@ -284,14 +245,6 @@ mix test
 # Run with real Python integration
 mix test --include real_python
 ```
-
-## Architecture
-
-1. **Introspection** (`priv/python/introspect.py`) - Analyzes Python libraries
-2. **Type Mapping** (`lib/snakebridge/generator/type_mapper.ex`) - Python types → Elixir specs
-3. **Source Generation** (`lib/snakebridge/generator/source_writer.ex`) - Generates .ex files
-4. **Runtime** (`lib/snakebridge/runtime.ex`) - Executes Python via Snakepit
-5. **Registry** (`lib/snakebridge/registry.ex`) - Tracks generated adapters
 
 ## License
 

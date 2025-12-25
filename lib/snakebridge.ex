@@ -1,171 +1,132 @@
 defmodule SnakeBridge do
   @moduledoc """
-  SnakeBridge - Manifest-driven Python library integration for Elixir.
+  SnakeBridge - Python library integration for Elixir.
 
-  SnakeBridge provides a declarative, type-safe way to integrate Python libraries
-  into Elixir applications. It uses JSON manifests to define Python function
-  signatures and automatically generates Elixir modules with proper documentation
-  and type specs.
+  SnakeBridge generates type-safe Elixir adapters for Python libraries with full
+  IDE support, documentation, and type specs.
 
-  ## Quick Start
+  ## Quick Start (Recommended)
 
-  Use built-in adapters immediately - no configuration needed:
+  1. Add SnakeBridge to your compilers in `mix.exs`:
 
-      # SymPy for symbolic mathematics
-      {:ok, roots} = SnakeBridge.SymPy.solve(%{expr: "x**2 - 1", symbol: "x"})
+      def project do
+        [
+          compilers: [:snakebridge] ++ Mix.compilers(),
+          # ...
+        ]
+      end
 
-      # PyLatexEnc for LaTeX parsing
-      {:ok, nodes} = SnakeBridge.PyLatexEnc.parse(%{latex: "\\\\frac{1}{2}"})
+  2. Configure the Python libraries you need in `config/config.exs`:
+
+      config :snakebridge,
+        adapters: [:json, :numpy, :sympy]
+
+  3. Run `mix compile` - adapters are generated automatically:
+
+      $ mix compile
+      SnakeBridge: Generating json adapter...
+        Generated 4 functions, 3 classes
+      SnakeBridge: Generating numpy adapter...
+        Generated 56 functions, 0 classes
+
+  4. Use the generated modules:
+
+      iex> Json.dumps(%{"hello" => "world"}, false, true, true, true, nil, nil, nil, nil, nil, false)
+      {:ok, "{\\"hello\\": \\"world\\"}"}
+
+      iex> Json.__functions__()
+      [{:dump, 12, Json, "Serialize obj..."}, ...]
+
+      iex> Json.__search__("decode")
+      [{:loads, 8, Json, "Deserialize..."}, ...]
+
+  ## How It Works
+
+  The SnakeBridge compiler:
+
+  1. Reads your `config :snakebridge, adapters: [...]` configuration
+  2. Introspects each Python library to discover functions, classes, and types
+  3. Generates Elixir modules with `@doc`, `@spec`, and full IDE support
+  4. Outputs to `lib/snakebridge_generated/` (auto-gitignored)
+
+  Generated code is ephemeral - it's regenerated on `mix compile` and excluded
+  from git via an auto-created `.gitignore`. Your repo stays clean.
+
+  ## Generated Module Features
+
+  Each generated module provides:
+
+  - **Functions** - All public Python functions as Elixir functions
+  - **Documentation** - Python docstrings converted to `@doc`
+  - **Type Specs** - `@spec` for Dialyzer and IDE support
+  - **Discovery** - `__functions__/0`, `__classes__/0`, `__search__/1`
+
+  Example:
+
+      # Discover available functions
+      iex> Numpy.__functions__() |> Enum.take(3)
+      [
+        {:abs, 1, Numpy, "Absolute value..."},
+        {:add, 2, Numpy, "Add two arrays..."},
+        {:arange, 3, Numpy, "Return evenly spaced values..."}
+      ]
+
+      # Search for functions
+      iex> Numpy.__search__("matrix")
+      [{:matmul, 2, Numpy, "Matrix multiplication..."}, ...]
+
+      # Get help
+      iex> h Numpy.array
+
+  ## Manual Generation
+
+  For cases where you want to commit generated code (not recommended):
+
+      $ mix snakebridge.gen json
+      $ mix snakebridge.gen numpy --output lib/my_adapters/
+
+  See `mix help snakebridge.gen` for options.
+
+  ## Type System
+
+  SnakeBridge handles type conversion between Elixir and Python:
+
+  - **Primitives**: integers, floats, strings, booleans, nil
+  - **Collections**: lists, maps, tuples (tagged), sets (MapSet)
+  - **Special**: DateTime, Date, Time, binaries, infinity, NaN
+
+  See `SnakeBridge.Types.Encoder` and `SnakeBridge.Types.Decoder`.
 
   ## Direct Runtime Calls
 
-  For ad-hoc Python function calls without generated modules:
+  For ad-hoc Python calls without generated modules:
 
-      # Call any Python function
-      {:ok, result} = SnakeBridge.call("json", "dumps", %{obj: %{hello: "world"}})
-
-      # With streaming
-      SnakeBridge.stream("requests", "iter_content", %{url: "..."}, fn chunk ->
-        IO.inspect(chunk, label: "Chunk")
-      end)
-
-  ## Architecture
-
-  SnakeBridge consists of three main layers:
-
-  1. **Generation Layer** - Introspects Python libraries and generates Elixir modules
-  2. **Type System** - Handles lossless conversion between Elixir and Python types
-  3. **Runtime Layer** - Executes Python code through Snakepit's gRPC interface
-
-  ### Type System
-
-  SnakeBridge automatically handles type conversion between Elixir and Python:
-
-  - Primitives: integers, floats, strings, booleans, nil
-  - Collections: lists, maps, tuples, sets
-  - Special types: DateTime, Date, Time, binaries
-  - Tagged types for lossless round-tripping
-
-  See `SnakeBridge.Types.Encoder` and `SnakeBridge.Types.Decoder` for details.
-
-  ### Generated Modules
-
-  Generated modules live in `lib/snakebridge/adapters/` and provide:
-
-  - Full function documentation from Python docstrings
-  - Type specs inferred from Python type hints
-  - Dialyzer-compatible types
-  - IDE autocomplete support
-
-  ## Manifest Format
-
-  Manifests are JSON files that describe Python libraries:
-
-      {
-        "name": "numpy",
-        "python_module": "numpy",
-        "elixir_module": "SnakeBridge.NumPy",
-        "functions": [
-          {
-            "name": "array",
-            "args": ["object"],
-            "returns": {"type": "ndarray"}
-          }
-        ]
-      }
-
-  ## Mix Tasks
-
-  - `mix snakebridge.gen <library>` - Generate adapter for a Python library
-  - `mix snakebridge.discover <module>` - Discover available functions
-  - `mix snakebridge.validate <manifest>` - Validate manifest file
+      {:ok, result} = SnakeBridge.call("json", "dumps", %{obj: %{key: "value"}})
 
   ## Configuration
 
-  Configure in `config/config.exs`:
-
       config :snakebridge,
-        # Auto-start Snakepit on first call (default: true)
-        auto_start_snakepit: true,
+        # Python libraries to generate adapters for
+        adapters: [:json, :numpy, :sympy],
 
-        # Custom manifest directories
-        custom_manifests: ["priv/my_manifests/**/*.json"]
+        # Or with options
+        adapters: [
+          :json,
+          {:numpy, functions: ["array", "zeros", "ones"]},
+          {:sympy, exclude: ["init_printing"]}
+        ]
 
-      # Configure Snakepit pool settings
-      config :snakepit,
-        pooling_enabled: true,
-        pool_size: 4,
-        adapter_module: Snakepit.Adapters.GrpcAdapter
+  ## Mix Tasks
 
-  ## Examples
+  - `mix snakebridge.gen <library>` - Manually generate an adapter
+  - `mix snakebridge.list` - List generated adapters
+  - `mix snakebridge.info <library>` - Show adapter details
+  - `mix snakebridge.clean <library>` - Remove an adapter
 
-      # Using generated adapters
-      alias SnakeBridge.NumPy
+  ## Requirements
 
-      {:ok, arr} = NumPy.array(%{object: [1, 2, 3, 4]})
-      {:ok, result} = NumPy.sum(%{array: arr})
-
-      # Direct runtime calls
-      {:ok, json_str} = SnakeBridge.call("json", "dumps", %{
-        obj: %{name: "Alice", age: 30}
-      })
-
-      # Streaming data
-      SnakeBridge.stream("requests", "get", %{url: "https://api.example.com/stream"},
-        fn chunk ->
-          process_chunk(chunk)
-        end,
-        timeout: 60_000
-      )
-
-  ## Error Handling
-
-  All functions return `{:ok, result}` or `{:error, reason}` tuples:
-
-      case SnakeBridge.call("math", "sqrt", %{x: -1}) do
-        {:ok, result} ->
-          IO.puts("Result: \#{result}")
-
-        {:error, %{category: :python_error, message: msg}} ->
-          IO.puts("Python error: \#{msg}")
-
-        {:error, reason} ->
-          IO.puts("Error: \#{inspect(reason)}")
-      end
-
-  ## Telemetry
-
-  SnakeBridge emits telemetry events for monitoring and observability:
-
-  - `[:snakebridge, :runtime, :call]` - Runtime function calls
-  - `[:snakebridge, :runtime, :stream]` - Streaming calls
-
-  Measurements include:
-  - `duration` - Call duration in native time units
-
-  Metadata includes:
-  - `module` - Python module name
-  - `function` - Function name
-  - `success` - Boolean indicating success/failure
-
-  Example handler:
-
-      :telemetry.attach(
-        "snakebridge-handler",
-        [:snakebridge, :runtime, :call],
-        fn _event, measurements, metadata, _config ->
-          duration_ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
-          IO.puts("Call \#{metadata.module}.\#{metadata.function} took \#{duration_ms}ms")
-        end,
-        nil
-      )
-
-  ## See Also
-
-  - `SnakeBridge.Runtime` - Core runtime execution
-  - `SnakeBridge.Types.Encoder` - Elixir to Python encoding
-  - `SnakeBridge.Types.Decoder` - Python to Elixir decoding
-  - [Snakepit](https://hex.pm/packages/snakepit) - Underlying Python orchestration
+  - Python 3.7+ in PATH
+  - Target Python libraries must be installed (`pip install numpy`)
   """
 
   # Delegate core runtime functions
@@ -178,7 +139,7 @@ defmodule SnakeBridge do
   ## Examples
 
       iex> SnakeBridge.version()
-      "0.3.2"
+      "0.4.0"
 
   """
   @spec version() :: String.t()

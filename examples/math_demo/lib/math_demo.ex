@@ -1,10 +1,10 @@
 defmodule MathDemo do
   @moduledoc """
-  Demonstrates SnakeBridge discovery APIs and generated code layout.
+  Demonstrates SnakeBridge v3 discovery APIs and generated layout.
 
   This example shows how to:
-  1. Configure SnakeBridge adapters in config/config.exs
-  2. Inspect the generated modules under lib/snakebridge_generated
+  1. Declare libraries in mix.exs dependency options
+  2. Inspect generated modules under lib/snakebridge_generated
   3. Use discovery helpers like __functions__/0, __classes__/0, and __search__/1
 
   Runtime Python calls are intentionally omitted from this demo.
@@ -17,11 +17,9 @@ defmodule MathDemo do
       # Explore available functions and classes
       iex> Json.__functions__()
       iex> Math.__functions__()
-      iex> Sympy.__functions__()
 
       # Search for specific functionality
-      iex> Math.__search__("sqrt")
-      iex> Sympy.__search__("solve")
+      iex> Math.__search__("sq")
 
       # Inspect generated layout
       iex> MathDemo.generated_structure()
@@ -32,12 +30,12 @@ defmodule MathDemo do
   """
 
   @doc """
-  Return a summary of the generated adapter layout on disk.
+  Return a summary of the generated layout on disk.
 
   ## Examples
 
       iex> MathDemo.generated_structure()
-      {:ok, %{root: "...", adapters: %{...}}}
+      {:ok, %{root: "...", libraries: ["json", "math"]}}
 
   """
   def generated_structure do
@@ -45,24 +43,14 @@ defmodule MathDemo do
 
     case File.ls(root) do
       {:ok, entries} ->
-        adapters =
+        files =
           entries
-          |> Enum.reject(&(&1 == ".gitignore"))
+          |> Enum.filter(&String.ends_with?(&1, ".ex"))
           |> Enum.sort()
-          |> Enum.map(fn adapter ->
-            module_root = Path.join([root, adapter, adapter])
 
-            files =
-              case File.ls(module_root) do
-                {:ok, files} -> Enum.sort(files)
-                {:error, _} -> []
-              end
+        libraries = Enum.map(files, &Path.rootname/1)
 
-            {adapter, files}
-          end)
-          |> Map.new()
-
-        {:ok, %{root: root, adapters: adapters}}
+        {:ok, %{root: root, libraries: libraries, files: files}}
 
       {:error, reason} ->
         {:error, reason}
@@ -77,17 +65,18 @@ defmodule MathDemo do
       IO.puts("=== Math Functions ===")
 
       Math.__functions__()
-      |> Enum.take(10)
+      |> Enum.take(5)
       |> Enum.each(fn {name, arity, _mod, doc} ->
         short_doc = String.slice(doc || "", 0, 50)
         IO.puts("  #{name}/#{arity}: #{short_doc}...")
       end)
 
-      IO.puts("\n=== Searching for 'sin' in Math ===")
+      IO.puts("\n=== Math Search: sq ===")
 
-      Math.__search__("sin")
-      |> Enum.each(fn {name, arity, _mod, _doc} ->
-        IO.puts("  #{name}/#{arity}")
+      Math.__search__("sq")
+      |> Enum.each(fn %{name: name, summary: summary, relevance: relevance} ->
+        short_doc = String.slice(summary || "", 0, 50)
+        IO.puts("  #{name} (#{Float.round(relevance, 2)}): #{short_doc}...")
       end)
     else
       IO.puts("Math module not available. Run `mix compile`.")
@@ -99,7 +88,6 @@ defmodule MathDemo do
       Json.__classes__()
       |> Enum.each(fn entry ->
         {name, mod_ref, doc} = normalize_class_entry(entry)
-
         short_doc = String.slice(doc || "", 0, 50)
 
         label =
@@ -113,18 +101,6 @@ defmodule MathDemo do
       end)
     else
       IO.puts("\nJson module not available. Run `mix compile`.")
-    end
-
-    if Code.ensure_loaded?(Sympy) do
-      IO.puts("\n=== Sympy Search: solve ===")
-
-      Sympy.__search__("solve")
-      |> Enum.take(10)
-      |> Enum.each(fn {name, arity, _mod, _doc} ->
-        IO.puts("  #{name}/#{arity}")
-      end)
-    else
-      IO.puts("\nSympy module not available. Run `mix compile`.")
     end
 
     :ok

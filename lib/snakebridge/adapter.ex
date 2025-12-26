@@ -37,30 +37,9 @@ defmodule SnakeBridge.Adapter do
   end
 
   @doc """
-  Calls a Python function with the given arguments.
-
-  This function is used by generated adapter modules to invoke Python functions
-  via the SnakeBridge runtime.
-
-  ## Parameters
-
-    * `func_name` - The Python function name as a string
-    * `args` - List of arguments to pass to the function
-
-  ## Returns
-
-  The result of the Python function call, decoded from Python types to Elixir.
-
-  ## Examples
-
-      __python_call__("sqrt", [16])
-      # => {:ok, 4.0}
-
-      __python_call__("loads", [~s({"key": "value"})])
-      # => {:ok, %{"key" => "value"}}
-
+  Calls a Python function with the given arguments using SnakeBridge.Runtime.
   """
-  @spec __python_call__(String.t(), list()) :: {:ok, any()} | {:error, any()}
+  @spec __python_call__(String.t(), list()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
   def __python_call__(func_name, args) do
     # Get the calling module to determine the Python module
     {module, _func, _arity} =
@@ -74,22 +53,10 @@ defmodule SnakeBridge.Adapter do
         nil -> {nil, nil, nil}
       end
 
-    python_module =
-      if module do
-        module
-        |> Module.split()
-        |> List.last()
-        |> Macro.underscore()
-      else
-        "unknown"
-      end
-
-    # Build args map from positional args
-    args_map =
-      args
-      |> Enum.with_index()
-      |> Enum.into(%{}, fn {arg, idx} -> {"arg#{idx}", arg} end)
-
-    SnakeBridge.Runtime.call(python_module, func_name, args_map)
+    if module do
+      SnakeBridge.Runtime.call(module, func_name, args)
+    else
+      {:error, Snakepit.Error.validation_error("Unable to determine calling module", %{})}
+    end
   end
 end

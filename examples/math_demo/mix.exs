@@ -22,9 +22,9 @@ defmodule MathDemo.MixProject do
 
   defp deps do
     [
-      # In a real project, you'd use: {:snakebridge, "~> 0.4"}
+      # In a real project, you'd use: {:snakebridge, "~> 3.0", libraries: [...]}
       # For this example, we reference the parent directory
-      {:snakebridge, path: "../.."},
+      {:snakebridge, path: "../..", libraries: [json: :stdlib, math: :stdlib]},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false}
     ]
   end

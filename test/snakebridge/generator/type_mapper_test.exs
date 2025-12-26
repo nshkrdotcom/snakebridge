@@ -46,11 +46,11 @@ defmodule SnakeBridge.Generator.TypeMapperTest do
       assert Macro.to_string(spec_ast) == "nil"
     end
 
-    test "maps any to any()" do
+    test "maps any to term()" do
       python_type = %{"type" => "any"}
       spec_ast = TypeMapper.to_spec(python_type)
 
-      assert Macro.to_string(spec_ast) == "any()"
+      assert Macro.to_string(spec_ast) == "term()"
     end
   end
 
@@ -66,7 +66,7 @@ defmodule SnakeBridge.Generator.TypeMapperTest do
       assert Macro.to_string(spec_ast) == "list(integer())"
     end
 
-    test "maps list of any to list(any())" do
+    test "maps list of any to list(term())" do
       python_type = %{
         "type" => "list",
         "element_type" => %{"type" => "any"}
@@ -74,7 +74,7 @@ defmodule SnakeBridge.Generator.TypeMapperTest do
 
       spec_ast = TypeMapper.to_spec(python_type)
 
-      assert Macro.to_string(spec_ast) == "list(any())"
+      assert Macro.to_string(spec_ast) == "list(term())"
     end
 
     test "maps dict to map()" do
@@ -86,7 +86,7 @@ defmodule SnakeBridge.Generator.TypeMapperTest do
 
       spec_ast = TypeMapper.to_spec(python_type)
 
-      assert Macro.to_string(spec_ast) == "map(String.t(), integer())"
+      assert Macro.to_string(spec_ast) == "%{optional(String.t()) => integer()}"
     end
 
     test "maps tuple with element types" do
@@ -214,7 +214,7 @@ defmodule SnakeBridge.Generator.TypeMapperTest do
 
       spec_ast = TypeMapper.to_spec(python_type)
 
-      assert Macro.to_string(spec_ast) == "map(String.t(), list(integer()))"
+      assert Macro.to_string(spec_ast) == "%{optional(String.t()) => list(integer())}"
     end
 
     test "maps optional list" do
@@ -239,7 +239,7 @@ defmodule SnakeBridge.Generator.TypeMapperTest do
 
       spec_ast = TypeMapper.to_spec(python_type)
 
-      assert Macro.to_string(spec_ast) == "list(any())"
+      assert Macro.to_string(spec_ast) == "list(term())"
     end
 
     test "handles missing types in dict" do
@@ -247,7 +247,7 @@ defmodule SnakeBridge.Generator.TypeMapperTest do
 
       spec_ast = TypeMapper.to_spec(python_type)
 
-      assert Macro.to_string(spec_ast) == "map(any(), any())"
+      assert Macro.to_string(spec_ast) == "%{optional(term()) => term()}"
     end
 
     test "handles unknown type" do
@@ -255,19 +255,19 @@ defmodule SnakeBridge.Generator.TypeMapperTest do
 
       spec_ast = TypeMapper.to_spec(python_type)
 
-      assert Macro.to_string(spec_ast) == "any()"
+      assert Macro.to_string(spec_ast) == "term()"
     end
 
     test "handles nil input" do
       spec_ast = TypeMapper.to_spec(nil)
 
-      assert Macro.to_string(spec_ast) == "any()"
+      assert Macro.to_string(spec_ast) == "term()"
     end
 
     test "handles empty map" do
       spec_ast = TypeMapper.to_spec(%{})
 
-      assert Macro.to_string(spec_ast) == "any()"
+      assert Macro.to_string(spec_ast) == "term()"
     end
   end
 end

@@ -1,0 +1,137 @@
+{
+  "classes": {
+    "PyLatexEnc.Latexwalker.LatexWalker": {
+      "attributes": [],
+      "class": "LatexWalker",
+      "docstring": "Walk a LaTeX string and parse nodes.",
+      "methods": [
+        {
+          "docstring": "",
+          "name": "__init__",
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "latex"
+            }
+          ]
+        },
+        {
+          "docstring": "Parse the LaTeX string into nodes.",
+          "name": "get_latex_nodes",
+          "parameters": []
+        }
+      ],
+      "module": "PyLatexEnc.Latexwalker.LatexWalker",
+      "python_module": "pylatexenc.latexwalker"
+    }
+  },
+  "symbols": {
+    "Elixir.MathVerify.grade/2": {
+      "docstring": "Score an answer against the gold expression.",
+      "function": "grade",
+      "module": "MathVerify",
+      "name": "grade",
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "gold"
+        },
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "answer"
+        }
+      ],
+      "python_module": "math_verify",
+      "return_annotation": null
+    },
+    "Elixir.MathVerify.parse/1": {
+      "docstring": "Parse an expression into normalized form.",
+      "function": "parse",
+      "module": "MathVerify",
+      "name": "parse",
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "text"
+        }
+      ],
+      "python_module": "math_verify",
+      "return_annotation": null
+    },
+    "Elixir.MathVerify.verify/2": {
+      "docstring": "Verify that an answer matches the gold expression.",
+      "function": "verify",
+      "module": "MathVerify",
+      "name": "verify",
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "gold"
+        },
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "answer"
+        }
+      ],
+      "python_module": "math_verify",
+      "return_annotation": null
+    },
+    "Elixir.PyLatexEnc.Latexencode.unicode_to_latex/1": {
+      "docstring": "Convert unicode text to LaTeX.",
+      "function": "unicode_to_latex",
+      "module": "PyLatexEnc.Latexencode",
+      "name": "unicode_to_latex",
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "text"
+        }
+      ],
+      "python_module": "pylatexenc.latexencode",
+      "return_annotation": null
+    },
+    "Elixir.Sympy.latex/1": {
+      "docstring": "Return a LaTeX representation of an expression.",
+      "function": "latex",
+      "module": "Sympy",
+      "name": "latex",
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "expr"
+        }
+      ],
+      "python_module": "sympy",
+      "return_annotation": null
+    },
+    "Elixir.Sympy.simplify/1": {
+      "docstring": "Simplify a symbolic expression.",
+      "function": "simplify",
+      "module": "Sympy",
+      "name": "simplify",
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "expr"
+        }
+      ],
+      "python_module": "sympy",
+      "return_annotation": null
+    },
+    "Elixir.Sympy.sympify/1": {
+      "docstring": "Convert text to a SymPy expression.",
+      "function": "sympify",
+      "module": "Sympy",
+      "name": "sympify",
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "expr"
+        }
+      ],
+      "python_module": "sympy",
+      "return_annotation": null
+    }
+  },
+  "version": "3.0.0"
+}

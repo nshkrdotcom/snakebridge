@@ -1,16 +1,10 @@
 import Config
 
 # Test-specific configuration
-
-# Disable automatic Snakepit startup in tests (use mocks)
 config :snakebridge,
-  auto_start_snakepit: false,
-  log_level: :warning
-
-# Smaller pool size for tests
-config :snakepit,
-  pool_size: 2,
-  pool_overflow: 5
+  strict: false,
+  verbose: false,
+  docs: [cache_enabled: false, source: :metadata]
 
 # Logger configuration for tests
 config :logger,
@@ -35,6 +29,3 @@ config :ex_unit,
   capture_log: true,
   assert_receive_timeout: 500,
   refute_receive_timeout: 100
-
-# Mox configuration (if using Mox for testing)
-config :snakebridge, :mocks, python_runtime: SnakeBridge.MockPythonRuntime

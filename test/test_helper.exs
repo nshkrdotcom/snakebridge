@@ -21,15 +21,9 @@ ExUnit.start(
   ]
 )
 
-# Setup Mox for mocking (if using Mox)
-# if Code.ensure_loaded?(Mox) do
-#   Mox.defmock(SnakeBridge.MockPythonRuntime, for: SnakeBridge.RuntimeBehaviour)
-# end
-
-# Setup Mimic for runtime mocking (if using Mimic)
-if Code.ensure_loaded?(Mimic) do
-  Mimic.copy(Snakepit)
-  Mimic.copy(System)
+if Code.ensure_loaded?(Mox) do
+  Mox.defmock(SnakeBridge.RuntimeClientMock, for: SnakeBridge.RuntimeClient)
+  Mox.defmock(SnakeBridge.PythonRunnerMock, for: SnakeBridge.PythonRunner)
 end
 
 # Helper functions for tests

@@ -43,7 +43,7 @@ defmodule SnakeBridge.MixProject do
   defp deps do
     [
       # Core - Python bridge
-      {:snakepit, "~> 0.7.3"},
+      {:snakepit, "~> 0.7.4"},
       # JSON encoding
       {:jason, "~> 1.4"},
 
@@ -51,8 +51,7 @@ defmodule SnakeBridge.MixProject do
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:mox, "~> 1.1", only: :test},
-      {:mimic, "~> 1.7", only: :test}
+      {:mox, "~> 1.1", only: :test}
     ]
   end
 
@@ -67,20 +66,15 @@ defmodule SnakeBridge.MixProject do
         Core: [
           SnakeBridge,
           SnakeBridge.Runtime,
-          SnakeBridge.Types
-        ],
-        "Type System": [
-          SnakeBridge.Types.Encoder,
-          SnakeBridge.Types.Decoder
+          SnakeBridge.Types,
+          SnakeBridge.Config
         ],
         Generator: [
-          SnakeBridge.Generator.Introspector,
-          SnakeBridge.Generator.TypeMapper,
-          SnakeBridge.Generator.DocFormatter,
-          SnakeBridge.Generator.SourceWriter
-        ],
-        "Mix Tasks": [
-          Mix.Tasks.Snakebridge.Gen
+          SnakeBridge.Generator,
+          SnakeBridge.Introspector,
+          SnakeBridge.Scanner,
+          SnakeBridge.Manifest,
+          SnakeBridge.Lock
         ]
       ]
     ]

@@ -1,258 +1,169 @@
 defmodule SnakeBridge.Runtime do
   @moduledoc """
-  Runtime execution layer for SnakeBridge.
+  Thin payload helper for SnakeBridge that delegates execution to Snakepit.
 
-  Provides the core integration between Elixir and Python through Snakepit,
-  handling argument encoding, result decoding, and error management.
-
-  ## Architecture
-
-  The Runtime module serves as a thin wrapper over Snakepit that:
-  1. Encodes Elixir arguments using `SnakeBridge.Types.Encoder`
-  2. Executes Python code via `Snakepit.execute/3`
-  3. Decodes Python results using `SnakeBridge.Types.Decoder`
-  4. Handles errors and converts them to Elixir-friendly formats
-
-  ## Protocol
-
-  The Python side expects calls through the "snakebridge_call" tool with:
-  - `module`: Python module path (e.g., "json", "numpy")
-  - `function`: Function name to call
-  - Additional arguments passed through as-is
-
-  ## Examples
-
-      # Call a Python function
-      {:ok, result} = SnakeBridge.Runtime.call("json", "dumps", %{obj: %{a: 1}})
-
-      # With options
-      {:ok, result} = SnakeBridge.Runtime.call(
-        "numpy",
-        "array",
-        %{object: [1, 2, 3]},
-        timeout: 5000
-      )
-
-      # Streaming results
-      SnakeBridge.Runtime.stream("requests", "get", %{url: "https://example.com"}, fn chunk ->
-        IO.inspect(chunk, label: "Chunk")
-      end)
-
+  This module is compile-time agnostic and focuses on building payloads that
+  match the Snakepit Prime runtime contract.
   """
 
-  alias SnakeBridge.Types.{Decoder, Encoder}
-
-  require Logger
-
-  @type module_name :: String.t()
-  @type function_name :: String.t()
-  @type args :: map()
+  @type module_ref :: module()
+  @type function_name :: atom() | String.t()
+  @type args :: list()
   @type opts :: keyword()
-  @type result :: term()
-  @type error :: {:error, term()}
 
-  @doc """
-  Calls a Python function and returns the result.
-
-  ## Arguments
-
-  - `module` - Python module path (e.g., "json", "numpy.linalg")
-  - `function` - Function name to call
-  - `args` - Map of arguments (will be encoded for Python)
-  - `opts` - Options keyword list
-
-  ## Options
-
-  - `:timeout` - Request timeout in milliseconds (default: 60000)
-  - `:session_id` - Session ID for worker affinity
-  - Any other options are passed through to Snakepit
-
-  ## Returns
-
-  - `{:ok, result}` - Decoded result from Python
-  - `{:error, reason}` - Error tuple with reason
-
-  ## Examples
-
-      iex> SnakeBridge.Runtime.call("json", "dumps", %{obj: %{hello: "world"}})
-      {:ok, "{\\"hello\\": \\"world\\"}"}
-
-      iex> SnakeBridge.Runtime.call("math", "sqrt", %{x: 16})
-      {:ok, 4.0}
-
-  """
-  @spec call(module_name(), function_name(), args(), opts()) :: {:ok, result()} | error()
-  def call(module, function, args \\ %{}, opts \\ []) do
-    # Encode arguments
-    encoded_args = encode_args(args)
-
-    # Build the call payload
-    payload =
-      %{
-        "module" => module,
-        "function" => function
-      }
-      |> Map.merge(encoded_args)
-
-    # Extract options
-    timeout = Keyword.get(opts, :timeout, 60_000)
-    snakepit_opts = build_snakepit_opts(opts, timeout)
-
-    # Execute via Snakepit
-    start_time = System.monotonic_time()
-
-    result =
-      case Snakepit.execute("snakebridge_call", payload, snakepit_opts) do
-        {:ok, response} ->
-          handle_response(response)
-
-        {:error, %Snakepit.Error{} = error} ->
-          {:error, format_snakepit_error(error)}
-      end
-
-    # Emit telemetry
-    duration = System.monotonic_time() - start_time
-    emit_telemetry(:call, duration, module, function, result)
-
-    result
+  @spec call(module_ref(), function_name(), args(), opts()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  def call(module, function, args \\ [], opts \\ []) do
+    {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
+    payload = base_payload(module, function, args ++ extra_args, kwargs, idempotent)
+    runtime_client().execute("snakebridge.call", payload, runtime_opts)
   end
 
-  @doc """
-  Calls a Python function with streaming results.
-
-  The callback function will be invoked for each chunk of data received
-  from the Python side.
-
-  ## Arguments
-
-  - `module` - Python module path
-  - `function` - Function name to call
-  - `args` - Map of arguments
-  - `callback` - Function to call for each chunk: `(chunk -> any())`
-  - `opts` - Options keyword list
-
-  ## Options
-
-  - `:timeout` - Request timeout in milliseconds (default: 300000)
-  - `:session_id` - Session ID for worker affinity
-  - Any other options are passed through to Snakepit
-
-  ## Returns
-
-  - `:ok` - Streaming completed successfully
-  - `{:error, reason}` - Error tuple with reason
-
-  ## Examples
-
-      iex> SnakeBridge.Runtime.stream("requests", "iter_content", %{url: "..."}, fn chunk ->
-      ...>   IO.puts("Received: \#{inspect(chunk)}")
-      ...> end)
-      :ok
-
-  """
-  @spec stream(module_name(), function_name(), args(), function(), opts()) :: :ok | error()
-  def stream(module, function, args \\ %{}, callback, opts \\ [])
+  @spec stream(module_ref(), function_name(), args(), opts(), (term() -> any())) ::
+          :ok | {:error, Snakepit.Error.t()}
+  def stream(module, function, args \\ [], opts \\ [], callback)
       when is_function(callback, 1) do
-    # Encode arguments
-    encoded_args = encode_args(args)
+    {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
+    payload = base_payload(module, function, args ++ extra_args, kwargs, idempotent)
+    runtime_client().execute_stream("snakebridge.stream", payload, callback, runtime_opts)
+  end
 
-    # Build the call payload
+  @spec call_class(module_ref(), function_name(), args(), opts()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  def call_class(module, function, args \\ [], opts \\ []) do
+    {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
+
     payload =
-      %{
-        "module" => module,
-        "function" => function
-      }
-      |> Map.merge(encoded_args)
+      module
+      |> base_payload(function, args ++ extra_args, kwargs, idempotent)
+      |> Map.put("call_type", "class")
+      |> Map.put("class", python_class_name(module))
 
-    # Extract options
-    timeout = Keyword.get(opts, :timeout, 300_000)
-    snakepit_opts = build_snakepit_opts(opts, timeout)
-
-    # Wrap callback to decode chunks
-    decoding_callback = fn chunk ->
-      decoded_chunk = Decoder.decode(chunk)
-      callback.(decoded_chunk)
-    end
-
-    # Execute via Snakepit streaming
-    start_time = System.monotonic_time()
-
-    result =
-      case Snakepit.execute_stream("snakebridge_call", payload, decoding_callback, snakepit_opts) do
-        :ok ->
-          :ok
-
-        {:error, %Snakepit.Error{} = error} ->
-          {:error, format_snakepit_error(error)}
-      end
-
-    # Emit telemetry
-    duration = System.monotonic_time() - start_time
-    emit_telemetry(:stream, duration, module, function, result)
-
-    result
+    runtime_client().execute("snakebridge.call", payload, runtime_opts)
   end
 
-  # Private Functions
+  @spec call_method(Snakepit.PyRef.t(), function_name(), args(), opts()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  def call_method(ref, function, args \\ [], opts \\ []) do
+    {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
 
-  @spec encode_args(args()) :: map()
-  defp encode_args(args) when is_map(args) do
-    Encoder.encode(args)
+    payload =
+      ref
+      |> base_payload_for_ref(function, args ++ extra_args, kwargs, idempotent)
+      |> Map.put("call_type", "method")
+      |> Map.put("instance", ref)
+
+    runtime_client().execute("snakebridge.call", payload, runtime_opts)
   end
 
-  defp encode_args(args), do: Encoder.encode(%{args: args})
+  @spec get_attr(Snakepit.PyRef.t(), atom() | String.t(), opts()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  def get_attr(ref, attr, opts \\ []) do
+    {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
 
-  @spec build_snakepit_opts(opts(), non_neg_integer()) :: keyword()
-  defp build_snakepit_opts(opts, timeout) do
-    opts
-    |> Keyword.put(:timeout, timeout)
-    |> Keyword.put_new(:pool, Snakepit.Pool)
+    payload =
+      ref
+      |> base_payload_for_ref(attr, [], kwargs, idempotent)
+      |> Map.put("call_type", "get_attr")
+      |> Map.put("instance", ref)
+      |> Map.put("attr", to_string(attr))
+
+    runtime_client().execute("snakebridge.call", payload, runtime_opts)
   end
 
-  @spec handle_response(map()) :: {:ok, result()} | error()
-  defp handle_response(%{"success" => true, "result" => result}) do
-    decoded_result = Decoder.decode(result)
-    {:ok, decoded_result}
+  @spec set_attr(Snakepit.PyRef.t(), atom() | String.t(), term(), opts()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  def set_attr(ref, attr, value, opts \\ []) do
+    {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
+
+    payload =
+      ref
+      |> base_payload_for_ref(attr, [value], kwargs, idempotent)
+      |> Map.put("call_type", "set_attr")
+      |> Map.put("instance", ref)
+      |> Map.put("attr", to_string(attr))
+
+    runtime_client().execute("snakebridge.call", payload, runtime_opts)
   end
 
-  defp handle_response(%{"success" => false, "error" => error_msg}) when is_binary(error_msg) do
-    {:error, error_msg}
+  defp runtime_client do
+    Application.get_env(:snakebridge, :runtime_client, Snakepit)
   end
 
-  defp handle_response(%{"success" => false, "error" => error_data}) do
-    {:error, Decoder.decode(error_data)}
+  defp split_opts(opts) do
+    extra_args = Keyword.get(opts, :__args__, [])
+    idempotent = Keyword.get(opts, :idempotent, false)
+    runtime_opts = Keyword.get(opts, :__runtime__, [])
+
+    kwargs =
+      opts
+      |> Keyword.drop([:__args__, :idempotent, :__runtime__])
+      |> Enum.into(%{}, fn {key, value} -> {to_string(key), value} end)
+
+    {kwargs, idempotent, List.wrap(extra_args), runtime_opts}
   end
 
-  defp handle_response(%{"error" => error_msg}) when is_binary(error_msg) do
-    {:error, error_msg}
-  end
+  defp base_payload(module, function, args, kwargs, idempotent) do
+    python_module = python_module_name(module)
 
-  defp handle_response(response) do
-    # Unexpected response format - try to decode anyway
-    Logger.warning("Unexpected response format from Python: #{inspect(response)}")
-    {:ok, Decoder.decode(response)}
-  end
-
-  @spec format_snakepit_error(Snakepit.Error.t()) :: String.t()
-  defp format_snakepit_error(%Snakepit.Error{} = error) do
-    "Snakepit error (#{error.category}): #{error.message}"
-  end
-
-  @spec emit_telemetry(atom(), integer(), module_name(), function_name(), term()) :: :ok
-  defp emit_telemetry(call_type, duration, module, function, result) do
-    measurements = %{duration: duration}
-
-    metadata = %{
-      call_type: call_type,
-      module: module,
-      function: function,
-      success: match?({:ok, _}, result) or result == :ok
+    %{
+      "library" => library_name(module, python_module),
+      "python_module" => python_module,
+      "function" => to_string(function),
+      "args" => List.wrap(args),
+      "kwargs" => kwargs,
+      "idempotent" => idempotent
     }
+  end
 
-    :telemetry.execute(
-      [:snakebridge, :runtime, call_type],
-      measurements,
-      metadata
-    )
+  defp base_payload_for_ref(ref, function, args, kwargs, idempotent) do
+    python_module =
+      Map.get(ref, :python_module) || Map.get(ref, :library) || python_module_name(ref)
+
+    library = Map.get(ref, :library) || library_name(ref, python_module)
+
+    %{
+      "library" => library,
+      "python_module" => python_module,
+      "function" => to_string(function),
+      "args" => List.wrap(args),
+      "kwargs" => kwargs,
+      "idempotent" => idempotent
+    }
+  end
+
+  defp python_module_name(module) when is_atom(module) do
+    if function_exported?(module, :__snakebridge_python_name__, 0) do
+      module.__snakebridge_python_name__()
+    else
+      module
+      |> Module.split()
+      |> Enum.map_join(".", &Macro.underscore/1)
+    end
+  end
+
+  defp python_module_name(%{python_module: python_module}) when is_binary(python_module),
+    do: python_module
+
+  defp python_module_name(_), do: "unknown"
+
+  defp library_name(module, python_module) when is_atom(module) do
+    if function_exported?(module, :__snakebridge_library__, 0) do
+      module.__snakebridge_library__()
+    else
+      python_module |> String.split(".") |> List.first()
+    end
+  end
+
+  defp library_name(_module, python_module) do
+    python_module |> String.split(".") |> List.first()
+  end
+
+  defp python_class_name(module) when is_atom(module) do
+    if function_exported?(module, :__snakebridge_python_class__, 0) do
+      module.__snakebridge_python_class__()
+    else
+      module |> Module.split() |> List.last()
+    end
   end
 end

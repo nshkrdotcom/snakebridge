@@ -1,17 +1,11 @@
 import Config
 
-# Configure SnakeBridge with the Python libraries you need
-# These will be generated automatically on `mix compile`
+# SnakeBridge v3 reads libraries from mix.exs dependency options.
+# This file only configures compile-time behavior.
 config :snakebridge,
-  adapters: [
-    # Standard library - always available
-    :json,
-    :math,
+  verbose: true,
+  strict: false,
+  docs: [source: :python, cache_enabled: false]
 
-    # SymPy - symbolic mathematics (uv installs automatically)
-    :sympy
-  ]
-
-# Configure logging (optional)
 config :logger,
   level: :info

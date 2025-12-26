@@ -62,17 +62,19 @@ defmodule SnakeBridge.Generator.TypeMapper do
 
   """
   @spec to_spec(map() | nil) :: Macro.t()
-  def to_spec(nil), do: quote(do: any())
-  def to_spec(%{} = python_type) when map_size(python_type) == 0, do: quote(do: any())
+  def to_spec(nil), do: quote(do: term())
+  def to_spec(%{} = python_type) when map_size(python_type) == 0, do: quote(do: term())
 
   # Primitive types
   def to_spec(%{"type" => "int"}), do: quote(do: integer())
   def to_spec(%{"type" => "float"}), do: quote(do: float())
   def to_spec(%{"type" => "str"}), do: quote(do: String.t())
+  def to_spec(%{"type" => "string"}), do: quote(do: String.t())
   def to_spec(%{"type" => "bool"}), do: quote(do: boolean())
+  def to_spec(%{"type" => "boolean"}), do: quote(do: boolean())
   def to_spec(%{"type" => "bytes"}), do: quote(do: binary())
   def to_spec(%{"type" => "none"}), do: quote(do: nil)
-  def to_spec(%{"type" => "any"}), do: quote(do: any())
+  def to_spec(%{"type" => "any"}), do: quote(do: term())
 
   # Complex types - delegate to specialized mappers
   def to_spec(%{"type" => "list"} = python_type), do: map_list_type(python_type)
@@ -84,8 +86,8 @@ defmodule SnakeBridge.Generator.TypeMapper do
   def to_spec(%{"type" => "class"} = python_type), do: map_class_type(python_type)
 
   # Fallback for unknown types
-  def to_spec(%{"type" => _}), do: quote(do: any())
-  def to_spec(_), do: quote(do: any())
+  def to_spec(%{"type" => _}), do: quote(do: term())
+  def to_spec(_), do: quote(do: term())
 
   # Private Functions
 
@@ -95,16 +97,16 @@ defmodule SnakeBridge.Generator.TypeMapper do
     quote(do: list(unquote(element_spec)))
   end
 
-  defp map_list_type(_), do: quote(do: list(any()))
+  defp map_list_type(_), do: quote(do: list(term()))
 
   @spec map_dict_type(map()) :: Macro.t()
   defp map_dict_type(%{"key_type" => key_type, "value_type" => value_type}) do
     key_spec = to_spec(key_type)
     value_spec = to_spec(value_type)
-    quote(do: map(unquote(key_spec), unquote(value_spec)))
+    quote(do: %{optional(unquote(key_spec)) => unquote(value_spec)})
   end
 
-  defp map_dict_type(_), do: quote(do: map(any(), any()))
+  defp map_dict_type(_), do: quote(do: %{optional(term()) => term()})
 
   @spec map_tuple_type(map()) :: Macro.t()
   defp map_tuple_type(%{"element_types" => element_types}) when is_list(element_types) do
@@ -126,7 +128,7 @@ defmodule SnakeBridge.Generator.TypeMapper do
     quote(do: MapSet.t(unquote(element_spec)))
   end
 
-  defp map_set_type(_), do: quote(do: MapSet.t(any()))
+  defp map_set_type(_), do: quote(do: MapSet.t(term()))
 
   @spec map_optional_type(map()) :: Macro.t()
   defp map_optional_type(%{"inner_type" => inner_type}) do
@@ -134,7 +136,7 @@ defmodule SnakeBridge.Generator.TypeMapper do
     quote(do: unquote(inner_spec) | nil)
   end
 
-  defp map_optional_type(_), do: quote(do: any() | nil)
+  defp map_optional_type(_), do: quote(do: term() | nil)
 
   @spec map_union_type(map()) :: Macro.t()
   defp map_union_type(%{"types" => types}) when is_list(types) and length(types) > 0 do
@@ -146,7 +148,7 @@ defmodule SnakeBridge.Generator.TypeMapper do
     end)
   end
 
-  defp map_union_type(_), do: quote(do: any())
+  defp map_union_type(_), do: quote(do: term())
 
   @spec map_class_type(map()) :: Macro.t()
   defp map_class_type(%{"name" => name}) when is_binary(name) do
@@ -156,5 +158,5 @@ defmodule SnakeBridge.Generator.TypeMapper do
     {{:., [], [module_alias, :t]}, [], []}
   end
 
-  defp map_class_type(_), do: quote(do: any())
+  defp map_class_type(_), do: quote(do: term())
 end

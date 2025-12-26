@@ -1,15 +1,8 @@
 import Config
 
 # Development-specific configuration
-
-# Enable verbose logging in development
 config :snakebridge,
-  log_level: :debug
-
-# Increase pool size for development (faster feedback)
-config :snakepit,
-  pool_size: 10,
-  pool_overflow: 20
+  verbose: true
 
 # Logger configuration for development
 config :logger,

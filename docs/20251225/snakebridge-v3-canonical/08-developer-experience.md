@@ -97,6 +97,7 @@ defmodule Numpy do
   ...
   """
   def array(object) do
+    # SnakeBridge.Runtime is a thin payload helper over Snakepit.
     SnakeBridge.Runtime.call(__MODULE__, :array, [object])
   end
 end
@@ -157,7 +158,7 @@ iex> Numpy.std(arr)
 {:ok, 1.4142135623730951}
 ```
 
-Note: Python object references (`SnakeBridge.PyRef.t()`) are session-bound. For long-lived objects, use `SnakeBridge.Runtime.call_in_session/5` or Snakepit sessions.
+Note: Python object references (`Snakepit.PyRef.t()`) are session-bound. For long-lived objects, use `SnakeBridge.Runtime.call_in_session/5` or Snakepit sessions.
 
 ## Error Messages
 
@@ -180,7 +181,7 @@ iex> Numpy.nonexistent([1, 2, 3])
 ```elixir
 iex> Numpy.array("invalid input")
 
-{:error, %SnakeBridge.Error{
+{:error, %Snakepit.Error{
   type: :python_error,
   python_type: "TypeError",
   message: "Cannot convert 'invalid input' to array",
@@ -196,15 +197,15 @@ Stub the runtime layer so tests remain fast and deterministic:
 
 ```elixir
 # test/support/runtime_stub.ex
-defmodule MyApp.RuntimeStub do
-  def call(_module, _function, _args, _opts \\ []), do: {:ok, :stubbed}
+defmodule MyApp.SnakepitStub do
+  def execute(_tool, _payload), do: {:ok, :stubbed}
 end
 ```
 
 Configure in `config/test.exs`:
 
 ```elixir
-config :snakebridge, runtime: MyApp.RuntimeStub
+config :snakebridge, runtime_client: MyApp.SnakepitStub
 ```
 
 ### Integration Tests (With Python)
@@ -356,10 +357,10 @@ defmodule MyAppTest do
   setup :verify_on_exit!
 
   test "analysis returns mean and std" do
-    SnakeBridge.RuntimeMock
-    |> expect(:call, fn Numpy, :array, [[1,2,3]] -> {:ok, [1,2,3]} end)
-    |> expect(:call, fn Numpy, :mean, [[1,2,3]] -> {:ok, 2.0} end)
-    |> expect(:call, fn Numpy, :std, [[1,2,3]] -> {:ok, 0.816} end)
+    MyApp.SnakepitMock
+    |> expect(:execute, fn "snakebridge.call", %{function: "array"} -> {:ok, [1,2,3]} end)
+    |> expect(:execute, fn "snakebridge.call", %{function: "mean"} -> {:ok, 2.0} end)
+    |> expect(:execute, fn "snakebridge.call", %{function: "std"} -> {:ok, 0.816} end)
 
     assert {2.0, 0.816} = MyApp.Analysis.run([1, 2, 3])
   end

@@ -17,7 +17,7 @@ defmodule Numpy do
   SnakeBridge bindings for `numpy`.
 
   This module provides Elixir wrappers for Python's numpy library.
-  Functions call Python through the Snakepit runtime.
+  Functions delegate to Snakepit Prime runtime via `snakebridge.call` payloads.
 
   ## Discovery
 
@@ -45,7 +45,7 @@ defmodule Numpy do
     - `{:ok, result}` on success
     - `{:error, reason}` on failure
   """
-  @spec array(term(), keyword()) :: {:ok, term()} | {:error, term()}
+  @spec array(term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
   def array(object, opts \\ []) do
     SnakeBridge.Runtime.call(__MODULE__, :array, [object], opts)
   end
@@ -53,7 +53,7 @@ defmodule Numpy do
   @doc """
   Compute the arithmetic mean along the specified axis.
   """
-  @spec mean(term(), keyword()) :: {:ok, term()} | {:error, term()}
+  @spec mean(term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
   def mean(a, opts \\ []) do
     SnakeBridge.Runtime.call(__MODULE__, :mean, [a], opts)
   end
@@ -61,7 +61,7 @@ defmodule Numpy do
   @doc """
   Compute the standard deviation along the specified axis.
   """
-  @spec std(term(), keyword()) :: {:ok, term()} | {:error, term()}
+  @spec std(term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
   def std(a, opts \\ []) do
     SnakeBridge.Runtime.call(__MODULE__, :std, [a], opts)
   end
@@ -88,6 +88,9 @@ defmodule Numpy do
   end
 end
 ```
+
+Note: `SnakeBridge.Runtime` is a thin payload helper that delegates to Snakepit.
+All pooling, execution, and error translation live in Snakepit Prime runtime.
 
 ## Implementation
 
@@ -167,7 +170,7 @@ defmodule SnakeBridge.Generator do
       SnakeBridge bindings for `#{library.python_name}`.
 
       This module provides Elixir wrappers for Python's #{library.python_name} library.
-      Functions call Python through the Snakepit runtime.
+      Functions delegate to Snakepit Prime runtime via `snakebridge.call` payloads.
 
       ## Discovery
 
@@ -240,7 +243,7 @@ defmodule SnakeBridge.Generator do
       |> Enum.any?(&(&1["kind"] in ["KEYWORD_ONLY", "VAR_KEYWORD"] || Map.has_key?(&1, "default")))
 
     spec_args = if has_opts, do: args <> ", keyword()", else: args
-    "@spec #{name}(#{spec_args}) :: {:ok, term()} | {:error, term()}"
+    "@spec #{name}(#{spec_args}) :: {:ok, term()} | {:error, Snakepit.Error.t()}"
   end
 
   defp generate_discovery_functions(functions) do
@@ -342,7 +345,7 @@ SnakeBridge generates wrapper signatures that separate **required positional** a
 Example:
 
 ```elixir
-@spec reshape(term(), keyword()) :: {:ok, term()} | {:error, term()}
+@spec reshape(term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
 def reshape(a, opts \\ []) do
   # opts: [shape: {2, 3}, order: "C", __args__: []]
   SnakeBridge.Runtime.call(__MODULE__, :reshape, [a], opts)
@@ -377,17 +380,17 @@ Python classes become nested Elixir modules with explicit constructors and metho
 ```elixir
 defmodule Sympy do
   defmodule Symbol do
-    @spec new(term(), keyword()) :: {:ok, SnakeBridge.PyRef.t()} | {:error, term()}
+    @spec new(term(), keyword()) :: {:ok, Snakepit.PyRef.t()} | {:error, Snakepit.Error.t()}
     def new(name, opts \\ []) do
       SnakeBridge.Runtime.call_class(__MODULE__, :__init__, [name], opts)
     end
 
-    @spec name(SnakeBridge.PyRef.t()) :: {:ok, term()} | {:error, term()}
+    @spec name(Snakepit.PyRef.t()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
     def name(ref) do
       SnakeBridge.Runtime.get_attr(ref, :name)
     end
 
-    @spec simplify(SnakeBridge.PyRef.t(), keyword()) :: {:ok, SnakeBridge.PyRef.t()} | {:error, term()}
+    @spec simplify(Snakepit.PyRef.t(), keyword()) :: {:ok, Snakepit.PyRef.t()} | {:error, Snakepit.Error.t()}
     def simplify(ref, opts \\ []) do
       SnakeBridge.Runtime.call_method(ref, :simplify, [], opts)
     end
@@ -397,7 +400,7 @@ end
 
 Rules:
 
-- Instance methods take a `SnakeBridge.PyRef.t()` as the first argument.
+- Instance methods take a `Snakepit.PyRef.t()` as the first argument.
 - Static/class methods are generated as normal module functions.
 - Attributes map to `get_attr/2` and `set_attr/3` helpers.
 
@@ -406,7 +409,7 @@ Rules:
 If a Python tool supports streaming, the generator emits a streaming variant:
 
 ```elixir
-@spec predict_stream(term(), keyword(), (map() -> any())) :: :ok | {:error, term()}
+@spec predict_stream(term(), keyword(), (map() -> any())) :: :ok | {:error, Snakepit.Error.t()}
 def predict_stream(input, opts \\ [], on_chunk) do
   SnakeBridge.Runtime.stream(__MODULE__, :predict, [input], opts, on_chunk)
 end

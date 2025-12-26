@@ -10,7 +10,7 @@ The introspector queries Python to extract function signatures, docstrings, and 
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │ Symbols to      │     │ Introspection   │     │ Structured      │
 │ Generate        │────►│ Script          │────►│ Metadata        │
-│                 │     │ (via uv/python) │     │                 │
+│                 │     │ (via Snakepit)  │     │                 │
 │ [array, mean]   │     │                 │     │ [{name, params, │
 │                 │     │                 │     │   doc, ...}]    │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
@@ -73,7 +73,7 @@ Class metadata is used by the generator to create nested modules and method wrap
 ### Python Script
 
 ```python
-# Introspection script (embedded in Elixir, executed via UV)
+# Introspection script (embedded in Elixir, executed via Snakepit runtime)
 import inspect
 import json
 import sys
@@ -146,7 +146,7 @@ if __name__ == "__main__":
 ```elixir
 defmodule SnakeBridge.Introspector do
   @moduledoc """
-  Introspects Python functions using UV/Python.
+  Introspects Python functions using the Snakepit Python runtime.
   """
 
   @doc """
@@ -179,23 +179,8 @@ defmodule SnakeBridge.Introspector do
   end
 
   defp run_python(library, script, args) do
-    {cmd, cmd_args} = build_command(library, script, args)
-    
-    case System.cmd(cmd, cmd_args, stderr_to_stdout: true) do
-      {output, 0} -> {:ok, String.trim(output)}
-      {error, code} -> {:error, {code, error}}
-    end
-  end
-
-  defp build_command(library, script, args) do
-    if library.version == :stdlib do
-      # Stdlib: use system Python
-      {"python3", ["-c", script | args]}
-    else
-      # Third-party: use UV with the specific version
-      version_spec = "#{library.python_name}#{library.version}"
-      {"uv", ["run", "--with", version_spec, "python", "-c", script | args]}
-    end
+    # Delegate runtime selection (uv/system/managed) to Snakepit.
+    Snakepit.Python.run(library, script, args)
   end
 
   defp parse_output(output) do
@@ -218,22 +203,14 @@ defmodule SnakeBridge.Introspector do
 end
 ```
 
-## UV Integration
+Note: `Snakepit.Python.run/3` is illustrative. SnakeBridge delegates runtime
+selection to Snakepit Prime; the actual entrypoint lives in Snakepit.
 
-SnakeBridge uses `uv` for third-party libraries and system Python for stdlib modules.
+## Python Runtime Integration (Snakepit)
 
-```elixir
-config :snakebridge,
-  python: [
-    python_executable: "python3",
-    uv_executable: "uv"
-  ]
-```
-
-- If `uv` is missing, third-party introspection fails with `:uv_not_found`.
-- If `python3` is missing, stdlib introspection fails with `:python_not_found`.
-
-`mix snakebridge.doctor` should surface both cases with install guidance.
+SnakeBridge does not manage Python directly. Introspection runs inside the
+Python runtime configured in Snakepit (uv-managed or system). Missing Python
+or uv errors surface from Snakepit and are forwarded by SnakeBridge.
 
 ## Batching Strategy
 
@@ -294,19 +271,14 @@ introspect(uninstalled_lib, [:func])
 introspect(huge_lib, many_functions, timeout: 60_000)
 ```
 
-### UV or Python Missing
+### Python Runtime Missing
 
-If `uv` or `python3` are missing:
+If Snakepit cannot locate Python or uv, introspection fails:
 
 - `:stdlib` libraries fail with `{:error, :python_not_found}`
-- Third-party libraries fail with `{:error, :uv_not_found}`
+- Third-party libraries fail with `{:error, :uv_not_found}` (from Snakepit)
 
-Errors should include install guidance:
-
-```
-SnakeBridge requires `uv` for third-party libraries.
-Install: https://astral.sh/uv/ or `pip install uv`
-```
+`mix snakebridge.doctor` should surface install guidance (delegated to Snakepit).
 
 ## Type Mapping
 

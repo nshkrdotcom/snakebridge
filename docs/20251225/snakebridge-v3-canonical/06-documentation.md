@@ -119,7 +119,7 @@ defmodule SnakeBridge.Docs do
         print("Function not found.")
     """
     
-    case run_python(library, script) do
+    case Snakepit.Python.run(library, script, []) do
       {:ok, output} -> String.trim(output)
       {:error, _} -> "Documentation unavailable."
     end
@@ -142,6 +142,9 @@ defmodule SnakeBridge.Docs do
   end
 end
 ```
+
+Note: `Snakepit.Python.run/3` is illustrative; SnakeBridge delegates to the
+Snakepit Prime runtime for Python execution when docs source is `:python`.
 
 ### Caching Strategy
 

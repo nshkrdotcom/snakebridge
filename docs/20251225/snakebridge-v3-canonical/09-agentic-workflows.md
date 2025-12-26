@@ -10,7 +10,7 @@ AI agents need to:
 1. **Discover** available APIs without prior knowledge
 2. **Understand** function signatures and types
 3. **Generate** adapters on-demand
-4. **Call** functions safely with structured errors
+4. **Call** functions safely with structured errors (from Snakepit runtime)
 
 Traditional full-library generation is too slow for iterative agent loops. SnakeBridge's lazy architecture solves this naturally.
 
@@ -106,7 +106,7 @@ For calls that can't be statically analyzed:
 
 ```elixir
 # Dynamic call (recorded to ledger in dev)
-SnakeBridge.Runtime.dynamic_call(Numpy, :custom_op, [a, b, c])
+Snakepit.dynamic_call(:numpy, :custom_op, [a, b, c])
 ```
 
 After development:
@@ -201,7 +201,7 @@ case Numpy.nonexistent([1, 2, 3]) do
   {:ok, result} ->
     result
 
-  {:error, %SnakeBridge.Error{
+  {:error, %Snakepit.Error{
     type: :function_not_found,
     message: "Function 'nonexistent' not found in numpy",
     suggestions: [:array, :zeros, :ones]

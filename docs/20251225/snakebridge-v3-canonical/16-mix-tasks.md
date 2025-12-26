@@ -99,7 +99,8 @@ mix snakebridge.repair
 
 ## `mix snakebridge.doctor`
 
-Check environment and dependency health.
+Check environment and dependency health (delegates to Snakepit runtime checks
+for Python/uv availability).
 
 Example:
 
@@ -145,4 +146,3 @@ Example:
 ```bash
 mix snakebridge.lock --rebuild
 ```
-

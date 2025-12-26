@@ -8,6 +8,12 @@ SnakeBridge v3 is a **compile-time code generator** that produces type-safe Elix
 
 **Key architectural decision**: SnakeBridge is the codegen layer; [Snakepit](https://hex.pm/packages/snakepit) remains the runtime substrate for Python process management.
 
+## Scope and Assumptions
+
+- This doc set covers **compile-time** behavior (scan, introspect, generate).
+- Runtime execution, pooling, zero-copy, crash barrier, and exception translation live in **Snakepit Prime runtime**.
+- SnakeBridge emits payloads that conform to the Snakepit runtime contract; it does not implement runtime behavior.
+
 ## System Overview
 
 ```
@@ -32,15 +38,15 @@ SnakeBridge v3 is a **compile-time code generator** that produces type-safe Elix
 │     └── No Python needed - generated source is committed                         │
 │                                                                                   │
 ├─────────────────────────────────────────────────────────────────────────────────┤
-│                              Run Time                                            │
+│                              Run Time (Snakepit)                                 │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                   │
-│  Generated modules call through Snakepit runtime:                                │
+│  Generated modules call Snakepit Prime runtime directly:                          │
 │                                                                                   │
-│  ┌────────────┐    ┌──────────────┐    ┌──────────────┐    ┌────────────────────┐│
-│  │Numpy.array │───►│ SnakeBridge  │───►│   Snakepit   │───►│  Python Process    ││
-│  │   (call)   │    │   Runtime    │    │ gRPC Pool    │    │  (numpy.array)     ││
-│  └────────────┘    └──────────────┘    └──────────────┘    └────────────────────┘│
+│  ┌────────────┐    ┌────────────────────┐    ┌────────────────────┐             │
+│  │Numpy.array │───►│   Snakepit Prime   │───►│  Python Process     │             │
+│  │   (call)   │    │   gRPC Pool        │    │  (numpy.array)      │             │
+│  └────────────┘    └────────────────────┘    └────────────────────┘             │
 │                                                                                   │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -191,9 +197,6 @@ At runtime, generated modules delegate to Snakepit:
 Numpy.mean(arr)
     │
     ▼
-SnakeBridge.Runtime.call(Numpy, :mean, [arr])
-    │
-    ▼
 Snakepit.execute("snakebridge.call", %{library: "numpy", function: "mean", args: [arr], kwargs: %{}})
     │
     ▼
@@ -203,24 +206,27 @@ gRPC to Python worker → numpy.mean(a) → result
 {:ok, 3.14159}
 ```
 
-Snakepit handles:
+Snakepit Prime runtime handles:
 - Worker pooling and lifecycle
 - Session affinity (if using sessions)
 - Streaming for large results
 - Telemetry and observability
 
+## ML Pillars (Must-Haves)
+
+To be credible for ML workloads, the runtime must provide:
+
+- Zero-copy tensor/table interop (DLPack + Arrow)
+- Crash barrier with tainting and optional retry
+- Structured exception translation
+- Hermetic, uv-managed Python runtime
+
+See `17-ml-pillars.md` for how SnakeBridge aligns with Snakepit Prime runtime.
+
 ## Snakepit Integration Contract
 
-SnakeBridge uses Snakepit as a runtime substrate via a dedicated Python adapter.
-
-**Required Snakepit config:**
-
-```elixir
-config :snakepit,
-  pooling_enabled: true,
-  adapter_module: Snakepit.Adapters.GRPCPython,
-  adapter_args: ["--adapter", "snakebridge_adapter"]
-```
+SnakeBridge uses Snakepit Prime as a runtime substrate via the `snakebridge.call`
+and `snakebridge.stream` tools exposed by the Snakepit adapter.
 
 **Runtime calls:**
 
@@ -233,6 +239,8 @@ SnakeBridge.Runtime.call(Numpy, :mean, [arr], [axis: 0])
        kwargs: %{axis: 0}
      })
 ```
+
+`SnakeBridge.Runtime` is a thin payload helper that delegates to Snakepit.
 
 **Streaming calls:**
 
@@ -290,3 +298,4 @@ See [01-configuration.md](01-configuration.md) for full options.
 | [14-runtime-integration.md](14-runtime-integration.md) | Snakepit runtime contract |
 | [15-error-handling.md](15-error-handling.md) | Error categories and surfaces |
 | [16-mix-tasks.md](16-mix-tasks.md) | CLI task reference |
+| [17-ml-pillars.md](17-ml-pillars.md) | Zero-copy, crash barrier, hermetic runtime |

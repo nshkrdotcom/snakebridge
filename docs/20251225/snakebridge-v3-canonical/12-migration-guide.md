@@ -40,8 +40,10 @@ defp deps do
      libraries: [
        numpy: "~> 1.26",
        pandas: "~> 2.0"
-     ]}
-    # snakepit is now a transitive dependency
+     ]},
+    # snakepit runtime (explicitly pin if needed)
+    # Requires Snakepit Prime runtime (>= 0.7.(x+1))
+    {:snakepit, "~> 0.7"}
   ]
 end
 
@@ -74,10 +76,14 @@ config :snakebridge,
    sympy: "~> 1.12"
  ]}
 
-# config/config.exs - only runtime options
+# config/config.exs - compile-time options only
 config :snakebridge,
   verbose: false,
   strict: false
+
+# runtime configuration lives under :snakepit
+config :snakepit,
+  pooling_enabled: true
 ```
 
 ### Step 3: Clean Old Generated Code

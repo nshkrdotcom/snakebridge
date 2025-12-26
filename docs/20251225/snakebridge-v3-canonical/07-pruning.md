@@ -140,23 +140,6 @@ Regenerating numpy.ex...
 Done.
 ```
 
-## Auto-Pruning (Opt-In)
-
-For teams that want automatic cleanup:
-
-```elixir
-config :snakebridge,
-  pruning: [
-    auto: true,
-    auto_on: :compile,              # Prune during compilation
-    auto_environment: [:prod]       # Only in prod builds
-  ]
-```
-
-> [!CAUTION]
-> Auto-pruning can cause non-deterministic builds if different code paths
-> are exercised. Use with caution. Manual pruning is recommended.
-
 ## Programmatic API
 
 ```elixir
@@ -226,11 +209,6 @@ Recommendations:
 ```elixir
 config :snakebridge,
   pruning: [
-    # Auto-prune (not recommended)
-    auto: false,
-    auto_on: :compile,
-    auto_environment: [:prod],
-
     # Safety
     backup: true,
     backup_dir: ".snakebridge/backups",

@@ -203,7 +203,7 @@ Automatic learning undermines determinism:
 
 ---
 
-## Decision 7: Python as Doc Source of Truth
+## Decision 7: Python as Doc Source of Truth (Metadata Fallback Allowed)
 
 ### The Question
 
@@ -215,16 +215,18 @@ Where do docs come from: metadata registry or live Python?
 **Option B: Live Python authoritative**
 **Option C: Hybrid**
 
-### Decision: Option B (Python Authoritative)
+### Decision: Option B (Python Authoritative) with Optional Metadata Fallback
 
 ### Rationale
 
-For v3, Python is source of truth:
+For v3, Python is the source of truth:
 - Docs always accurate to installed version
-- No separate registry infrastructure
-- Simple mental model
+- No separate registry infrastructure required
+- Simple mental model for developers
 
-Metadata packages can become an optimization later.
+Metadata fallback is allowed for CI/offline use:
+- `docs.source: :metadata` avoids Python dependency
+- `:hybrid` prefers metadata, falls back to Python in dev
 
 ---
 
@@ -344,6 +346,7 @@ Should generated files include timestamps?
 - Minimal git diffs
 - Easier code review
 - Content-addressed, not time-addressed
+- Applies to generated source and manifests
 
 ---
 
@@ -357,7 +360,7 @@ Should generated files include timestamps?
 | Environment tracking | Full lock file | Reproducibility |
 | Cleanup policy | Manual prune | Determinism |
 | Dynamic dispatch | Ledger + promote | Controlled |
-| Doc source | Python | Accuracy |
+| Doc source | Python (metadata fallback) | Accuracy + offline option |
 | Security | Limited v1 scope | Explicit |
 | File granularity | Per-library | Merge friendliness |
 | Runtime | Snakepit | Separation of concerns |

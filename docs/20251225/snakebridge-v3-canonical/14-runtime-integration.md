@@ -1,124 +1,111 @@
-# Runtime Integration (Snakepit Contract)
+# Runtime Integration (Snakepit Prime Contract)
 
 ## Overview
 
-SnakeBridge generates Elixir wrappers, but **execution happens in Snakepit**. This document specifies the runtime contract between generated code and Snakepit.
+SnakeBridge generates Elixir wrappers, but **execution happens in Snakepit Prime**.
+This document defines the payload contract SnakeBridge must emit. Runtime behavior
+(pooling, crash barrier, zero-copy, exception translation) is owned by Snakepit.
 
-## Required Snakepit Configuration
+Assumption: Snakepit Prime runtime (>= 0.7.(x+1)) is available and configured.
 
-```elixir
-# config/config.exs
-config :snakepit,
-  pooling_enabled: true,
-  adapter_module: Snakepit.Adapters.GRPCPython,
-  adapter_args: ["--adapter", "snakebridge_adapter"]
-```
+## Tool Names
 
-SnakeBridge ships a Python adapter named `snakebridge_adapter` that exposes two tools:
+SnakeBridge-generated wrappers call these Snakepit tools:
 
 - `snakebridge.call` (request/response)
 - `snakebridge.stream` (streaming)
 
-## Runtime API
+If you provide a custom adapter, it must expose these tool names.
 
-### Standard Call
+## Base Payload
 
-```elixir
-@spec call(module(), atom(), list(), keyword()) :: {:ok, term()} | {:error, SnakeBridge.Error.t()}
-def call(module, function, args, kwargs \\ []) do
-  Snakepit.execute("snakebridge.call", %{
-    library: library_name(module),           # "numpy" or "sympy"
-    python_module: python_name(module),      # "numpy" or "numpy.linalg"
-    function: to_string(function),
-    args: args,
-    kwargs: Map.new(kwargs)
-  })
-end
+```json
+{
+  "library": "numpy",
+  "python_module": "numpy.linalg",
+  "function": "solve",
+  "args": ["..."],
+  "kwargs": {"axis": 0},
+  "idempotent": true
+}
 ```
 
-`python_name/1` reads `__snakebridge_python_name__/0` from generated modules. Top-level libraries return `"numpy"`, nested submodules return `"numpy.linalg"`.
+### Fields
 
-### Session-Affine Call
+- `library`: top-level library name
+- `python_module`: dotted module path for submodules
+- `function`: function/method name
+- `args`: positional args (may include `Snakepit.ZeroCopyRef` handles)
+- `kwargs`: keyword args
+- `idempotent`: used by Snakepit crash barrier retry policy
 
-Python object references are only valid in the worker that created them. Use sessions for methods on `SnakeBridge.PyRef.t()`:
+## Class and Method Payloads
 
-```elixir
-@spec call_in_session(String.t(), module(), atom(), list(), keyword()) :: {:ok, term()} | {:error, SnakeBridge.Error.t()}
-def call_in_session(session_id, module, function, args, kwargs \\ []) do
-  Snakepit.execute_in_session(session_id, "snakebridge.call", %{
-    library: library_name(module),
-    python_module: python_name(module),
-    function: to_string(function),
-    args: args,
-    kwargs: Map.new(kwargs)
-  })
-end
+```json
+{
+  "call_type": "class",
+  "library": "sympy",
+  "python_module": "sympy",
+  "class": "Symbol",
+  "function": "__init__",
+  "args": ["x"],
+  "kwargs": {}
+}
 ```
 
-### Streaming Call
-
-```elixir
-@spec stream(module(), atom(), list(), keyword(), (map() -> any())) :: :ok | {:error, SnakeBridge.Error.t()}
-def stream(module, function, args, kwargs \\ [], on_chunk) do
-  Snakepit.execute_stream("snakebridge.stream", %{
-    library: library_name(module),
-    python_module: python_name(module),
-    function: to_string(function),
-    args: args,
-    kwargs: Map.new(kwargs)
-  }, on_chunk)
-end
+```json
+{
+  "call_type": "method",
+  "library": "sympy",
+  "python_module": "sympy",
+  "instance": "<pyref>",
+  "function": "simplify",
+  "args": [],
+  "kwargs": {}
+}
 ```
 
-## Class and Method Calls
-
-Class and instance operations use the same `snakebridge.call` tool with a `call_type` field:
-
-```elixir
-# Constructor
-%{call_type: "class", library: "sympy", python_module: "sympy", class: "Symbol", function: "__init__", args: [...], kwargs: %{...}}
-
-# Instance method
-%{call_type: "method", library: "sympy", python_module: "sympy", instance: ref, function: "simplify", args: [...], kwargs: %{...}}
-
-# Attribute access
-%{call_type: "get_attr", library: "sympy", python_module: "sympy", instance: ref, attr: "name"}
-%{call_type: "set_attr", library: "sympy", python_module: "sympy", instance: ref, attr: "name", value: "x"}
+```json
+{
+  "call_type": "get_attr",
+  "library": "sympy",
+  "python_module": "sympy",
+  "instance": "<pyref>",
+  "attr": "name"
+}
 ```
 
-The Python adapter resolves these call types and invokes the correct Python object.
+## Runtime Client Helper
 
-### Convenience Helpers
-
-Generated code calls helper functions to construct the appropriate payloads:
-
-```elixir
-SnakeBridge.Runtime.call_class(Sympy.Symbol, :__init__, [name], opts)
-SnakeBridge.Runtime.call_method(ref, :simplify, [], opts)
-SnakeBridge.Runtime.get_attr(ref, :name)
-SnakeBridge.Runtime.set_attr(ref, :name, "x")
-```
-
-## Serialization
-
-Snakepit handles serialization to/from Python. SnakeBridge assumes:
-
-- Primitives are JSON-compatible
-- Complex objects are returned as `SnakeBridge.PyRef.t()` handles
-- Errors are returned in a structured error format (see `15-error-handling.md`)
-
-## Dynamic Calls and Ledger
-
-For dynamic dispatch (`apply/3`), use the runtime helper so calls are recorded:
+Generated wrappers call a small helper that builds payloads and delegates to
+Snakepit. This helper is not a runtime subsystem; it exists to keep payload
+construction consistent and to allow test stubs.
 
 ```elixir
-SnakeBridge.Runtime.dynamic_call(Numpy, :custom_op, [a, b, c])
+SnakeBridge.Runtime.call(Numpy, :mean, [arr], opts)
+# -> Snakepit.execute("snakebridge.call", payload)
 ```
 
-In dev, dynamic calls are written to the ledger and can be promoted with `mix snakebridge.promote`.
+You may override the client module in tests (see `08-developer-experience.md`).
 
-## Timeouts and Pooling
+```elixir
+config :snakebridge, runtime_client: MyApp.SnakepitStub
+```
 
-Per-call timeouts and pool selection are delegated to Snakepit configuration. SnakeBridge does not manage pool scheduling.
+## Sessions and PyRef
 
-For high-throughput or long-running tasks, configure Snakepit pools and use `execute_in_session/3` for affinity.
+Python object references are session-bound. For instance methods, use sessions:
+
+```elixir
+Snakepit.execute_in_session(session_id, "snakebridge.call", payload)
+```
+
+## Runtime Features (Owned by Snakepit)
+
+- **Zero-copy interop**: `Snakepit.ZeroCopyRef` handles pass through payloads.
+- **Crash barrier**: `idempotent` enables safe retries when workers crash.
+- **Exception translation**: errors surface as `Snakepit.Error` structs.
+- **Hermetic Python**: runtime identity is managed by Snakepit.
+
+SnakeBridge only guarantees that payloads include the fields required for these
+features. For details, see the Snakepit Prime runtime docs.

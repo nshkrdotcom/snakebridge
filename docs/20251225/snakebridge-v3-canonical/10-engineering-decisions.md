@@ -350,6 +350,39 @@ Should generated files include timestamps?
 
 ---
 
+## Decision 13: Runtime Capabilities Live in Snakepit
+
+### The Question
+
+Where should runtime concerns (pooling, zero-copy, crash barrier, exception translation) live?
+
+### Decision: Snakepit Owns Runtime, SnakeBridge Emits Payloads
+
+### Rationale
+
+- SnakeBridge stays compile-time only (scan/introspect/generate).
+- Snakepit Prime runtime owns execution, pooling, isolation, and error mapping.
+- SnakeBridge only guarantees payload fields (`kwargs`, `call_type`, `idempotent`)
+  and references Snakepit runtime types (`Snakepit.PyRef`, `Snakepit.ZeroCopyRef`).
+
+---
+
+## Decision 16: Hermetic Python Runtime
+
+### The Question
+
+Should we rely on system Python?
+
+### Decision: UV-Managed Python with Hash in Lockfile
+
+### Rationale
+
+- Managed Python eliminates “works on my machine” drift.
+- Lockfile records interpreter hash and platform identity.
+- CI builds do not require system Python.
+
+---
+
 ## Summary Table
 
 | Decision | Choice | Key Rationale |
@@ -366,3 +399,7 @@ Should generated files include timestamps?
 | Runtime | Snakepit | Separation of concerns |
 | CI safety | Strict mode | Fail-fast |
 | Timestamps | None | Content-addressed |
+| Zero-copy interop | DLPack + Arrow | Performance |
+| Crash barrier | Taint + rotate | Stability |
+| Exception translation | Structured errors | Ergonomics |
+| Hermetic runtime | UV-managed Python | Reproducibility |

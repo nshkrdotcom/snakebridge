@@ -92,7 +92,8 @@ end
 
 ## Lock File
 
-The lock file captures complete environment identity:
+The lock file captures complete environment identity. SnakeBridge records
+Python/runtime identity as reported by Snakepit Prime (managed or system):
 
 ```json
 {
@@ -102,6 +103,7 @@ The lock file captures complete environment identity:
     "generator_hash": "sha256:...",
     "python_version": "3.11.5",
     "python_platform": "linux-x86_64",
+    "python_runtime_hash": "sha256:...",
     "elixir_version": "1.16.0",
     "otp_version": "26.1"
   },
@@ -120,6 +122,11 @@ The lock file captures complete environment identity:
   "metadata": {
     "source": "python",
     "hash": "sha256:..."
+  },
+  "hardware": {
+    "cuda": "12.1",
+    "cudnn": "8.9.0",
+    "accelerators": ["cuda"]
   }
 }
 ```
@@ -159,17 +166,10 @@ The ledger captures dynamic calls that AST scanning can't detect:
 ### Recording Dynamic Calls
 
 ```elixir
-# In dev, runtime records dynamic calls
-defmodule SnakeBridge.Runtime do
-  def call(module, function, args) do
-    if Mix.env() == :dev do
-      SnakeBridge.Ledger.record(module, function, length(args))
-    end
-    
-    # Actual execution via Snakepit
-    execute(module, function, args)
-  end
-end
+# In dev, dynamic calls are recorded by the runtime path.
+# Use Snakepit.dynamic_call/4 (or SnakeBridge.DynamicCall wrapper) so the
+# ledger is updated deterministically.
+Snakepit.dynamic_call(:numpy, :custom_op, [a, b, c])
 ```
 
 ### Promoting Ledger to Manifest

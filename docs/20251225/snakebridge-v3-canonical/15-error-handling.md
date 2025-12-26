@@ -1,6 +1,7 @@
 # Error Handling
 
-This document defines error categories and how they surface at each phase.
+This document defines error categories and how they surface at each phase. SnakeBridge
+owns compile-time errors; runtime errors come from Snakepit Prime and are passed through.
 
 ## Compile-Time Errors (Prepass)
 
@@ -14,13 +15,13 @@ In `strict: true`, scanner errors become compiler diagnostics.
 
 ### Introspector
 
-- `:uv_not_found` → error with install guidance
-- `:python_not_found` → error with install guidance
+- Missing Python/uv/runtime → error with install guidance (from Snakepit)
 - Import error (module not installed) → error
 - Timeout → error with hint to increase timeout
 - Function missing → warning (skipped)
 
-Introspection errors during generation **fail compilation** unless `strict: false` and the symbol is optional.
+Introspection errors during generation **fail compilation** unless `strict: false`
+and the symbol is optional.
 
 ### Generator
 
@@ -30,55 +31,48 @@ Introspection errors during generation **fail compilation** unless `strict: fals
 
 ### Manifest / Lock
 
-- Lockfile mismatch → compilation error with `mix snakebridge.lock --rebuild` guidance
+- Lockfile mismatch → compilation error with `mix snakebridge.lock --rebuild`
 - Manifest/source mismatch → error with `mix snakebridge.verify` or `mix snakebridge.repair`
 
-## Runtime Errors
+## Runtime Errors (Snakepit)
 
-### Snakepit Errors
+Snakepit Prime handles runtime execution and returns structured errors. SnakeBridge
+passes these through unchanged.
 
-Snakepit can return:
+Common categories:
 
 - `:pool_error` (no workers, queue full)
 - `:timeout`
 - `:grpc_error`
+- `:worker_crash` (segfault, CUDA fatal error)
 
-These are wrapped into `SnakeBridge.Error` with `type: :runtime_error`.
-
-### Python Exceptions
-
-Python exceptions are returned as structured errors:
+Python exceptions surface as structured errors:
 
 ```elixir
-%SnakeBridge.Error{
+{:error, %Snakepit.Error{
   type: :python_error,
   python_type: "TypeError",
   message: "Invalid input",
   traceback: "...",
   suggestions: ["Check input shape", "Use Numpy.array/1"]
-}
+}}
 ```
 
-## Error Struct
+When a mapping exists, exceptions are promoted to specific structs for pattern
+matching (defined in Snakepit):
 
 ```elixir
-defmodule SnakeBridge.Error do
-  @type t :: %__MODULE__{
-    type: :python_error | :runtime_error | :generation_error | :config_error,
-    message: String.t(),
-    python_type: String.t() | nil,
-    traceback: String.t() | nil,
-    suggestions: [String.t()]
-  }
-
-  defstruct [:type, :message, :python_type, :traceback, suggestions: []]
-end
+{:error, %Snakepit.Error.ValueError{
+  message: "shapes (3,4) and (2,2) not aligned",
+  stacktrace: [...],
+  context: %{shape_a: [3,4], shape_b: [2,2]}
+}}
 ```
 
 ## Error Surfaces
 
 - **Compile time**: `Mix.Task.Compiler.Diagnostic` errors
-- **Runtime**: `{:error, SnakeBridge.Error.t()}` tuples
+- **Runtime**: `{:error, Snakepit.Error.t()}` tuples
 - **CLI**: non-zero exit codes with human-readable diagnostics
 
 ## Recovery Paths
@@ -87,4 +81,3 @@ end
 - **Ledger entries** → run `mix snakebridge.promote`
 - **Lock mismatch** → run `mix snakebridge.lock --rebuild`
 - **Python/uv missing** → install and rerun `mix snakebridge.doctor`
-

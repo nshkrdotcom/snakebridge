@@ -76,23 +76,20 @@ config :snakebridge,
   # Verbose compilation output
   verbose: false,
 
-  # Runtime module (override for testing)
-  runtime: SnakeBridge.Runtime,
-
   # Introspection concurrency
   introspector: [max_concurrency: 4, timeout: 30_000],
 
-  # Python tooling
-  python: [
-    python_executable: "python3",
-    uv_executable: "uv"
-  ],
+  # Runtime client (used by SnakeBridge.Runtime helper, override in tests)
+  runtime_client: Snakepit,
 
   # Ledger behavior (dynamic calls)
   ledger: [
     enabled: true,
     promote: :manual
   ]
+
+# Note: SnakeBridge uses the Python runtime configured in Snakepit for
+# introspection. There is no separate Python/uv config under :snakebridge.
 
 # config/dev.exs
 config :snakebridge,
@@ -164,12 +161,12 @@ jobs:
 ```
 
 ```elixir
-# config/config.exs - Runtime configuration
+# config/config.exs - Compile-time configuration
 config :snakebridge,
   # Compilation
   verbose: false,                       # Log generation progress
   strict: false,                        # Fail if generation needed
-  runtime: SnakeBridge.Runtime,         # Runtime module
+  runtime_client: Snakepit,             # Payload helper client (test override)
   
   # Scanning
   scan_paths: ["lib"],                  # Paths to scan for usage
@@ -194,6 +191,12 @@ config :snakebridge,
     promote: :manual
   ]
 ```
+
+## Runtime Configuration (Snakepit)
+
+SnakeBridge does **not** configure runtime execution. Runtime pooling, Python
+environment, zero-copy, crash barrier, and exception translation are configured
+via `config :snakepit`. See the Snakepit Prime runtime docs for details.
 
 ## Per-Environment Patterns
 
@@ -225,19 +228,9 @@ config :snakebridge,
 
 ## Snakepit Configuration
 
-SnakeBridge uses Snakepit for runtime. Configure Snakepit separately:
-
-```elixir
-# config/config.exs
-config :snakepit,
-  pooling_enabled: true,
-  pool_size: 10,
-  adapter_module: Snakepit.Adapters.GRPCPython,
-  adapter_args: ["--adapter", "snakebridge_adapter"]
-
-# See Snakepit documentation for full options:
-# https://hexdocs.pm/snakepit
-```
+SnakeBridge uses Snakepit for runtime. Configure Snakepit separately under
+`config :snakepit` and ensure the adapter exposes `snakebridge.call` and
+`snakebridge.stream`. See the Snakepit Prime runtime docs for details.
 
 ## Configuration Loading Order
 

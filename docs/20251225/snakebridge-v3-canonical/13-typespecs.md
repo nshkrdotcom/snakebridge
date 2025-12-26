@@ -6,19 +6,40 @@ SnakeBridge v3 generates `@spec` annotations from Python type hints. The goal is
 
 ## Core Types
 
+These runtime handle types are defined in Snakepit Prime and referenced by
+SnakeBridge-generated specs.
+
+Runtime errors use `Snakepit.Error.t()` and subtypes; SnakeBridge does not
+wrap or redefine these errors.
+
 ### Python Object References
 
 Python objects that cannot be safely serialized are represented as opaque references:
 
 ```elixir
-@type SnakeBridge.PyRef.t :: %SnakeBridge.PyRef{
+@type Snakepit.PyRef.t :: %Snakepit.PyRef{
   ref: reference(),          # runtime handle
   library: String.t(),       # "numpy", "sympy", ...
   class: String.t() | nil    # "ndarray", "Symbol", ...
 }
 ```
 
-Instances of Python classes and complex objects (e.g., `numpy.ndarray`) map to `SnakeBridge.PyRef.t()` unless a library defines a custom Elixir struct.
+Instances of Python classes and complex objects (e.g., `numpy.ndarray`) map to `Snakepit.PyRef.t()` unless a library defines a custom Elixir struct.
+
+### Zero-Copy Handles
+
+Zero-copy interop uses explicit handle types:
+
+```elixir
+@type Snakepit.ZeroCopyRef.t :: %Snakepit.ZeroCopyRef{
+  kind: :dlpack | :arrow,
+  device: :cpu | :cuda | :mps,
+  dtype: atom(),
+  shape: tuple() | nil
+}
+```
+
+These handles are passed to generated functions and unwrapped in Python via the Snakepit adapter.
 
 ## Mapping Table
 
@@ -39,7 +60,7 @@ Instances of Python classes and complex objects (e.g., `numpy.ndarray`) map to `
 | `Union[A, B]` | `a | b` |
 | `Any` | `term()` |
 | `Callable` | `function()` |
-| `numpy.ndarray` | `SnakeBridge.PyRef.t()` |
+| `numpy.ndarray` | `Snakepit.PyRef.t()` |
 | Unknown | `term()` |
 
 `T`, `K`, and `V` are recursively mapped.
@@ -55,17 +76,17 @@ Instances of Python classes and complex objects (e.g., `numpy.ndarray`) map to `
 If the class is generated, we prefer a module-specific type:
 
 ```elixir
-@spec new(term()) :: {:ok, Sympy.Symbol.t()} | {:error, term()}
+@spec new(term()) :: {:ok, Sympy.Symbol.t()} | {:error, Snakepit.Error.t()}
 ```
 
-If not generated, fall back to `SnakeBridge.PyRef.t()`.
+If not generated, fall back to `Snakepit.PyRef.t()`.
 
 ## Keyword Arguments
 
 Generated functions use `keyword()` for optional/keyword-only args:
 
 ```elixir
-@spec mean(term(), keyword()) :: {:ok, term()} | {:error, term()}
+@spec mean(term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
 ```
 
 When there are no optional/keyword args, the `keyword()` parameter is omitted.
@@ -75,13 +96,13 @@ When there are no optional/keyword args, the `keyword()` parameter is omitted.
 ### Simple Function
 
 ```elixir
-@spec sqrt(number()) :: {:ok, float()} | {:error, term()}
+@spec sqrt(number()) :: {:ok, float()} | {:error, Snakepit.Error.t()}
 ```
 
 ### Class Method
 
 ```elixir
-@spec simplify(SnakeBridge.PyRef.t(), keyword()) :: {:ok, SnakeBridge.PyRef.t()} | {:error, term()}
+@spec simplify(Snakepit.PyRef.t(), keyword()) :: {:ok, Snakepit.PyRef.t()} | {:error, Snakepit.Error.t()}
 ```
 
 ## Limitations
@@ -91,4 +112,3 @@ When there are no optional/keyword args, the `keyword()` parameter is omitted.
 - The mapping prioritizes **safety** over precision.
 
 Future versions can add library-specific type plug-ins for richer specs.
-

@@ -35,9 +35,8 @@ lib/
 │   ├── lock.ex                       # Lock file management
 │   ├── ledger.ex                     # Runtime usage ledger
 │   ├── types.ex                      # Typespec mapping + PyRef struct
-│   ├── error.ex                      # Structured error types
 │   ├── docs.ex                       # Documentation system
-│   └── runtime.ex                    # Python call interface
+│   └── runtime.ex                    # Payload helper (delegates to Snakepit)
 ├── mix/
 │   └── tasks/
 │       ├── compile/
@@ -279,52 +278,15 @@ end
 
 ---
 
-## Phase 8: Runtime & Docs
+## Phase 8: Docs + Payload Helper
 
-**Goal**: Execute calls and provide documentation.
+**Goal**: Provide documentation and a thin payload helper for Snakepit.
 
-### 8.1 Runtime
+SnakeBridge does not implement runtime behavior. It provides a small helper
+that constructs payloads and delegates to Snakepit Prime. Ledger recording
+can be enabled in dev, but execution is always in Snakepit.
 
-```elixir
-defmodule SnakeBridge.Runtime do
-  def call(module, function, args, kwargs \\ []) do
-    if Mix.env() == :dev do
-      SnakeBridge.Ledger.record(module, function, length(args))
-    end
-    
-    library = module_to_library(module)
-    Snakepit.execute("snakebridge.call", %{
-      library: library.python_name,
-      python_module: library.python_name,
-      function: to_string(function),
-      args: args,
-      kwargs: Map.new(kwargs)
-    })
-  end
-
-  def call_in_session(session_id, module, function, args, kwargs \\ []) do
-    Snakepit.execute_in_session(session_id, "snakebridge.call", %{
-      library: library_name(module),
-      python_module: python_name(module),
-      function: to_string(function),
-      args: args,
-      kwargs: Map.new(kwargs)
-    })
-  end
-
-  def stream(module, function, args, kwargs \\ [], on_chunk) do
-    Snakepit.execute_stream("snakebridge.stream", %{
-      library: library_name(module),
-      python_module: python_name(module),
-      function: to_string(function),
-      args: args,
-      kwargs: Map.new(kwargs)
-    }, on_chunk)
-  end
-end
-```
-
-### 8.2 Docs
+### 8.1 Docs
 
 ```elixir
 defmodule SnakeBridge.Docs do
@@ -336,6 +298,18 @@ defmodule SnakeBridge.Docs do
   end
 end
 ```
+
+---
+
+## Phase 9: Runtime Alignment (Snakepit)
+
+**Goal**: Ensure generated payloads and types align with Snakepit Prime runtime.
+
+- Payload fields: `kwargs`, `call_type`, `idempotent`
+- Handle types: `Snakepit.PyRef`, `Snakepit.ZeroCopyRef`
+- Error types: `Snakepit.Error.*`
+
+See `14-runtime-integration.md` and `17-ml-pillars.md`.
 
 ---
 
@@ -351,6 +325,7 @@ end
 | 6 | Compiler | Integrates with `mix compile` |
 | 7 | Mix Tasks | All CLI tools work |
 | 8 | Runtime/Docs | Calls work, docs queryable |
+| 9 | ML Pillars | Zero-copy + crash barrier + hermetic runtime |
 | **v3.0.0** | **Release** | All tests pass |
 
 ---

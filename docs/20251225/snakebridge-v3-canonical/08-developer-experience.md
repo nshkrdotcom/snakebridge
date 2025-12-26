@@ -157,6 +157,8 @@ iex> Numpy.std(arr)
 {:ok, 1.4142135623730951}
 ```
 
+Note: Python object references (`SnakeBridge.PyRef.t()`) are session-bound. For long-lived objects, use `SnakeBridge.Runtime.call_in_session/5` or Snakepit sessions.
+
 ## Error Messages
 
 ### Function Not Found
@@ -186,7 +188,53 @@ iex> Numpy.array("invalid input")
 }}
 ```
 
+## Testing
+
+### Unit Tests (No Python)
+
+Stub the runtime layer so tests remain fast and deterministic:
+
+```elixir
+# test/support/runtime_stub.ex
+defmodule MyApp.RuntimeStub do
+  def call(_module, _function, _args, _opts \\ []), do: {:ok, :stubbed}
+end
+```
+
+Configure in `config/test.exs`:
+
+```elixir
+config :snakebridge, runtime: MyApp.RuntimeStub
+```
+
+### Integration Tests (With Python)
+
+Use tags so Python-dependent tests are opt-in:
+
+```elixir
+@moduletag :integration
+test "numpy mean" do
+  {:ok, arr} = Numpy.array([1, 2, 3])
+  {:ok, mean} = Numpy.mean(arr)
+  assert mean == 2.0
+end
+```
+
+Run with:
+
+```bash
+mix test --include integration
+```
+
+### CI Strategy
+
+- Commit `lib/snakebridge_generated/*.ex` and `snakebridge.lock`
+- Run `mix compile` with `SNAKEBRIDGE_STRICT=true`
+- Skip integration tests unless Python is installed
+
 ## Mix Tasks
+
+See [16-mix-tasks.md](16-mix-tasks.md) for full options and examples.
 
 ### Generate
 

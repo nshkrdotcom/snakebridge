@@ -111,14 +111,22 @@ defmodule SnakeBridge.Scanner do
 
   defp source_files(config) do
     scan_paths = config.scan_paths || ["lib"]
+    scan_exclude = config.scan_exclude || []
     
     scan_paths
     |> Enum.flat_map(&Path.wildcard(Path.join(&1, "**/*.ex")))
     |> Enum.reject(&in_generated_dir?(&1, config))
+    |> Enum.reject(&excluded_path?(&1, scan_exclude))
   end
 
   defp in_generated_dir?(path, config) do
     String.starts_with?(path, config.generated_dir)
+  end
+
+  defp excluded_path?(path, patterns) do
+    Enum.any?(patterns, fn pattern ->
+      Path.wildcard(pattern) |> Enum.member?(path)
+    end)
   end
 
   defp scan_file(path, library_modules) do
@@ -247,6 +255,16 @@ Scan time scales with project size:
 - 1000 files: ~500ms
 - 10000 files: ~5s
 
+Incremental scanning uses a simple file-hash cache in `.snakebridge/scan_cache.json`. If the cache is missing, a full scan runs.
+
+## Error Handling
+
+- **Syntax errors**: files with parse errors are skipped with a warning.
+- **Missing files**: ignored; scan is best-effort.
+- **Unsupported AST**: ignored; no crash.
+
+In strict mode, scanner errors are surfaced as compiler diagnostics rather than silent skips.
+
 ## Debugging
 
 ```bash
@@ -275,7 +293,11 @@ defmacro with_numpy(do: block) do
 end
 ```
 
-Macro-generated calls are detected when the macro is expanded at compile time. The scanner runs after macro expansion.
+Macro-generated calls are **not** detected. The scanner operates on source AST before compilation and does not expand macros. If you rely on macros to emit library calls, use one of:
+
+- `libraries: [numpy: [include: ["array"]]]` in `mix.exs`
+- `mix snakebridge.generate --from lib/` to force scan+generate
+- Ledger promotion for runtime dynamic usage
 
 ### Protocol Implementations
 

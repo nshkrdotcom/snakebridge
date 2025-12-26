@@ -16,6 +16,7 @@ my_app/
 │   └── sympy.ex                     # All Sympy functions
 ├── .snakebridge/
 │   ├── manifest.json                # Symbol tracking (committed)
+│   ├── scan_cache.json              # File hash cache (local)
 │   └── ledger.json                  # Dynamic call log (dev only, NOT committed)
 ├── snakebridge.lock                 # Environment lock (committed)
 └── _build/                          # Compiled BEAM (not committed)
@@ -23,20 +24,22 @@ my_app/
 
 ## Manifest
 
-The manifest tracks all generated symbols:
+The manifest tracks all generated symbols. It is stable and deterministic:
+
+- No timestamps (avoids diff churn)
+- Sorted keys
+- Rebuildable from generated source if needed
 
 ```json
 {
   "version": "3.0.0",
   "symbols": {
     "Numpy.array/1": {
-      "generated_at": "2025-12-25T10:00:00Z",
       "python_name": "array",
       "source_file": "lib/snakebridge_generated/numpy.ex",
       "checksum": "sha256:abc123..."
     },
     "Numpy.mean/1": {
-      "generated_at": "2025-12-25T10:05:00Z",
       "python_name": "mean",
       "source_file": "lib/snakebridge_generated/numpy.ex",
       "checksum": "sha256:def456..."
@@ -69,7 +72,10 @@ defmodule SnakeBridge.Manifest do
 
   def missing(manifest, detected) do
     existing = MapSet.new(Map.keys(manifest["symbols"]))
-    detected_keys = MapSet.new(detected, fn {m, f, a} -> "#{m}.#{f}/#{a}" end)
+    detected_keys =
+      detected
+      |> Enum.map(fn {m, f, a} -> "#{m}.#{f}/#{a}" end)
+      |> MapSet.new()
     
     MapSet.difference(detected_keys, existing)
     |> MapSet.to_list()
@@ -93,6 +99,7 @@ The lock file captures complete environment identity:
   "version": "3.0.0",
   "environment": {
     "snakebridge_version": "3.0.0",
+    "generator_hash": "sha256:...",
     "python_version": "3.11.5",
     "python_platform": "linux-x86_64",
     "elixir_version": "1.16.0",
@@ -101,12 +108,18 @@ The lock file captures complete environment identity:
   "libraries": {
     "numpy": {
       "requested": "~> 1.26",
-      "resolved": "1.26.4"
+      "resolved": "1.26.4",
+      "hash": "sha256:..."
     },
     "pandas": {
       "requested": "~> 2.0", 
-      "resolved": "2.1.4"
+      "resolved": "2.1.4",
+      "hash": "sha256:..."
     }
+  },
+  "metadata": {
+    "source": "python",
+    "hash": "sha256:..."
   }
 }
 ```
@@ -227,7 +240,13 @@ lib/snakebridge_generated/* linguist-generated=true
 
 # Merge-friendly (sorted keys)
 .snakebridge/manifest.json merge=union
-snakebridge.lock merge=union
+snakebridge.lock merge=ours
+```
+
+If `snakebridge.lock` conflicts, regenerate it:
+
+```bash
+mix snakebridge.lock --rebuild
 ```
 
 ## Merge Conflict Prevention
@@ -251,8 +270,8 @@ All JSON files use sorted keys:
 ```json
 {
   "symbols": {
-    "Numpy.array/1": {"generated_at": "..."},
-    "Numpy.mean/1": {"generated_at": "..."}
+    "Numpy.array/1": {"python_name": "array"},
+    "Numpy.mean/1": {"python_name": "mean"}
   }
 }
 ```

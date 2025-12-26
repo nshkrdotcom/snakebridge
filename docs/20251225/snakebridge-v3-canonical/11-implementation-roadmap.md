@@ -34,6 +34,8 @@ lib/
 │   ├── manifest.ex                   # Manifest management
 │   ├── lock.ex                       # Lock file management
 │   ├── ledger.ex                     # Runtime usage ledger
+│   ├── types.ex                      # Typespec mapping + PyRef struct
+│   ├── error.ex                      # Structured error types
 │   ├── docs.ex                       # Documentation system
 │   └── runtime.ex                    # Python call interface
 ├── mix/
@@ -196,7 +198,7 @@ defmodule SnakeBridge.Manifest do
   @path ".snakebridge/manifest.json"
 
   def load, do: ...
-  def save(manifest), do: ...
+  def save(manifest), do: ... # sorted keys, no timestamps
   def missing(manifest, detected), do: ...
   def add_symbols(manifest, symbols), do: ...
 end
@@ -233,6 +235,7 @@ defmodule Mix.Tasks.Compile.Snakebridge do
     if config.libraries == [] do
       {:ok, []}
     else
+      SnakeBridge.Lock.acquire!()    # file lock around generation
       detected = SnakeBridge.Scanner.scan_project(config)
       manifest = SnakeBridge.Manifest.load()
       to_generate = SnakeBridge.Manifest.missing(manifest, detected)
@@ -247,6 +250,7 @@ defmodule Mix.Tasks.Compile.Snakebridge do
         
         SnakeBridge.Manifest.update(manifest, detected)
         SnakeBridge.Lock.update(config)
+        SnakeBridge.Lock.release!()
         {:ok, []}
       end
     end
@@ -263,12 +267,15 @@ end
 | Task | Purpose |
 |------|---------|
 | `mix snakebridge.generate` | Manual generation |
+| `mix snakebridge.scan` | Scan and list detected symbols |
 | `mix snakebridge.prune` | Remove unused symbols |
 | `mix snakebridge.verify` | Verify cache integrity |
+| `mix snakebridge.repair` | Repair missing symbols |
 | `mix snakebridge.analyze` | Show cache analysis |
 | `mix snakebridge.ledger` | Show dynamic calls |
 | `mix snakebridge.promote` | Promote ledger to manifest |
 | `mix snakebridge.doctor` | Check environment |
+| `mix snakebridge.lock` | Rebuild lockfile |
 
 ---
 
@@ -280,13 +287,39 @@ end
 
 ```elixir
 defmodule SnakeBridge.Runtime do
-  def call(module, function, args) do
+  def call(module, function, args, kwargs \\ []) do
     if Mix.env() == :dev do
       SnakeBridge.Ledger.record(module, function, length(args))
     end
     
     library = module_to_library(module)
-    Snakepit.execute(library.python_name, to_string(function), args_to_params(args))
+    Snakepit.execute("snakebridge.call", %{
+      library: library.python_name,
+      python_module: library.python_name,
+      function: to_string(function),
+      args: args,
+      kwargs: Map.new(kwargs)
+    })
+  end
+
+  def call_in_session(session_id, module, function, args, kwargs \\ []) do
+    Snakepit.execute_in_session(session_id, "snakebridge.call", %{
+      library: library_name(module),
+      python_module: python_name(module),
+      function: to_string(function),
+      args: args,
+      kwargs: Map.new(kwargs)
+    })
+  end
+
+  def stream(module, function, args, kwargs \\ [], on_chunk) do
+    Snakepit.execute_stream("snakebridge.stream", %{
+      library: library_name(module),
+      python_module: python_name(module),
+      function: to_string(function),
+      args: args,
+      kwargs: Map.new(kwargs)
+    }, on_chunk)
   end
 end
 ```

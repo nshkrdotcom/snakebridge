@@ -22,6 +22,7 @@ defmodule Numpy do
   ## Discovery
 
       Numpy.__functions__()   # List all functions
+      Numpy.__classes__()     # List all classes
       Numpy.__search__("term") # Search by keyword
       Numpy.doc(:array)       # Get documentation
 
@@ -44,25 +45,25 @@ defmodule Numpy do
     - `{:ok, result}` on success
     - `{:error, reason}` on failure
   """
-  @spec array(term()) :: {:ok, term()} | {:error, term()}
-  def array(object) do
-    SnakeBridge.Runtime.call(__MODULE__, :array, [object])
+  @spec array(term(), keyword()) :: {:ok, term()} | {:error, term()}
+  def array(object, opts \\ []) do
+    SnakeBridge.Runtime.call(__MODULE__, :array, [object], opts)
   end
 
   @doc """
   Compute the arithmetic mean along the specified axis.
   """
-  @spec mean(term()) :: {:ok, term()} | {:error, term()}
-  def mean(a) do
-    SnakeBridge.Runtime.call(__MODULE__, :mean, [a])
+  @spec mean(term(), keyword()) :: {:ok, term()} | {:error, term()}
+  def mean(a, opts \\ []) do
+    SnakeBridge.Runtime.call(__MODULE__, :mean, [a], opts)
   end
 
   @doc """
   Compute the standard deviation along the specified axis.
   """
-  @spec std(term()) :: {:ok, term()} | {:error, term()}
-  def std(a) do
-    SnakeBridge.Runtime.call(__MODULE__, :std, [a])
+  @spec std(term(), keyword()) :: {:ok, term()} | {:error, term()}
+  def std(a, opts \\ []) do
+    SnakeBridge.Runtime.call(__MODULE__, :std, [a], opts)
   end
 
   # ── Discovery Functions ────────────────────────────────────────────
@@ -171,6 +172,7 @@ defmodule SnakeBridge.Generator do
       ## Discovery
 
           #{library.module_name}.__functions__()   # List all functions
+          #{library.module_name}.__classes__()     # List all classes
           #{library.module_name}.__search__("term") # Search by keyword
           #{library.module_name}.doc(:array)       # Get documentation
 
@@ -187,8 +189,13 @@ defmodule SnakeBridge.Generator do
     doc = info["docstring"] || ""
     
     # Build parameter list
-    {param_names, _} = build_params(params)
-    param_list = Enum.join(param_names, ", ")
+    {param_names, has_opts} = build_params(params)
+    param_list =
+      if has_opts do
+        Enum.join(param_names ++ ["opts \\\\ []"], ", ")
+      else
+        Enum.join(param_names, ", ")
+      end
     
     # Build @spec
     spec = generate_spec(name, params)
@@ -199,19 +206,26 @@ defmodule SnakeBridge.Generator do
       \"\"\"
       #{spec}
       def #{name}(#{param_list}) do
-        SnakeBridge.Runtime.call(__MODULE__, :#{name}, [#{param_list}])
+        args = [#{Enum.join(param_names, ", ")}]
+        #{if has_opts, do: "SnakeBridge.Runtime.call(__MODULE__, :#{name}, args, opts)", else: "SnakeBridge.Runtime.call(__MODULE__, :#{name}, args)"}
       end
     """
   end
 
   defp build_params(params) do
-    # Filter to required positional args only
-    # Optional/keyword args become part of an opts keyword list
-    params
-    |> Enum.filter(&(&1["kind"] in ["POSITIONAL_ONLY", "POSITIONAL_OR_KEYWORD"]))
-    |> Enum.reject(&Map.has_key?(&1, "default"))
-    |> Enum.map(&{&1["name"], nil})
-    |> Enum.unzip()
+    # Required positional args become parameters.
+    # Optional/keyword args are passed via opts keyword list.
+    required =
+      params
+      |> Enum.filter(&(&1["kind"] in ["POSITIONAL_ONLY", "POSITIONAL_OR_KEYWORD"]))
+      |> Enum.reject(&Map.has_key?(&1, "default"))
+
+    optional_or_kw =
+      params
+      |> Enum.filter(&(&1["kind"] in ["KEYWORD_ONLY", "VAR_KEYWORD"]))
+
+    param_names = Enum.map(required, & &1["name"])
+    {param_names, optional_or_kw != []}
   end
 
   defp generate_spec(name, params) do
@@ -221,10 +235,16 @@ defmodule SnakeBridge.Generator do
     |> length()
 
     args = List.duplicate("term()", arity) |> Enum.join(", ")
-    "@spec #{name}(#{args}) :: {:ok, term()} | {:error, term()}"
+    has_opts =
+      params
+      |> Enum.any?(&(&1["kind"] in ["KEYWORD_ONLY", "VAR_KEYWORD"] || Map.has_key?(&1, "default")))
+
+    spec_args = if has_opts, do: args <> ", keyword()", else: args
+    "@spec #{name}(#{spec_args}) :: {:ok, term()} | {:error, term()}"
   end
 
   defp generate_discovery_functions(functions) do
+    class_list = [] # generated from class metadata (see Class Generation)
     function_list = functions
     |> Enum.map(fn info ->
       name = info["name"]
@@ -242,6 +262,11 @@ defmodule SnakeBridge.Generator do
         [
           #{function_list}
         ]
+      end
+
+      @doc false
+      def __classes__ do
+        #{inspect(class_list)}
       end
 
       @doc false
@@ -304,6 +329,100 @@ defmodule SnakeBridge.Generator do
   end
 end
 ```
+
+## Argument Handling and Keyword Options
+
+SnakeBridge generates wrapper signatures that separate **required positional** arguments from **optional/keyword** arguments.
+
+- Required positionals become explicit parameters.
+- Optional and keyword-only args are passed via a `opts \\ []` keyword list.
+- `opts` is converted into Python kwargs.
+- `*args` (VAR_POSITIONAL) are passed via `opts[:__args__]` as a list.
+
+Example:
+
+```elixir
+@spec reshape(term(), keyword()) :: {:ok, term()} | {:error, term()}
+def reshape(a, opts \\ []) do
+  # opts: [shape: {2, 3}, order: "C", __args__: []]
+  SnakeBridge.Runtime.call(__MODULE__, :reshape, [a], opts)
+end
+```
+
+Reserved keyword keys:
+
+- `:__args__` — additional positional arguments for Python `*args`
+
+## Submodule Generation
+
+All submodules are **nested inside the same library file** (one file per library).
+
+```elixir
+# lib/snakebridge_generated/numpy.ex
+defmodule Numpy do
+  defmodule Linalg do
+    def solve(a, b, opts \\ []) do
+      SnakeBridge.Runtime.call(__MODULE__, :solve, [a, b], opts)
+    end
+  end
+end
+```
+
+The introspector uses dotted Python names (`numpy.linalg`) and the generator writes nested modules that include a `__snakebridge_python_name__/0` function so runtime can resolve to `numpy.linalg`.
+
+## Class Generation
+
+Python classes become nested Elixir modules with explicit constructors and methods.
+
+```elixir
+defmodule Sympy do
+  defmodule Symbol do
+    @spec new(term(), keyword()) :: {:ok, SnakeBridge.PyRef.t()} | {:error, term()}
+    def new(name, opts \\ []) do
+      SnakeBridge.Runtime.call_class(__MODULE__, :__init__, [name], opts)
+    end
+
+    @spec name(SnakeBridge.PyRef.t()) :: {:ok, term()} | {:error, term()}
+    def name(ref) do
+      SnakeBridge.Runtime.get_attr(ref, :name)
+    end
+
+    @spec simplify(SnakeBridge.PyRef.t(), keyword()) :: {:ok, SnakeBridge.PyRef.t()} | {:error, term()}
+    def simplify(ref, opts \\ []) do
+      SnakeBridge.Runtime.call_method(ref, :simplify, [], opts)
+    end
+  end
+end
+```
+
+Rules:
+
+- Instance methods take a `SnakeBridge.PyRef.t()` as the first argument.
+- Static/class methods are generated as normal module functions.
+- Attributes map to `get_attr/2` and `set_attr/3` helpers.
+
+## Streaming Functions
+
+If a Python tool supports streaming, the generator emits a streaming variant:
+
+```elixir
+@spec predict_stream(term(), keyword(), (map() -> any())) :: :ok | {:error, term()}
+def predict_stream(input, opts \\ [], on_chunk) do
+  SnakeBridge.Runtime.stream(__MODULE__, :predict, [input], opts, on_chunk)
+end
+```
+
+Streaming support is declared in config:
+
+```elixir
+libraries: [
+  torch: [version: "~> 2.1", streaming: ["predict"]]
+]
+```
+
+## Typespec Generation
+
+Typespecs are derived from Python annotations where possible and fall back to `term()` for unknowns. See [13-typespecs.md](13-typespecs.md).
 
 ## Design Decisions
 
@@ -373,37 +492,22 @@ Why:
 - No corrupted files
 - Concurrent safety
 
-## Submodule Generation
+## Error Handling
 
-For libraries with submodules (e.g., `numpy.linalg`):
+- **Write failures**: compilation fails with a diagnostic (disk full, permission).
+- **Docstring formatting errors**: docstrings are sanitized and truncated; generation continues.
+- **Name collisions**: if a function name conflicts with an existing helper, generation fails and suggests a rename override.
+
+## Submodule Generation (Recap)
+
+Submodules are always nested in the library file to preserve the one-file-per-library rule:
 
 ```elixir
-# Detected: Numpy.Linalg.solve/2
-
-# Option 1: Nested in parent file
-# lib/snakebridge_generated/numpy.ex
 defmodule Numpy do
   defmodule Linalg do
-    def solve(a, b), do: ...
+    def solve(a, b, opts \\ []), do: ...
   end
 end
-
-# Option 2: Separate file (for large submodules)
-# lib/snakebridge_generated/numpy_linalg.ex
-defmodule Numpy.Linalg do
-  def solve(a, b), do: ...
-end
-```
-
-Configuration:
-
-```elixir
-libraries: [
-  numpy: [
-    version: "~> 1.26",
-    submodules: :nested      # or :separate
-  ]
-]
 ```
 
 ## Regeneration

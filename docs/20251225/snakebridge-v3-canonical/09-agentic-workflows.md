@@ -81,6 +81,8 @@ SnakeBridge.ensure_adapters([
 # => :ok
 ```
 
+`ensure_adapter/2` runs the **same prepass generator** as `mix compile`, writes to `lib/snakebridge_generated/`, and compiles the updated library file in the current VM. In strict mode, it returns an error instead of generating.
+
 ## Strict Mode Interaction
 
 With `strict: true`, `ensure_adapter/2` fails instead of generating:
@@ -104,7 +106,7 @@ For calls that can't be statically analyzed:
 
 ```elixir
 # Dynamic call (recorded to ledger in dev)
-SnakeBridge.dynamic_call(Numpy, :custom_op, [a, b, c])
+SnakeBridge.Runtime.dynamic_call(Numpy, :custom_op, [a, b, c])
 ```
 
 After development:

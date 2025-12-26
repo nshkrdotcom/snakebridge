@@ -15,7 +15,7 @@ defp deps do
 end
 ```
 
-That's it. Libraries are declared in the dependency itself.
+That's it. Libraries are declared in the dependency itself. Do not put `libraries:` in `config/*.exs` (v0.4 style); SnakeBridge v3 reads library configuration from the dependency options only.
 
 ## Library Declaration
 
@@ -38,7 +38,9 @@ libraries: [
     module_name: Np,              # Custom Elixir module name
     python_name: "numpy",         # Python import name (default: atom as string)
     include: ["array", "zeros"],  # Allowlist (skip scan, generate these)
-    exclude: ["deprecated_fn"]    # Blocklist (never generate)
+    exclude: ["deprecated_fn"],   # Blocklist (never generate)
+    streaming: ["predict"],       # Functions that use streaming
+    submodules: true              # Generate submodule bindings (nested)
   ],
   
   # Short form with options
@@ -72,7 +74,25 @@ config :snakebridge,
   metadata_dir: ".snakebridge",
   
   # Verbose compilation output
-  verbose: false
+  verbose: false,
+
+  # Runtime module (override for testing)
+  runtime: SnakeBridge.Runtime,
+
+  # Introspection concurrency
+  introspector: [max_concurrency: 4, timeout: 30_000],
+
+  # Python tooling
+  python: [
+    python_executable: "python3",
+    uv_executable: "uv"
+  ],
+
+  # Ledger behavior (dynamic calls)
+  ledger: [
+    enabled: true,
+    promote: :manual
+  ]
 
 # config/dev.exs
 config :snakebridge,
@@ -115,7 +135,7 @@ jobs:
 |----------|--------|
 | `SNAKEBRIDGE_STRICT` | Enable strict mode |
 | `SNAKEBRIDGE_VERBOSE` | Enable verbose output |
-| `SNAKEBRIDGE_SKIP` | Skip generation entirely |
+| `SNAKEBRIDGE_SKIP` | Skip scanning/generation (useful when only compiling pre-generated code) |
 
 ## Full Configuration Reference
 
@@ -132,7 +152,8 @@ jobs:
      python_name: "my_lib",              # Python import (default: atom as string)
      include: ["fn1", "fn2"],            # Only generate these
      exclude: ["deprecated"],            # Never generate these
-     submodules: true                    # Generate submodule bindings
+     streaming: ["predict"],             # Streaming functions
+     submodules: true                    # Generate submodule bindings (nested)
    ]
  ],
  
@@ -148,22 +169,29 @@ config :snakebridge,
   # Compilation
   verbose: false,                       # Log generation progress
   strict: false,                        # Fail if generation needed
+  runtime: SnakeBridge.Runtime,         # Runtime module
   
   # Scanning
   scan_paths: ["lib"],                  # Paths to scan for usage
   scan_exclude: [],                     # Patterns to exclude from scan
   
   # Documentation
-  docs: [
-    cache_enabled: true,                # Cache doc queries
-    cache_ttl: :infinity,               # Cache TTL
-    source: :python                     # :python | :metadata
-  ],
+    docs: [
+      cache_enabled: true,                # Cache doc queries
+      cache_ttl: :infinity,               # Cache TTL
+      source: :python                     # :python | :metadata | :hybrid
+    ],
   
   # Pruning
   pruning: [
     warn_unused_days: 30,               # Warn if unused this long
     backup_before_prune: true           # Backup before pruning
+  ],
+
+  # Ledger (dynamic calls)
+  ledger: [
+    enabled: true,
+    promote: :manual
   ]
 ```
 
@@ -204,7 +232,8 @@ SnakeBridge uses Snakepit for runtime. Configure Snakepit separately:
 config :snakepit,
   pooling_enabled: true,
   pool_size: 10,
-  adapter_module: Snakepit.Adapters.GRPCPython
+  adapter_module: Snakepit.Adapters.GRPCPython,
+  adapter_args: ["--adapter", "snakebridge_adapter"]
 
 # See Snakepit documentation for full options:
 # https://hexdocs.pm/snakepit

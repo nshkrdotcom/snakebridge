@@ -80,7 +80,13 @@ defmodule SnakeBridge.Docs do
         doc
         
       [] ->
-        doc = fetch_from_python(module, function)
+        doc =
+          case docs_source() do
+            :python -> fetch_from_python(module, function)
+            :metadata -> fetch_from_metadata(module, function)
+            :hybrid -> fetch_from_metadata(module, function) || fetch_from_python(module, function)
+          end
+
         :ets.insert(@cache_table, {key, doc})
         doc
     end
@@ -119,6 +125,10 @@ defmodule SnakeBridge.Docs do
     end
   end
 
+  defp fetch_from_metadata(module, function) do
+    SnakeBridge.Manifest.doc_for(module, function)
+  end
+
   defp score(function_name, query) do
     name = to_string(function_name) |> String.downcase()
     query = String.downcase(query)
@@ -141,10 +151,15 @@ Level 1: ETS (in-memory)
   ├── Instant access (<1ms)
   └── Cleared on restart
 
-Level 2: Python (source of truth)
-  ├── Always accurate to installed version
-  ├── ~50ms per query
-  └── Requires Python available
+Level 2: Disk cache (optional)
+  ├── Compressed doc blobs
+  └── Shared across sessions
+
+Level 3: Python or metadata (source of truth)
+  ├── Python: accurate to installed version (~50ms)
+  └── Metadata: deterministic and CI-friendly
+
+In strict mode or CI, docs should not be required for compilation. If Python is unavailable, the docs layer returns a stub message unless `source: :metadata` is configured.
 ```
 
 ## IEx Integration
@@ -217,6 +232,15 @@ defmodule SnakeBridge.Docs.Formatter do
 end
 ```
 
+Recommended pipeline:
+
+1. Render RST to HTML via `docutils` (Python).
+2. Sanitize HTML (allow code, tables, math).
+3. Emit Markdown with embedded HTML or keep HTML for ExDoc.
+4. Enable `math_engine: :katex` for inline and block math.
+
+If `docutils` is not available, fall back to plain text rendering.
+
 ## IDE Integration
 
 ### Hover Documentation
@@ -277,10 +301,13 @@ config :snakebridge,
     # Cache TTL (infinity = never expire)
     cache_ttl: :infinity,
     
-    # Source: :python (always accurate) or :metadata (faster, may be stale)
+    # Source of truth: :python | :metadata | :hybrid
     source: :python,
     
     # Convert RST to Markdown
-    format: :markdown
+    format: :markdown,
+    
+    # Optional disk cache
+    cache_dir: ".snakebridge/docs"
   ]
 ```

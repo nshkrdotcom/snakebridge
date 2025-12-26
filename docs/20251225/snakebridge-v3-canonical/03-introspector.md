@@ -49,6 +49,25 @@ For each function, we extract:
 }
 ```
 
+## Class Introspection
+
+When a symbol is a class, the introspector emits structured metadata:
+
+```json
+{
+  "name": "Symbol",
+  "type": "class",
+  "docstring": "Symbol class...",
+  "methods": [
+    {"name": "__init__", "parameters": [...], "docstring": "..."},
+    {"name": "simplify", "parameters": [...], "docstring": "..."}
+  ],
+  "attributes": ["name", "is_commutative"]
+}
+```
+
+Class metadata is used by the generator to create nested modules and method wrappers.
+
 ## Implementation
 
 ### Python Script
@@ -153,8 +172,8 @@ defmodule SnakeBridge.Introspector do
       fn {library, functions} ->
         {library, introspect(library, functions)}
       end,
-      max_concurrency: 4,
-      timeout: 30_000
+      max_concurrency: config().introspector.max_concurrency || System.schedulers_online(),
+      timeout: config().introspector.timeout || 30_000
     )
     |> Enum.map(fn {:ok, result} -> result end)
   end
@@ -199,6 +218,23 @@ defmodule SnakeBridge.Introspector do
 end
 ```
 
+## UV Integration
+
+SnakeBridge uses `uv` for third-party libraries and system Python for stdlib modules.
+
+```elixir
+config :snakebridge,
+  python: [
+    python_executable: "python3",
+    uv_executable: "uv"
+  ]
+```
+
+- If `uv` is missing, third-party introspection fails with `:uv_not_found`.
+- If `python3` is missing, stdlib introspection fails with `:python_not_found`.
+
+`mix snakebridge.doctor` should surface both cases with install guidance.
+
 ## Batching Strategy
 
 Introspection is I/O-bound (starting Python, loading libraries). We optimize by:
@@ -218,6 +254,18 @@ results = Introspector.introspect_batch([
   {sympy_lib, [:Symbol, :solve]}
 ])
 ```
+
+### Concurrency Controls
+
+```elixir
+config :snakebridge,
+  introspector: [
+    max_concurrency: 4,
+    timeout: 30_000
+  ]
+```
+
+`max_concurrency` caps parallel library introspections to avoid CPU and I/O saturation.
 
 ## Error Handling
 
@@ -246,25 +294,33 @@ introspect(uninstalled_lib, [:func])
 introspect(huge_lib, many_functions, timeout: 60_000)
 ```
 
+### UV or Python Missing
+
+If `uv` or `python3` are missing:
+
+- `:stdlib` libraries fail with `{:error, :python_not_found}`
+- Third-party libraries fail with `{:error, :uv_not_found}`
+
+Errors should include install guidance:
+
+```
+SnakeBridge requires `uv` for third-party libraries.
+Install: https://astral.sh/uv/ or `pip install uv`
+```
+
 ## Type Mapping
 
-The introspector extracts Python type annotations, which are later mapped to Elixir typespecs.
+The introspector extracts Python type annotations, which are later mapped to Elixir typespecs. See [13-typespecs.md](13-typespecs.md) for the full mapping and edge cases.
+
+Quick examples:
 
 | Python Annotation | Elixir Typespec |
 |-------------------|-----------------|
 | `int` | `integer()` |
 | `float` | `float()` |
 | `str` | `String.t()` |
-| `bool` | `boolean()` |
-| `None` | `nil` |
-| `list` | `list()` |
-| `dict` | `map()` |
-| `Any` | `term()` |
 | `Optional[T]` | `T \| nil` |
-| `ndarray` | `reference()` |
-| Unknown | `term()` |
-
-Complex annotations (generics, unions) are simplified to `term()` for safety.
+| `Any` | `term()` |
 
 ## Submodule Handling
 
@@ -277,11 +333,11 @@ For submodules like `numpy.linalg`:
 introspect(%{python_name: "numpy.linalg"}, [:solve])
 ```
 
-The introspector handles dotted module names:
+The introspector handles dotted module names via importlib:
 
 ```python
-# For "numpy.linalg"
-import numpy.linalg as module
+import importlib
+module = importlib.import_module("numpy.linalg")
 getattr(module, "solve")
 ```
 
@@ -298,11 +354,9 @@ Introspection results are cached in the manifest. Re-introspection happens when:
 {
   "symbols": {
     "Numpy.array/1": {
-      "generated_at": "2025-12-25T10:00:00Z",
-      "introspection": {
-        "parameters": [...],
-        "docstring": "..."
-      }
+      "python_name": "array",
+      "signature": "(object, dtype=None, ...)",
+      "doc_hash": "sha256:..."
     }
   }
 }

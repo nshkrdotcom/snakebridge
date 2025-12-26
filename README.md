@@ -1,22 +1,30 @@
+<p align="center">
+  <img src="assets/snakebridge.svg" alt="SnakeBridge Logo">
+</p>
+
 # SnakeBridge
 
 [![Elixir](https://img.shields.io/badge/elixir-1.14+-purple.svg)](https://elixir-lang.org)
 [![Hex.pm](https://img.shields.io/hexpm/v/snakebridge.svg)](https://hex.pm/packages/snakebridge)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Generate type-safe Elixir adapters for Python libraries with full IDE support.
-
-Built on [Snakepit](https://hex.pm/packages/snakepit) for Python runtime management.
+SnakeBridge generates type-safe Elixir bindings for Python libraries at **compile time**.
+Runtime execution is handled by [Snakepit](https://hex.pm/packages/snakepit).
 
 ## Quick Start
 
-### 1. Add Dependency
+### 1. Add Dependency (with libraries)
 
 ```elixir
 # mix.exs
-def deps do
+defp deps do
   [
-    {:snakebridge, "~> 0.4"}
+    {:snakebridge, "~> 0.4.0",
+     libraries: [
+       json: :stdlib,
+       math: :stdlib,
+       numpy: "~> 1.26"
+     ]}
   ]
 end
 ```
@@ -33,24 +41,22 @@ def project do
 end
 ```
 
-### 3. Configure Adapters
+### 3. Optional Configuration
 
 ```elixir
 # config/config.exs
 config :snakebridge,
-  adapters: [:json, :math, :sympy]
+  generated_dir: "lib/snakebridge_generated",
+  metadata_dir: ".snakebridge",
+  strict: false,
+  verbose: false,
+  docs: [source: :python, cache_enabled: true]
 ```
 
 ### 4. Compile
 
 ```bash
-$ mix compile
-SnakeBridge: Generating json adapter...
-  Generated 4 functions, 3 classes
-SnakeBridge: Generating math adapter...
-  Generated 56 functions, 0 classes
-SnakeBridge: Generating sympy adapter...
-  Generated 481 functions, 392 classes
+mix compile
 ```
 
 ### 5. Use
@@ -59,7 +65,7 @@ SnakeBridge: Generating sympy adapter...
 iex> Math.sqrt(2)
 {:ok, 1.4142135623730951}
 
-iex> Json.dumps(%{"hello" => "world"}, false, true, true, true, nil, nil, nil, nil, false, %{})
+iex> Json.dumps(%{"hello" => "world"})
 {:ok, "{\"hello\": \"world\"}"}
 
 iex> Math.__functions__() |> Enum.take(3)
@@ -72,180 +78,64 @@ iex> Math.__functions__() |> Enum.take(3)
 
 ## How It Works
 
-```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  Python Module  │────>│   mix compile    │────>│  Elixir Adapter │
-│  (e.g., json)   │     │  :snakebridge    │     │  (Json module)  │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-                              │
-                    Introspects Python:
-                    - Function signatures
-                    - Type annotations
-                    - Docstrings
-                    - Classes
-```
+SnakeBridge is a **pre-pass generator**:
 
-1. **Compile-time generation**: The `:snakebridge` compiler runs before Elixir compilation
-2. **Python introspection**: Each configured library is introspected for functions, classes, and types
-3. **Elixir code generation**: Type-safe modules with `@doc`, `@spec`, and discovery functions
-4. **Auto-gitignore**: Generated code goes to `lib/snakebridge_generated/` with a self-contained `.gitignore`
+1. Scan the project for library calls.
+2. Introspect Python using the Snakepit-configured runtime.
+3. Generate Elixir modules under `lib/snakebridge_generated/*.ex`.
 
-Your repo stays clean - generated code is excluded from git but visible to your IDE.
+Generated source is **committed to git**. There are no timestamps and no auto-gitignore.
 
-## Generated Structure
+## Generated Layout
 
 ```
 lib/snakebridge_generated/
-├── .gitignore              # Contains "* !.gitignore" (self-ignoring)
-├── json/
-│   └── json/
-│       ├── _meta.ex        # Discovery functions
-│       ├── json.ex         # Main module
-│       └── classes/
-│           ├── json_encoder.ex
-│           └── json_decoder.ex
-├── math/
-│   └── math/
-│       ├── _meta.ex
-│       └── math.ex
-└── sympy/
-    └── sympy/
-        ├── _meta.ex
-        ├── sympy.ex
-        └── classes/
-            └── ... (392 class modules)
+├── json.ex
+├── math.ex
+└── numpy.ex
 ```
 
-## Discovery Functions
+Metadata and environment identity are tracked alongside source:
 
-Every generated module includes:
+```
+.snakebridge/manifest.json
+snakebridge.lock
+```
+
+## Configuration (Library Options)
 
 ```elixir
-# List all functions with arities and documentation
-Json.__functions__()
-# => [{:dump, 12, Json, "Serialize obj..."}, {:dumps, 11, Json, "..."}, ...]
-
-# List all classes
-Json.__classes__()
-# => [{:JSONEncoder, Json.JSONEncoder, "Extensible JSON encoder..."}, ...]
-
-# Search functions by name or documentation
-Json.__search__("decode")
-# => [{:loads, 8, Json, "Deserialize s to a Python object..."}, ...]
-
-# Standard IEx help works
-iex> h Json.dumps
+{:snakebridge, "~> 0.4.0",
+ libraries: [
+   numpy: [
+     version: "~> 1.26",
+     module_name: Np,
+     python_name: "numpy",
+     include: ["array", "zeros"],
+     exclude: ["deprecated_fn"],
+     streaming: ["predict"],
+     submodules: true
+   ],
+   json: :stdlib
+ ]}
 ```
 
-## Configuration Options
+## Runtime
 
-```elixir
-config :snakebridge,
-  adapters: [
-    # Simple - just the library name
-    :json,
-    :math,
+SnakeBridge is compile-time only. Runtime behavior belongs to Snakepit.
+The generated wrappers send payloads to Snakepit tools:
 
-    # With options
-    {:numpy, functions: ["array", "zeros", "ones"]},
-    {:sympy, exclude: ["init_printing"]}
-  ]
-```
+- `snakebridge.call`
+- `snakebridge.stream`
 
-## Type System
-
-SnakeBridge handles the impedance mismatch between Python and Elixir types:
-
-| Python Type | Elixir Type | Serialization |
-|-------------|-------------|---------------|
-| `None` | `nil` | Direct |
-| `bool` | `boolean()` | Direct |
-| `int` | `integer()` | Direct |
-| `float` | `float()` | Direct |
-| `str` | `String.t()` | Direct |
-| `list` | `list()` | Direct |
-| `dict` | `map()` | Direct |
-| `tuple` | `tuple()` | Tagged: `{"__type__": "tuple", ...}` |
-| `set` | `MapSet.t()` | Tagged: `{"__type__": "set", ...}` |
-| `datetime` | `DateTime.t()` | Tagged: `{"__type__": "datetime", ...}` |
-| `bytes` | `binary()` | Tagged: `{"__type__": "bytes", ...}` |
-| `inf/-inf/nan` | `:infinity/:neg_infinity/:nan` | Tagged |
-
-## Manual Generation
-
-For cases where you want to commit generated code:
-
-```bash
-# Generate an adapter manually
-mix snakebridge.gen numpy
-
-# Options
-mix snakebridge.gen numpy --functions array,zeros,ones
-mix snakebridge.gen os --exclude system,exec
-mix snakebridge.gen requests --output lib/my_app/http/
-mix snakebridge.gen json --force  # Regenerate existing
-
-# Management
-mix snakebridge.list   # List generated adapters
-mix snakebridge.info json  # Show adapter details
-mix snakebridge.clean json  # Remove an adapter
-```
+Configure Snakepit separately under `config :snakepit`.
 
 ## Example Project
 
-See `examples/math_demo/` for a complete working example:
+See `examples/math_demo` for a full v3 example with committed generated code.
 
 ```bash
 cd examples/math_demo
 mix deps.get
-mix compile           # Generates adapters automatically
-mix run -e Demo.run   # Run the demo
-```
-
-## Requirements
-
-- Elixir 1.14+
-- Python 3.7+
-- **Recommended**: [`uv`](https://github.com/astral-sh/uv) for automatic Python package management
-
-### Automatic Dependency Management
-
-If you have `uv` installed, SnakeBridge automatically installs Python packages in temporary environments during generation:
-
-```bash
-# Install uv (one-time setup)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Now just use SnakeBridge - no pip install needed!
 mix compile
-# => SnakeBridge: Generating sympy adapter...
-#    (uv automatically installs sympy in temp environment)
 ```
-
-Without `uv`, you'll need to install packages manually: `pip install numpy sympy`
-
-## Direct Runtime API
-
-For one-off calls without generating an adapter:
-
-```elixir
-{:ok, result} = SnakeBridge.call("math", "sqrt", %{x: 16})
-# => {:ok, 4.0}
-
-{:ok, data} = SnakeBridge.call("json", "loads", %{s: ~s({"key": "value"})})
-# => {:ok, %{"key" => "value"}}
-```
-
-## Testing
-
-```bash
-# Run unit tests (mocked, no Python required)
-mix test
-
-# Run with real Python integration
-mix test --include real_python
-```
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.

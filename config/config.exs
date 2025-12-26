@@ -1,28 +1,19 @@
 import Config
 
-# SnakeBridge configuration
-#
-# This file contains compile-time configuration for SnakeBridge.
-# For runtime configuration, see config/runtime.exs
-
-# Core SnakeBridge settings
+# SnakeBridge compile-time configuration.
 config :snakebridge,
-  # Automatically start Snakepit pools on first call
-  auto_start_snakepit: true,
-  # Python executable to use
-  python_executable: "python3",
-  # Additional Python paths (added to PYTHONPATH)
-  python_path: [],
-  # Log level for SnakeBridge operations
-  log_level: :info
+  generated_dir: "lib/snakebridge_generated",
+  metadata_dir: ".snakebridge",
+  verbose: false,
+  strict: false,
+  scan_paths: ["lib"],
+  scan_exclude: [],
+  introspector: [max_concurrency: 4, timeout: 30_000],
+  docs: [cache_enabled: true, cache_ttl: :infinity, source: :python],
+  runtime_client: Snakepit,
+  ledger: [enabled: true, promote: :manual]
 
-# Snakepit configuration (underlying Python runtime)
-config :snakepit,
-  # Python executable
-  python: "python3",
-  # Pool configuration
-  pool_size: 5,
-  pool_overflow: 10
+# Snakepit runtime configuration lives under :snakepit.
 
 # Import environment-specific config files
 import_config "#{config_env()}.exs"

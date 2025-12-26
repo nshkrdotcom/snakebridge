@@ -1,6 +1,7 @@
-# MathDemo - SnakeBridge Example
+# MathDemo - SnakeBridge v3 Example
 
-This example demonstrates SnakeBridge adapter generation and discovery-only APIs (no runtime Python calls).
+This example demonstrates SnakeBridge v3 compile-time generation and discovery APIs.
+Runtime calls are intentionally omitted.
 
 ## Quick Start
 
@@ -11,32 +12,23 @@ mix compile
 mix run -e Demo.run
 ```
 
-That's it! The demo only inspects generated metadata and does not require Snakepit runtime setup.
-
 ## What Happens
 
-1. `mix compile` runs the SnakeBridge compiler
-2. SnakeBridge reads `config/config.exs`: `adapters: [:json, :math, :sympy]`
-3. For each library:
-   - Standard library (json, math) → uses system Python
-   - Third-party (sympy) → uses `uv run --with sympy` to auto-install
-4. Generates Elixir modules to `lib/snakebridge_generated/` with discovery metadata
-5. Creates a `.gitignore` inside (auto-excluded from git)
+1. `mix compile` runs the SnakeBridge pre-pass.
+2. Libraries are read from `mix.exs` dependency options.
+3. SnakeBridge scans, introspects, and generates modules under `lib/snakebridge_generated/`.
+4. Generated source, manifest, and lock are committed to git.
 
 ## Generated Structure
 
 ```
 lib/snakebridge_generated/
-├── .gitignore          # Self-ignoring directory
-├── json/json/
-│   ├── _meta.ex        # Discovery functions
-│   ├── json.ex         # Main module
-│   └── classes/
-├── math/math/
-└── sympy/sympy/
-```
+├── json.ex
+└── math.ex
 
-Docs live in each adapter's `_meta.ex` and are exposed via `__functions__/0`, `__classes__/0`, and `__search__/1`.
+.snakebridge/manifest.json
+snakebridge.lock
+```
 
 ## Interactive Usage
 
@@ -47,39 +39,34 @@ iex -S mix
 ```elixir
 # Discovery
 iex> Math.__functions__() |> length()
-56
+3
 
-iex> Math.__search__("sqrt")
-[{:sqrt, 1, Math, "Return the square root of x."}]
+iex> Math.__search__("sq")
+[%{name: :sqrt, summary: "Return the square root.", relevance: 0.9}]
 
 iex> Json.__classes__()
 [...]
 
 iex> MathDemo.generated_structure()
-{:ok, %{root: ".../lib/snakebridge_generated", adapters: %{...}}}
+{:ok, %{root: ".../lib/snakebridge_generated", libraries: ["json", "math"]}}
 
 iex> MathDemo.discover()
 :ok
-
-iex> Sympy.__functions__() |> length()
-...
-
-iex> Sympy.__search__("solve")
-[...]
 ```
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `mix.exs` | Adds `:snakebridge` compiler |
-| `config/config.exs` | Configures adapters |
+| `mix.exs` | Declares SnakeBridge libraries in deps |
+| `config/config.exs` | Compile-time options only |
+| `lib/snakebridge_generated/*.ex` | Generated bindings (committed) |
+| `.snakebridge/manifest.json` | Symbol manifest (committed) |
+| `snakebridge.lock` | Runtime identity lock (committed) |
 | `lib/demo.ex` | Demo script |
 | `lib/math_demo.ex` | Discovery helpers |
 
 ## Requirements
 
 - Python 3.7+
-- `uv` (recommended): `curl -LsSf https://astral.sh/uv/install.sh | sh`
-
-If you don't want third-party adapters, remove `:sympy` from `config/config.exs`.
+- Snakepit configured for runtime execution when you call generated functions

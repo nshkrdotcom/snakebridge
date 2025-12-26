@@ -7,7 +7,6 @@ defmodule MathDemoTest do
       assert is_list(functions)
       assert length(functions) > 0
 
-      # Check for expected functions
       names = Enum.map(functions, fn {name, _, _, _} -> name end)
       assert :sqrt in names
       assert :sin in names
@@ -29,21 +28,18 @@ defmodule MathDemoTest do
       assert length(classes) > 0
     end
 
-    test "search works" do
-      results = Math.__search__("sqrt")
-      assert length(results) >= 1
-
-      {name, _arity, _mod, _doc} = hd(results)
-      assert name == :sqrt
+    test "search returns ranked results" do
+      results = Math.__search__("sq")
+      assert [%{name: :sqrt, summary: _summary, relevance: _relevance} | _] = results
     end
   end
 
   describe "MathDemo helpers" do
-    test "generated_structure returns adapter entries" do
+    test "generated_structure returns libraries" do
       {:ok, info} = MathDemo.generated_structure()
-      assert is_map(info.adapters)
-      assert Map.has_key?(info.adapters, "math")
-      assert Map.has_key?(info.adapters, "json")
+      assert is_list(info.libraries)
+      assert "math" in info.libraries
+      assert "json" in info.libraries
     end
 
     test "discover returns :ok" do

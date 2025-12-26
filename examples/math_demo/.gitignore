@@ -7,7 +7,5 @@
 /doc/
 .fetch
 erl_crash.dump
-*.lock
 
-# Note: lib/snakebridge_generated/ is auto-gitignored by SnakeBridge
-# No need to add it here - the generator creates its own .gitignore
+# Generated SnakeBridge bindings are committed in v3.

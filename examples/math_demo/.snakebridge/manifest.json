@@ -1,0 +1,107 @@
+{
+  "classes": {
+    "Json.Encoder.JSONEncoder": {
+      "attributes": [
+        "item_separator"
+      ],
+      "class": "JSONEncoder",
+      "docstring": "Extensible JSON encoder for Python data structures.",
+      "methods": [
+        {
+          "docstring": "",
+          "name": "__init__",
+          "parameters": []
+        },
+        {
+          "docstring": "Return a JSON string representation.",
+          "name": "encode",
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "o"
+            }
+          ]
+        }
+      ],
+      "module": "Json.Encoder.JSONEncoder",
+      "python_module": "json.encoder"
+    }
+  },
+  "symbols": {
+    "Elixir.Json.dumps/1": {
+      "docstring": "Serialize obj to a JSON formatted str.",
+      "function": "dumps",
+      "module": "Json",
+      "name": "dumps",
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "obj"
+        },
+        {
+          "kind": "KEYWORD_ONLY",
+          "name": "skipkeys"
+        }
+      ],
+      "python_module": "json",
+      "return_annotation": null
+    },
+    "Elixir.Json.loads/1": {
+      "docstring": "Deserialize s to a Python object.",
+      "function": "loads",
+      "module": "Json",
+      "name": "loads",
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "s"
+        }
+      ],
+      "python_module": "json",
+      "return_annotation": null
+    },
+    "Elixir.Math.cos/1": {
+      "docstring": "Return the cosine of x.",
+      "function": "cos",
+      "module": "Math",
+      "name": "cos",
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "x"
+        }
+      ],
+      "python_module": "math",
+      "return_annotation": null
+    },
+    "Elixir.Math.sin/1": {
+      "docstring": "Return the sine of x.",
+      "function": "sin",
+      "module": "Math",
+      "name": "sin",
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "x"
+        }
+      ],
+      "python_module": "math",
+      "return_annotation": null
+    },
+    "Elixir.Math.sqrt/1": {
+      "docstring": "Return the square root of x.",
+      "function": "sqrt",
+      "module": "Math",
+      "name": "sqrt",
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "x"
+        }
+      ],
+      "python_module": "math",
+      "return_annotation": null
+    }
+  },
+  "version": "3.0.0"
+}

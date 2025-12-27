@@ -25,7 +25,11 @@ defmodule ProofPipeline.MixProject do
        libraries: [
          sympy: [version: "~> 1.12", module_name: Sympy],
          pylatexenc: [version: "~> 2.10", module_name: PyLatexEnc, submodules: true],
-         math_verify: [version: "~> 0.1", module_name: MathVerify]
+         math_verify: [
+           version: "~> 0.1",
+           module_name: MathVerify,
+           pypi_package: "math-verify"
+         ]
        ]},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false}
     ]

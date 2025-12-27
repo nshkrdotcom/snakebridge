@@ -6,8 +6,7 @@ defmodule MathDemo do
   1. Declare libraries in mix.exs dependency options
   2. Inspect generated modules under lib/snakebridge_generated
   3. Use discovery helpers like __functions__/0, __classes__/0, and __search__/1
-
-  Runtime Python calls are intentionally omitted from this demo.
+  4. Execute runtime calls via Snakepit-backed functions
 
   ## Usage
 
@@ -26,6 +25,9 @@ defmodule MathDemo do
 
       # Print a short discovery summary
       iex> MathDemo.discover()
+
+      # Run a runtime sample
+      iex> MathDemo.compute_sample()
 
   """
 
@@ -104,6 +106,21 @@ defmodule MathDemo do
     end
 
     :ok
+  end
+
+  @doc """
+  Execute a few runtime calls to verify the bridge is working.
+  """
+  def compute_sample do
+    if Code.ensure_loaded?(Math) do
+      with {:ok, sqrt} <- Math.sqrt(2),
+           {:ok, sin} <- Math.sin(1.0),
+           {:ok, cos} <- Math.cos(0.0) do
+        {:ok, %{sqrt: sqrt, sin: sin, cos: cos}}
+      end
+    else
+      {:error, :math_module_unavailable}
+    end
   end
 
   defp normalize_class_entry(entry) do

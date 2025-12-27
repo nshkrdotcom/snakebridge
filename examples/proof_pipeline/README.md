@@ -4,9 +4,9 @@ This example builds a multi-step proof grading pipeline using three Python libra
 
 - **SymPy** for symbolic normalization
 - **pylatexenc** for LaTeX handling
-- **math_verify** for verification and grading
+- **math_verify** for verification
 
-The demo defaults to a dry plan so it can run without Python libraries installed.
+The demo runs the live pipeline and requires Python libraries installed.
 
 ## Quick Start
 
@@ -17,17 +17,15 @@ mix compile
 mix run -e Demo.run
 ```
 
-To execute the live pipeline (requires Python libs installed and Snakepit runtime configured):
-
-```bash
-PROOF_PIPELINE_LIVE=1 mix run -e Demo.run
-```
+The first compile auto-installs the Python runtime and packages (managed via uv).
+This demo wraps execution in `Snakepit.run_as_script/2` so Python workers are
+cleaned up when the script exits.
 
 ## What It Does
 
 1. Parse LaTeX into nodes with pylatexenc
 2. Convert and simplify with SymPy
-3. Verify and grade with math_verify
+3. Verify with math_verify
 
 ## Generated Structure
 
@@ -49,8 +47,6 @@ iex -S mix
 
 ```elixir
 iex> ProofPipeline.sample_input()
-
-iex> ProofPipeline.plan(ProofPipeline.sample_input())
 
 iex> ProofPipeline.run(ProofPipeline.sample_input())
 # requires Python runtime + libs

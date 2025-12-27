@@ -21,7 +21,11 @@ import sys
 import importlib
 import inspect
 import traceback
-from typing import Any, Dict
+import uuid
+import os
+import glob
+import hashlib
+from typing import Any, Dict, List, Tuple, Optional
 
 # Import the SnakeBridge type encoding system
 try:
@@ -35,6 +39,22 @@ except ImportError:
 
 # Module cache to avoid repeated imports
 _module_cache: Dict[str, Any] = {}
+_instance_registry: Dict[str, Any] = {}
+_helper_registry: Dict[str, Any] = {}
+_helper_registry_key: Optional[Tuple[Any, ...]] = None
+_helper_registry_index: List[Dict[str, Any]] = []
+
+
+class SnakeBridgeHelperNotFoundError(Exception):
+    pass
+
+
+class SnakeBridgeHelperLoadError(Exception):
+    pass
+
+
+class SnakeBridgeSerializationError(Exception):
+    pass
 
 
 def snakebridge_call(module: str, function: str, args: dict) -> dict:
@@ -264,6 +284,304 @@ def snakebridge_create_instance(module: str, class_name: str, args: dict) -> dic
 
     except Exception as e:
         return encode_error(e)
+
+
+def _import_module(module_name: str) -> Any:
+    if module_name in _module_cache:
+        return _module_cache[module_name]
+
+    mod = importlib.import_module(module_name)
+    _module_cache[module_name] = mod
+    return mod
+
+
+def _make_ref(session_id: str, obj: Any, python_module: str, library: str) -> dict:
+    ref_id = uuid.uuid4().hex
+    key = f"{session_id}:{ref_id}"
+    _instance_registry[key] = obj
+
+    return {
+        "__snakebridge_ref__": True,
+        "ref_id": ref_id,
+        "session_id": session_id,
+        "python_module": python_module,
+        "library": library
+    }
+
+
+def _resolve_ref(ref: dict, session_id: str) -> Any:
+    if not isinstance(ref, dict) or not ref.get("__snakebridge_ref__"):
+        raise ValueError("Invalid SnakeBridge reference payload")
+
+    ref_id = ref.get("ref_id")
+    ref_session = ref.get("session_id") or session_id
+    key = f"{ref_session}:{ref_id}"
+
+    if key not in _instance_registry:
+        raise KeyError(f"Unknown SnakeBridge reference: {ref_id}")
+
+    return _instance_registry[key]
+
+
+def _default_helper_config() -> Dict[str, Any]:
+    return {
+        "helper_paths": ["priv/python/helpers"],
+        "helper_pack_enabled": True,
+        "helper_allowlist": "all"
+    }
+
+
+def _normalize_helper_config(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    normalized = _default_helper_config()
+    if isinstance(config, dict):
+        normalized.update(config)
+
+    helper_paths = normalized.get("helper_paths") or []
+    if isinstance(helper_paths, str):
+        helper_paths = [helper_paths]
+
+    helper_paths = [os.path.abspath(path) for path in helper_paths if path]
+    normalized["helper_paths"] = helper_paths
+    normalized["helper_pack_enabled"] = bool(normalized.get("helper_pack_enabled", True))
+
+    allowlist = normalized.get("helper_allowlist", "all")
+    if allowlist in [None, "all", ":all"]:
+        normalized["helper_allowlist"] = "all"
+    elif isinstance(allowlist, (list, tuple, set)):
+        normalized["helper_allowlist"] = [str(item) for item in allowlist]
+    else:
+        normalized["helper_allowlist"] = [str(allowlist)]
+
+    return normalized
+
+
+def _helper_config_key(config: Dict[str, Any]) -> Tuple[Any, ...]:
+    helper_paths = tuple(config.get("helper_paths", []))
+    allowlist = config.get("helper_allowlist", "all")
+    allowlist_key = "all" if allowlist == "all" else tuple(allowlist)
+
+    return (helper_paths, allowlist_key, bool(config.get("helper_pack_enabled", True)))
+
+
+def _resolve_helper_paths(config: Dict[str, Any]) -> List[str]:
+    paths: List[str] = []
+    if config.get("helper_pack_enabled", True):
+        pack_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helpers")
+        paths.append(pack_path)
+
+    paths.extend(config.get("helper_paths", []))
+    return paths
+
+
+def _list_helper_files(paths: List[str]) -> List[str]:
+    files: List[str] = []
+    for path in paths:
+        if not path:
+            continue
+        if os.path.isdir(path):
+            for file_path in sorted(glob.glob(os.path.join(path, "*.py"))):
+                base = os.path.basename(file_path)
+                if base == "__init__.py" or base.startswith("_"):
+                    continue
+                files.append(file_path)
+        elif os.path.isfile(path):
+            base = os.path.basename(path)
+            if base != "__init__.py" and not base.startswith("_"):
+                files.append(path)
+    return files
+
+
+def _import_helper_module(path: str) -> Any:
+    module_name = f"snakebridge_helper_{hashlib.md5(path.encode('utf-8')).hexdigest()}"
+    if module_name in sys.modules:
+        return sys.modules[module_name]
+
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise SnakeBridgeHelperLoadError(f"Unable to load helper module: {path}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    sys.modules[module_name] = module
+    return module
+
+
+def _extract_helpers_from_module(module: Any) -> Dict[str, Any]:
+    if hasattr(module, "__snakebridge_helpers__"):
+        helpers = getattr(module, "__snakebridge_helpers__")
+    elif hasattr(module, "snakebridge_helpers"):
+        helpers = module.snakebridge_helpers()
+    elif hasattr(module, "HELPERS"):
+        helpers = getattr(module, "HELPERS")
+    else:
+        return {}
+
+    if not isinstance(helpers, dict):
+        raise SnakeBridgeHelperLoadError("Helper registry must be a dict of name => callable")
+
+    for name, func in helpers.items():
+        if not isinstance(name, str):
+            raise SnakeBridgeHelperLoadError("Helper names must be strings")
+        if not callable(func):
+            raise SnakeBridgeHelperLoadError(f"Helper '{name}' is not callable")
+
+    return helpers
+
+
+def _apply_allowlist(helpers: Dict[str, Any], allowlist: Any) -> Dict[str, Any]:
+    if allowlist == "all":
+        return helpers
+    if not allowlist:
+        return {}
+
+    return {name: func for name, func in helpers.items() if name in allowlist}
+
+
+def _load_helper_registry(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    global _helper_registry, _helper_registry_key, _helper_registry_index
+
+    normalized = _normalize_helper_config(config)
+    key = _helper_config_key(normalized)
+
+    if key == _helper_registry_key:
+        return _helper_registry
+
+    registry: Dict[str, Any] = {}
+    for path in _resolve_helper_paths(normalized):
+        if not path or not os.path.exists(path):
+            continue
+
+        for file_path in _list_helper_files([path]):
+            module = _import_helper_module(file_path)
+            helpers = _extract_helpers_from_module(module)
+            registry.update(helpers)
+
+    registry = _apply_allowlist(registry, normalized.get("helper_allowlist", "all"))
+    _helper_registry = registry
+    _helper_registry_key = key
+    _helper_registry_index = _build_helper_index(registry)
+
+    return registry
+
+
+def _format_annotation(annotation: Any) -> Optional[str]:
+    if annotation is inspect.Signature.empty:
+        return None
+    if hasattr(annotation, "__name__"):
+        return annotation.__name__
+    return str(annotation)
+
+
+def _param_info(param: inspect.Parameter) -> Dict[str, Any]:
+    info: Dict[str, Any] = {"name": param.name, "kind": param.kind.name}
+    if param.default is not inspect.Parameter.empty:
+        info["default"] = repr(param.default)
+    if param.annotation is not inspect.Parameter.empty:
+        info["annotation"] = _format_annotation(param.annotation)
+    return info
+
+
+def _build_helper_index(helpers: Dict[str, Any]) -> List[Dict[str, Any]]:
+    index: List[Dict[str, Any]] = []
+    for name, func in helpers.items():
+        entry = {"name": name}
+
+        try:
+            sig = inspect.signature(func)
+            entry["parameters"] = [_param_info(p) for p in sig.parameters.values()]
+        except (ValueError, TypeError):
+            entry["parameters"] = []
+
+        doc = inspect.getdoc(func) or ""
+        if doc:
+            entry["docstring"] = doc[:8000]
+
+        index.append(entry)
+
+    index.sort(key=lambda item: item.get("name", ""))
+    return index
+
+
+def helper_registry_index(config: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    _load_helper_registry(config or {})
+    return _helper_registry_index
+
+
+class SnakeBridgeAdapter:
+    def __init__(self):
+        self.session_context = None
+
+    def set_session_context(self, session_context):
+        self.session_context = session_context
+
+    def execute_tool(self, tool_name: str, arguments: dict, context):
+        if tool_name == "snakebridge.helpers":
+            helper_config = {}
+            if isinstance(arguments, dict):
+                helper_config = arguments.get("helper_config") or arguments
+            return helper_registry_index(helper_config)
+
+        if tool_name not in ["snakebridge.call", "snakebridge.stream"]:
+            raise AttributeError(f"Tool '{tool_name}' not supported by SnakeBridgeAdapter")
+
+        session_id = None
+        if context is not None and hasattr(context, "session_id"):
+            session_id = context.session_id
+        elif self.session_context is not None:
+            session_id = self.session_context.session_id
+        else:
+            session_id = "default"
+
+        call_type = arguments.get("call_type") or "function"
+        python_module = arguments.get("python_module") or arguments.get("module")
+        function = arguments.get("function")
+        args = arguments.get("args") or []
+        kwargs = arguments.get("kwargs") or {}
+        library = arguments.get("library") or (python_module.split(".")[0] if python_module else None)
+
+        if call_type == "class":
+            class_name = arguments.get("class") or arguments.get("class_name")
+            mod = _import_module(python_module)
+            cls = getattr(mod, class_name)
+            instance = cls(*args, **kwargs)
+            return _make_ref(session_id, instance, python_module, library)
+
+        if call_type == "method":
+            instance = _resolve_ref(arguments.get("instance"), session_id)
+            method = getattr(instance, function)
+            return method(*args, **kwargs)
+
+        if call_type == "get_attr":
+            instance = _resolve_ref(arguments.get("instance"), session_id)
+            attr = arguments.get("attr") or function
+            return getattr(instance, attr)
+
+        if call_type == "set_attr":
+            instance = _resolve_ref(arguments.get("instance"), session_id)
+            attr = arguments.get("attr") or function
+            value = args[0] if args else None
+            setattr(instance, attr, value)
+            return True
+
+        if call_type == "helper":
+            helper_name = arguments.get("helper") or function
+            helper_config = arguments.get("helper_config") or {}
+
+            if not helper_name:
+                raise SnakeBridgeHelperNotFoundError("Helper name is required")
+
+            registry = _load_helper_registry(helper_config)
+            if helper_name not in registry:
+                raise SnakeBridgeHelperNotFoundError(f"Helper '{helper_name}' not found")
+
+            return registry[helper_name](*args, **kwargs)
+
+        if not python_module:
+            raise ValueError("snakebridge.call requires python_module")
+
+        mod = _import_module(python_module)
+        func = getattr(mod, function)
+        return func(*args, **kwargs)
 
 
 # Make the module callable for testing

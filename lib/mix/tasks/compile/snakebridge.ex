@@ -5,7 +5,17 @@ defmodule Mix.Tasks.Compile.Snakebridge do
 
   use Mix.Task.Compiler
 
-  alias SnakeBridge.{Config, Generator, Introspector, Lock, Manifest, Scanner}
+  alias SnakeBridge.{
+    Config,
+    Generator,
+    HelperGenerator,
+    Helpers,
+    Introspector,
+    Lock,
+    Manifest,
+    PythonEnv,
+    Scanner
+  }
 
   @impl Mix.Task.Compiler
   def run(_args) do
@@ -15,12 +25,18 @@ defmodule Mix.Tasks.Compile.Snakebridge do
       {:ok, []}
     else
       config = Config.load()
+      run_with_config(config)
+    end
+  end
 
-      if config.libraries == [] do
-        {:ok, []}
-      else
-        run_with_config(config)
-      end
+  defp run_with_config(%{libraries: []}), do: {:ok, []}
+
+  defp run_with_config(config) do
+    if strict_mode?(config) do
+      run_strict(config)
+    else
+      PythonEnv.ensure!(config)
+      run_normal(config)
     end
   end
 
@@ -262,27 +278,55 @@ defmodule Mix.Tasks.Compile.Snakebridge do
     end)
   end
 
-  defp run_with_config(config) do
-    detected = Scanner.scan_project(config)
+  defp strict_mode?(config) do
+    System.get_env("SNAKEBRIDGE_STRICT") == "1" || config.strict == true
+  end
+
+  defp run_strict(config) do
+    manifest = Manifest.load(config)
+    detected = scanner_module().scan_project(config)
+    missing = Manifest.missing(manifest, detected)
+
+    if missing != [] do
+      formatted = format_missing(missing)
+
+      raise SnakeBridge.CompileError, """
+      Strict mode: #{length(missing)} symbol(s) not in manifest.
+
+      Missing:
+      #{formatted}
+
+      To fix:
+        1. Run `mix snakebridge.setup` locally
+        2. Run `mix compile` to generate bindings
+        3. Commit the updated manifest and generated files
+        4. Re-run CI
+
+      Set SNAKEBRIDGE_STRICT=0 to disable strict mode.
+      """
+    end
+
+    {:ok, []}
+  end
+
+  defp run_normal(config) do
+    detected = scanner_module().scan_project(config)
     manifest = Manifest.load(config)
     missing = Manifest.missing(manifest, detected)
     targets = build_targets(missing, config, manifest)
 
-    if config.strict and targets != [] do
-      {:error, [diagnostic("Strict mode: generation needed for: #{format_targets(targets)}")]}
-    else
-      updated_manifest =
-        if targets != [] do
-          update_manifest(manifest, targets)
-        else
-          manifest
-        end
+    updated_manifest =
+      if targets != [] do
+        update_manifest(manifest, targets)
+      else
+        manifest
+      end
 
-      Manifest.save(config, updated_manifest)
-      generate_from_manifest(config, updated_manifest)
-      Lock.update(config)
-      {:ok, []}
-    end
+    Manifest.save(config, updated_manifest)
+    generate_from_manifest(config, updated_manifest)
+    generate_helper_wrappers(config)
+    Lock.update(config)
+    {:ok, []}
   end
 
   defp required_arity(params) do
@@ -292,23 +336,35 @@ defmodule Mix.Tasks.Compile.Snakebridge do
     |> length()
   end
 
-  defp diagnostic(message) do
-    %Mix.Task.Compiler.Diagnostic{
-      compiler_name: "snakebridge",
-      details: nil,
-      file: "mix.exs",
-      message: message,
-      position: 1,
-      severity: :error
-    }
+  defp format_missing(missing) do
+    missing
+    |> Enum.sort()
+    |> Enum.map_join("\n", fn {mod, fun, arity} ->
+      module = Module.split(mod) |> Enum.join(".")
+      "  - #{module}.#{fun}/#{arity}"
+    end)
   end
 
-  defp format_targets(targets) do
-    targets
-    |> Enum.flat_map(fn {library, python_module, functions} ->
-      module = module_for_python(library, python_module)
-      Enum.map(functions, fn name -> "#{module}.#{name}" end)
-    end)
-    |> Enum.join(", ")
+  defp scanner_module do
+    Application.get_env(:snakebridge, :scanner, Scanner)
+  end
+
+  defp generate_helper_wrappers(config) do
+    if Helpers.enabled?(config) do
+      case Helpers.discover(config) do
+        {:ok, helpers} ->
+          HelperGenerator.generate_helpers(helpers, config)
+
+        {:error, %SnakeBridge.HelperRegistryError{} = error} ->
+          Mix.shell().error(Exception.message(error))
+          :ok
+
+        {:error, reason} ->
+          Mix.shell().error("Helper registry failed: #{inspect(reason)}")
+          :ok
+      end
+    else
+      :ok
+    end
   end
 end

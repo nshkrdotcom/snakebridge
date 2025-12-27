@@ -1,12 +1,13 @@
 {
   "environment": {
     "elixir_version": "1.18.4",
-    "generator_hash": "c9163ff21f1f2b0390dc48bdda47179718f772f507a7cebceca59ce1a7129029",
+    "generator_hash": "d1f62539db82b51da84bda2f4885db5e847db8389183be41389efd0ae6edab94",
     "otp_version": "28",
+    "python_packages_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "python_platform": "x86_64-pc-linux-gnu",
     "python_runtime_hash": "1319c137ea5d30f1d7599943cb0e72666648c20a94cf5932dd095364d07dafeb",
     "python_version": "3.12.3",
-    "snakebridge_version": "3.0.0"
+    "snakebridge_version": "0.5.0"
   },
   "libraries": {
     "json": {
@@ -20,5 +21,6 @@
       "resolved": "stdlib"
     }
   },
-  "version": "3.0.0"
+  "python_packages": {},
+  "version": "0.5.0"
 }

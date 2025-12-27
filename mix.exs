@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.4.0"
+  @version "0.5.0"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -24,7 +24,6 @@ defmodule SnakeBridge.MixProject do
 
       # Dialyzer
       dialyzer: [
-        plt_file: {:no_warn, "priv_old/plts/dialyzer.plt"},
         plt_add_apps: [:mix, :ex_unit]
       ]
     ]
@@ -43,7 +42,7 @@ defmodule SnakeBridge.MixProject do
   defp deps do
     [
       # Core - Python bridge
-      {:snakepit, "~> 0.7.4"},
+      {:snakepit, "~> 0.7.6"},
       # JSON encoding
       {:jason, "~> 1.4"},
 
@@ -74,9 +73,12 @@ defmodule SnakeBridge.MixProject do
         Generator: [
           SnakeBridge.Generator,
           SnakeBridge.Introspector,
+          SnakeBridge.IntrospectionError,
           SnakeBridge.Scanner,
           SnakeBridge.Manifest,
-          SnakeBridge.Lock
+          SnakeBridge.Lock,
+          SnakeBridge.PythonEnv,
+          SnakeBridge.EnvironmentError
         ]
       ]
     ]

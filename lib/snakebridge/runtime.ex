@@ -19,6 +19,24 @@ defmodule SnakeBridge.Runtime do
     runtime_client().execute("snakebridge.call", payload, runtime_opts)
   end
 
+  @spec call_helper(String.t(), args(), opts() | map()) :: {:ok, term()} | {:error, term()}
+  def call_helper(helper, args \\ [], opts \\ [])
+
+  def call_helper(helper, args, opts) when is_map(opts) do
+    payload = helper_payload(helper, args, stringify_keys(opts), false)
+
+    runtime_client().execute("snakebridge.call", payload, [])
+    |> classify_helper_result(helper)
+  end
+
+  def call_helper(helper, args, opts) when is_list(opts) do
+    {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
+    payload = helper_payload(helper, args ++ extra_args, kwargs, idempotent)
+
+    runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    |> classify_helper_result(helper)
+  end
+
   @spec stream(module_ref(), function_name(), args(), opts(), (term() -> any())) ::
           :ok | {:error, Snakepit.Error.t()}
   def stream(module, function, args \\ [], opts \\ [], callback)
@@ -165,5 +183,67 @@ defmodule SnakeBridge.Runtime do
     else
       module |> Module.split() |> List.last()
     end
+  end
+
+  defp helper_payload(helper, args, kwargs, idempotent) do
+    %{
+      "call_type" => "helper",
+      "helper" => helper,
+      "function" => helper,
+      "library" => helper_library(helper),
+      "args" => List.wrap(args),
+      "kwargs" => kwargs,
+      "idempotent" => idempotent,
+      "helper_config" => SnakeBridge.Helpers.payload_config(SnakeBridge.Helpers.runtime_config())
+    }
+  end
+
+  defp helper_library(helper) when is_binary(helper) do
+    case String.split(helper, ".", parts: 2) do
+      [library, _rest] -> library
+      _ -> "unknown"
+    end
+  end
+
+  defp helper_library(_), do: "unknown"
+
+  defp classify_helper_result({:error, reason}, helper) do
+    {:error, classify_helper_error(reason, helper)}
+  end
+
+  defp classify_helper_result(result, _helper), do: result
+
+  defp classify_helper_error({:invalid_parameter, :json_encode_failed, message}, _helper) do
+    SnakeBridge.SerializationError.new(message)
+  end
+
+  defp classify_helper_error(
+         %{python_type: "SnakeBridgeHelperNotFoundError", message: message},
+         helper
+       ) do
+    helper_name = extract_helper_name(message) || helper
+    SnakeBridge.HelperNotFoundError.new(helper_name)
+  end
+
+  defp classify_helper_error(
+         %{python_type: "SnakeBridgeSerializationError", message: message},
+         _helper
+       ) do
+    SnakeBridge.SerializationError.new(message)
+  end
+
+  defp classify_helper_error(reason, _helper), do: reason
+
+  defp extract_helper_name(message) when is_binary(message) do
+    case Regex.run(~r/Helper ['"]([^'"]+)['"]/, message) do
+      [_, helper] -> helper
+      _ -> nil
+    end
+  end
+
+  defp extract_helper_name(_), do: nil
+
+  defp stringify_keys(map) when is_map(map) do
+    Enum.into(map, %{}, fn {key, value} -> {to_string(key), value} end)
   end
 end

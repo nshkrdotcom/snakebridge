@@ -46,4 +46,44 @@ defmodule MathDemoTest do
       assert :ok == MathDemo.discover()
     end
   end
+
+  describe "MathDemo runtime" do
+    defmodule RuntimeClientStub do
+      def execute("snakebridge.call", %{"function" => "sqrt", "args" => [2]}, _opts),
+        do: {:ok, 1.41421356237}
+
+      def execute("snakebridge.call", %{"function" => "sin", "args" => [1.0]}, _opts),
+        do: {:ok, 0.84}
+
+      def execute("snakebridge.call", %{"function" => "cos", "args" => [0.0]}, _opts),
+        do: {:ok, 1.0}
+
+      def execute(_tool, _payload, _opts), do: {:error, :unexpected}
+
+      def execute_stream(_tool, _payload, _cb, _opts), do: :ok
+    end
+
+    setup do
+      original = Application.get_env(:snakebridge, :runtime_client)
+
+      Application.put_env(:snakebridge, :runtime_client, RuntimeClientStub)
+
+      on_exit(fn ->
+        if original do
+          Application.put_env(:snakebridge, :runtime_client, original)
+        else
+          Application.delete_env(:snakebridge, :runtime_client)
+        end
+      end)
+
+      :ok
+    end
+
+    test "compute_sample returns runtime results" do
+      assert {:ok, %{sqrt: sqrt, sin: sin, cos: cos}} = MathDemo.compute_sample()
+      assert sqrt > 1.4
+      assert sin > 0.8
+      assert cos == 1.0
+    end
+  end
 end

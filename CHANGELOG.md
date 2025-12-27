@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - (no changes yet)
 
+## [0.5.0] - 2025-12-25
+
+### Added
+- `SnakeBridge.PythonEnv` module for Python environment orchestration
+- `SnakeBridge.EnvironmentError` for missing package errors
+- `SnakeBridge.IntrospectionError` for classified introspection failures
+- `mix snakebridge.setup` task for provisioning Python packages
+- Config options: `pypi_package`, `extras` per library
+- Config option: `auto_install` (:never | :dev | :always)
+- Strict mode enforcement via `SNAKEBRIDGE_STRICT=1` or `strict: true`
+- Package identity in `snakebridge.lock` (`python_packages`, `python_packages_hash`)
+
+### Changed
+- Compiler now calls `PythonEnv.ensure!/1` before introspection (when not strict)
+- Improved introspection error messages with fix suggestions
+
+### Dependencies
+- Requires snakepit ~> 0.7.5 (for PythonPackages support)
+
 ## [0.4.0] - 2025-12-25
 
 ### Added
@@ -65,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type system mapper
 - Basic code generation
 
+[0.5.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/nshkrdotcom/snakebridge/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.3.0...v0.3.1

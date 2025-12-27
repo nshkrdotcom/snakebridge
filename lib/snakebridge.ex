@@ -8,6 +8,7 @@ defmodule SnakeBridge do
   """
 
   defdelegate call(module, function, args \\ [], opts \\ []), to: SnakeBridge.Runtime
+  defdelegate call_helper(helper, args \\ [], opts \\ []), to: SnakeBridge.Runtime
   defdelegate stream(module, function, args \\ [], opts \\ [], callback), to: SnakeBridge.Runtime
 
   @doc """

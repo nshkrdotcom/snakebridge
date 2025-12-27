@@ -19,7 +19,7 @@ Runtime execution is handled by [Snakepit](https://hex.pm/packages/snakepit).
 # mix.exs
 defp deps do
   [
-    {:snakebridge, "~> 0.4.0",
+    {:snakebridge, "~> 0.5.0",
      libraries: [
        json: :stdlib,
        math: :stdlib,
@@ -48,18 +48,27 @@ end
 config :snakebridge,
   generated_dir: "lib/snakebridge_generated",
   metadata_dir: ".snakebridge",
+  auto_install: :dev,
   strict: false,
   verbose: false,
   docs: [source: :python, cache_enabled: true]
 ```
 
-### 4. Compile
+`auto_install` supports `:never | :dev | :always` (default: `:dev`).
+
+### 4. Provision Python Packages (optional)
+
+```bash
+mix snakebridge.setup
+```
+
+### 5. Compile
 
 ```bash
 mix compile
 ```
 
-### 5. Use
+### 6. Use
 
 ```elixir
 iex> Math.sqrt(2)
@@ -92,7 +101,9 @@ Generated source is **committed to git**. There are no timestamps and no auto-gi
 lib/snakebridge_generated/
 ├── json.ex
 ├── math.ex
-└── numpy.ex
+├── numpy.ex
+└── helpers/
+    └── sympy.ex
 ```
 
 Metadata and environment identity are tracked alongside source:
@@ -105,20 +116,33 @@ snakebridge.lock
 ## Configuration (Library Options)
 
 ```elixir
-{:snakebridge, "~> 0.4.0",
+{:snakebridge, "~> 0.5.0",
  libraries: [
    numpy: [
      version: "~> 1.26",
      module_name: Np,
      python_name: "numpy",
+     pypi_package: "numpy",
+     extras: ["cuda"],
      include: ["array", "zeros"],
      exclude: ["deprecated_fn"],
      streaming: ["predict"],
      submodules: true
    ],
    json: :stdlib
- ]}
+]}
 ```
+
+## Strict Mode (CI)
+
+Strict mode prevents introspection and fails if generation would be required.
+
+```bash
+SNAKEBRIDGE_STRICT=1 mix compile
+```
+
+When strict mode fails, run `mix snakebridge.setup`, then `mix compile`,
+commit the updated manifest and generated files, and retry CI.
 
 ## Runtime
 
@@ -127,6 +151,36 @@ The generated wrappers send payloads to Snakepit tools:
 
 - `snakebridge.call`
 - `snakebridge.stream`
+
+## Helpers
+
+Helpers are opt-in Python functions registered explicitly in helper modules.
+They are discovered at compile time and wrapped under `lib/snakebridge_generated/helpers/`.
+
+```python
+# priv/python/helpers/sympy_helpers.py
+def parse_implicit(expr):
+    # custom logic here
+    return expr
+
+__snakebridge_helpers__ = {
+    "sympy.parse_implicit": parse_implicit
+}
+```
+
+```elixir
+# config/config.exs
+config :snakebridge,
+  helper_paths: ["priv/python/helpers"],
+  helper_pack_enabled: true,
+  helper_allowlist: :all,
+  inline_enabled: false
+```
+
+```elixir
+iex> Sympy.Helpers.parse_implicit("2x")
+{:ok, "2x"}
+```
 
 Configure Snakepit separately under `config :snakepit`.
 

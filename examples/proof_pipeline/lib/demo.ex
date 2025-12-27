@@ -4,15 +4,15 @@ defmodule Demo do
   """
 
   def run do
-    IO.puts("""
-    ╔═══════════════════════════════════════════════════════════╗
-    ║            ProofPipeline - SnakeBridge Demo               ║
-    ╚═══════════════════════════════════════════════════════════╝
-    """)
+    Snakepit.run_as_script(fn ->
+      IO.puts("""
+      ╔═══════════════════════════════════════════════════════════╗
+      ║            ProofPipeline - SnakeBridge Demo               ║
+      ╚═══════════════════════════════════════════════════════════╝
+      """)
 
-    input = ProofPipeline.sample_input()
+      input = ProofPipeline.sample_input()
 
-    if live?() do
       IO.puts("Running live pipeline (requires Python libs installed)...")
 
       case ProofPipeline.run(input) do
@@ -22,22 +22,13 @@ defmodule Demo do
         {:error, reason} ->
           IO.puts("Pipeline failed: #{inspect(reason)}")
       end
-    else
-      IO.puts("Dry run plan (set PROOF_PIPELINE_LIVE=1 to execute):")
+    end)
+    |> case do
+      {:error, reason} ->
+        IO.puts("Snakepit script failed: #{inspect(reason)}")
 
-      ProofPipeline.plan(input)
-      |> Enum.each(fn step ->
-        IO.puts(
-          "  - #{step.step}: #{inspect(step.library)}.#{step.function}/#{length(step.args)}"
-        )
-      end)
-    end
-  end
-
-  defp live? do
-    case System.get_env("PROOF_PIPELINE_LIVE") do
-      nil -> false
-      value -> value in ["1", "true", "TRUE", "yes", "YES"]
+      _ ->
+        :ok
     end
   end
 end

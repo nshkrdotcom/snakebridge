@@ -3,6 +3,8 @@ defmodule SnakeBridge.Introspector do
   Introspects Python functions using the Snakepit-configured runtime.
   """
 
+  alias SnakeBridge.IntrospectionError
+
   @type function_name :: atom() | String.t()
 
   @spec introspect(SnakeBridge.Config.Library.t() | map(), [function_name()]) ::
@@ -19,6 +21,7 @@ defmodule SnakeBridge.Introspector do
 
     case python_runner().run(introspection_script(), [python_name, functions_json], runner_opts()) do
       {:ok, output} -> parse_output(output)
+      {:error, {:python_exit, _status, output}} -> handle_python_error(output, python_name)
       {:error, reason} -> {:error, reason}
     end
   end
@@ -163,5 +166,9 @@ defmodule SnakeBridge.Introspector do
 
         print(json.dumps(results))
     """
+  end
+
+  defp handle_python_error(output, package) do
+    {:error, IntrospectionError.from_python_output(output, package)}
   end
 end

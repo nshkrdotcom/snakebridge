@@ -1,7 +1,7 @@
 # MathDemo - SnakeBridge v3 Example
 
-This example demonstrates SnakeBridge v3 compile-time generation and discovery APIs.
-Runtime calls are intentionally omitted.
+This example demonstrates SnakeBridge v3 compile-time generation, discovery APIs,
+and live runtime calls via Snakepit.
 
 ## Quick Start
 
@@ -11,6 +11,9 @@ mix deps.get
 mix compile
 mix run -e Demo.run
 ```
+
+This demo wraps execution in `Snakepit.run_as_script/2` to ensure Python workers
+clean up on exit (prevents orphan warnings on subsequent runs).
 
 ## What Happens
 
@@ -52,6 +55,9 @@ iex> MathDemo.generated_structure()
 
 iex> MathDemo.discover()
 :ok
+
+iex> MathDemo.compute_sample()
+{:ok, %{cos: 1.0, sin: 0.84, sqrt: 1.41421356237}}
 ```
 
 ## Key Files
@@ -69,4 +75,5 @@ iex> MathDemo.discover()
 ## Requirements
 
 - Python 3.7+
-- Snakepit configured for runtime execution when you call generated functions
+- Snakepit runtime (enabled in config/config.exs)
+- Auto-install runs during compile (`auto_install: :dev`)

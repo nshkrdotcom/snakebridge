@@ -5,9 +5,8 @@ defmodule ProofPipeline do
   This module builds a multi-step flow:
   1. Parse LaTeX into nodes (pylatexenc)
   2. Normalize and simplify (SymPy)
-  3. Verify and grade (math_verify)
-
-  The live runtime path is optional. Use `Demo.run/0` to see the dry plan.
+  3. Verify with math_verify
+  Use `Demo.run/0` to execute the live pipeline.
   """
 
   @type input :: %{
@@ -28,7 +27,7 @@ defmodule ProofPipeline do
   @spec plan(input()) :: [map()]
   def plan(%{student_latex: student, gold_latex: gold}) do
     expr = "<sympy_expr>"
-    normalized = "<normalized_latex>"
+    rendered = "<rendered_latex>"
 
     [
       %{
@@ -43,18 +42,16 @@ defmodule ProofPipeline do
         function: :get_latex_nodes,
         args: [student]
       },
-      %{step: :sympify, library: Sympy, function: :sympify, args: [student]},
+      %{
+        step: :parse_expr,
+        library: ProofPipeline.PythonParser,
+        function: :parse_expr,
+        args: [student]
+      },
       %{step: :simplify, library: Sympy, function: :simplify, args: [expr]},
       %{step: :render_latex, library: Sympy, function: :latex, args: [expr]},
-      %{
-        step: :normalize_latex,
-        library: PyLatexEnc.Latexencode,
-        function: :unicode_to_latex,
-        args: [normalized]
-      },
-      %{step: :verify, library: MathVerify, function: :verify, args: [gold, normalized]},
-      %{step: :parse, library: MathVerify, function: :parse, args: [normalized]},
-      %{step: :grade, library: MathVerify, function: :grade, args: [gold, normalized]}
+      %{step: :verify, library: MathVerify, function: :verify, args: [gold, rendered]},
+      %{step: :parse, library: MathVerify, function: :parse, args: [rendered]}
     ]
   end
 
@@ -62,23 +59,20 @@ defmodule ProofPipeline do
   def run(%{student_latex: student, gold_latex: gold} = input) do
     with {:ok, walker} <- PyLatexEnc.Latexwalker.LatexWalker.new(student),
          {:ok, nodes} <- PyLatexEnc.Latexwalker.LatexWalker.get_latex_nodes(walker),
-         {:ok, expr} <- Sympy.sympify(student),
+         {:ok, expr} <- ProofPipeline.PythonParser.parse_expr(student),
          {:ok, simplified} <- Sympy.simplify(expr),
          {:ok, rendered} <- Sympy.latex(simplified),
-         {:ok, normalized} <- PyLatexEnc.Latexencode.unicode_to_latex(rendered),
-         {:ok, verdict} <- MathVerify.verify(gold, normalized),
-         {:ok, parsed} <- MathVerify.parse(normalized),
-         {:ok, grade} <- MathVerify.grade(gold, normalized) do
+         {:ok, verdict} <- MathVerify.verify(gold, rendered),
+         {:ok, parsed} <- MathVerify.parse(rendered) do
       {:ok,
        %{
          input: input,
          nodes: nodes,
          simplified: simplified,
          rendered: rendered,
-         normalized: normalized,
+         normalized: rendered,
          parsed: parsed,
-         verdict: verdict,
-         grade: grade
+         verdict: verdict
        }}
     end
   end

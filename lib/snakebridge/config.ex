@@ -5,8 +5,13 @@ defmodule SnakeBridge.Config do
 
   defstruct [
     :libraries,
+    :auto_install,
     :generated_dir,
     :metadata_dir,
+    :helper_paths,
+    :helper_pack_enabled,
+    :helper_allowlist,
+    :inline_enabled,
     :strict,
     :verbose,
     :scan_paths,
@@ -27,6 +32,8 @@ defmodule SnakeBridge.Config do
       :version,
       :module_name,
       :python_name,
+      :pypi_package,
+      :extras,
       include: [],
       exclude: [],
       streaming: [],
@@ -38,6 +45,8 @@ defmodule SnakeBridge.Config do
             version: String.t() | :stdlib | nil,
             module_name: module(),
             python_name: String.t(),
+            pypi_package: String.t() | nil,
+            extras: [String.t()],
             include: [String.t()],
             exclude: [String.t()],
             streaming: [String.t()],
@@ -47,8 +56,13 @@ defmodule SnakeBridge.Config do
 
   @type t :: %__MODULE__{
           libraries: [Library.t()],
+          auto_install: :never | :dev | :always,
           generated_dir: String.t(),
           metadata_dir: String.t(),
+          helper_paths: [String.t()],
+          helper_pack_enabled: boolean(),
+          helper_allowlist: :all | [String.t()],
+          inline_enabled: boolean(),
           strict: boolean(),
           verbose: boolean(),
           scan_paths: [String.t()],
@@ -77,8 +91,13 @@ defmodule SnakeBridge.Config do
 
     %__MODULE__{
       libraries: parse_libraries(Keyword.get(opts, :libraries, [])),
+      auto_install: Application.get_env(:snakebridge, :auto_install, :dev),
       generated_dir: Keyword.get(opts, :generated_dir, "lib/snakebridge_generated"),
       metadata_dir: Keyword.get(opts, :metadata_dir, ".snakebridge"),
+      helper_paths: Application.get_env(:snakebridge, :helper_paths, ["priv/python/helpers"]),
+      helper_pack_enabled: Application.get_env(:snakebridge, :helper_pack_enabled, true),
+      helper_allowlist: Application.get_env(:snakebridge, :helper_allowlist, :all),
+      inline_enabled: Application.get_env(:snakebridge, :inline_enabled, false),
       strict: env_flag(:strict, "SNAKEBRIDGE_STRICT", false),
       verbose: env_flag(:verbose, "SNAKEBRIDGE_VERBOSE", false),
       scan_paths: Application.get_env(:snakebridge, :scan_paths, ["lib"]),
@@ -115,12 +134,15 @@ defmodule SnakeBridge.Config do
   defp build_library(name, version, opts) do
     module_name = Keyword.get(opts, :module_name, default_module_name(name))
     python_name = Keyword.get(opts, :python_name, Atom.to_string(name))
+    extras = Keyword.get(opts, :extras, [])
 
     %Library{
       name: name,
       version: version,
       module_name: module_name,
       python_name: python_name,
+      pypi_package: Keyword.get(opts, :pypi_package),
+      extras: List.wrap(extras),
       include: Keyword.get(opts, :include, []),
       exclude: Keyword.get(opts, :exclude, []),
       streaming: Keyword.get(opts, :streaming, []),

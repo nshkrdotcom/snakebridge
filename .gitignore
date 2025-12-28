@@ -53,3 +53,13 @@ htmlcov/
 /priv/plts/
 /snakepit/
 /pythonLibs/
+
+# Example projects (Elixir project artifacts)
+examples/*/_build/
+examples/*/deps/
+examples/*/cover/
+examples/*/doc/
+examples/*/.fetch
+examples/*/snakepit/
+examples/*/pythonLibs/
+/docs/20251227/

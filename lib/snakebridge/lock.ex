@@ -1,6 +1,33 @@
 defmodule SnakeBridge.Lock do
   @moduledoc """
-  Manages snakebridge.lock with runtime identity and library versions.
+  Manages snakebridge.lock with runtime identity, hardware info, and library versions.
+
+  The lock file captures:
+  - Hardware identity (accelerator, CUDA version, CPU features)
+  - Platform information (OS, architecture)
+  - Python environment (version, packages)
+  - Library configurations
+
+  ## Hardware-Aware Lock Files
+
+  The lock file includes hardware information to detect compatibility issues:
+
+      %{
+        "environment" => %{
+          "hardware" => %{
+            "accelerator" => "cuda",
+            "cuda_version" => "12.1",
+            "gpu_count" => 2,
+            "cpu_features" => ["avx", "avx2"]
+          },
+          "platform" => %{
+            "os" => "linux",
+            "arch" => "x86_64"
+          }
+        }
+      }
+
+  Use `SnakeBridge.Lock.Verifier` to verify compatibility.
   """
 
   alias SnakeBridge.Config
@@ -32,6 +59,8 @@ defmodule SnakeBridge.Lock do
 
     packages = get_package_metadata(config)
     packages_hash = "sha256:" <> compute_packages_hash(packages)
+    hardware = build_hardware_section()
+    platform = build_platform_section()
 
     %{
       "version" => version(),
@@ -43,10 +72,74 @@ defmodule SnakeBridge.Lock do
         "python_runtime_hash" => runtime.hash,
         "python_packages_hash" => packages_hash,
         "elixir_version" => System.version(),
-        "otp_version" => System.otp_release()
+        "otp_version" => System.otp_release(),
+        "hardware" => hardware,
+        "platform" => platform
       },
+      "compatibility" => build_compatibility_section(hardware),
       "libraries" => libraries_lock(config),
       "python_packages" => packages
+    }
+  end
+
+  @doc """
+  Builds the hardware section for the lock file.
+
+  Returns a map with hardware identity including accelerator type,
+  CUDA version if available, GPU count, and CPU features.
+  """
+  @spec build_hardware_section() :: map()
+  def build_hardware_section do
+    identity = hardware_module().identity()
+    caps = hardware_module().capabilities()
+
+    base = %{
+      "accelerator" => identity["accelerator"],
+      "gpu_count" => identity["gpu_count"],
+      "cpu_features" => identity["cpu_features"]
+    }
+
+    # Add CUDA-specific info if available
+    base =
+      if caps.cuda do
+        base
+        |> Map.put("cuda_version", caps.cuda_version)
+        |> Map.put("cudnn_version", caps.cudnn_version)
+      else
+        base
+      end
+
+    base
+  end
+
+  @doc """
+  Builds the platform section for the lock file.
+  """
+  @spec build_platform_section() :: map()
+  def build_platform_section do
+    identity = hardware_module().identity()
+    platform = identity["platform"] || "unknown-unknown"
+
+    case String.split(platform, "-", parts: 2) do
+      [os, arch] ->
+        %{"os" => os, "arch" => arch}
+
+      [os] ->
+        %{"os" => os, "arch" => "unknown"}
+
+      _ ->
+        %{"os" => "unknown", "arch" => "unknown"}
+    end
+  end
+
+  @doc """
+  Builds the compatibility section with minimum requirements.
+  """
+  @spec build_compatibility_section(map()) :: map()
+  def build_compatibility_section(hardware) do
+    %{
+      "cuda_min" => hardware["cuda_version"],
+      "compute_capability_min" => nil
     }
   end
 
@@ -123,5 +216,9 @@ defmodule SnakeBridge.Lock do
 
   defp python_runtime_module do
     Application.get_env(:snakebridge, :python_runtime, Snakepit.PythonRuntime)
+  end
+
+  defp hardware_module do
+    Application.get_env(:snakebridge, :hardware_module, Snakepit.Hardware)
   end
 end

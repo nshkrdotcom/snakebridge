@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.5.0"
+  @version "0.6.0"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -16,7 +16,7 @@ defmodule SnakeBridge.MixProject do
 
       # Docs
       name: "SnakeBridge",
-      description: "Generate type-safe Elixir bindings for Python libraries",
+      description: "Compile-time generator for type-safe Elixir bindings to Python libraries",
       source_url: @source_url,
       homepage_url: @source_url,
       docs: docs(),
@@ -42,9 +42,12 @@ defmodule SnakeBridge.MixProject do
   defp deps do
     [
       # Core - Python bridge
-      {:snakepit, "~> 0.7.6"},
+      {:snakepit, "~> 0.8.1"},
       # JSON encoding
       {:jason, "~> 1.4"},
+      # Telemetry
+      {:telemetry, "~> 1.2"},
+      {:telemetry_metrics, "~> 1.0"},
 
       # Development & Testing
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},

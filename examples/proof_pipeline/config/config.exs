@@ -8,6 +8,7 @@ path_sep =
 
 app_root = Path.expand("..", __DIR__)
 snakebridge_root = Path.expand("../..", app_root)
+venv_python = Path.join([snakebridge_root, ".venv", "bin", "python"])
 
 snakepit_priv = Path.join([app_root, "deps", "snakepit", "priv", "python"])
 snakebridge_priv = Path.join([snakebridge_root, "priv", "python"])
@@ -28,6 +29,7 @@ config :snakebridge,
 
 config :snakepit,
   pooling_enabled: true,
+  python_executable: venv_python,
   adapter_module: Snakepit.Adapters.GRPCPython,
   pool_config: %{
     pool_size: 4,
@@ -45,4 +47,4 @@ config :snakepit, :python,
 config :snakepit, :python_packages, installer: :uv
 
 config :logger,
-  level: :info
+  level: :warning

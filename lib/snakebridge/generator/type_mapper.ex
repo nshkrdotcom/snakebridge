@@ -85,6 +85,20 @@ defmodule SnakeBridge.Generator.TypeMapper do
   def to_spec(%{"type" => "union"} = python_type), do: map_union_type(python_type)
   def to_spec(%{"type" => "class"} = python_type), do: map_class_type(python_type)
 
+  # ML-specific types (NumPy, PyTorch, Pandas)
+  def to_spec(%{"type" => "numpy.ndarray"}), do: quote(do: Numpy.NDArray.t())
+  def to_spec(%{"type" => "numpy.dtype"}), do: quote(do: Numpy.DType.t())
+  def to_spec(%{"type" => "torch.tensor"}), do: quote(do: Torch.Tensor.t())
+  def to_spec(%{"type" => "torch.Tensor"}), do: quote(do: Torch.Tensor.t())
+  def to_spec(%{"type" => "torch.dtype"}), do: quote(do: Torch.DType.t())
+  def to_spec(%{"type" => "pandas.dataframe"}), do: quote(do: Pandas.DataFrame.t())
+  def to_spec(%{"type" => "pandas.DataFrame"}), do: quote(do: Pandas.DataFrame.t())
+  def to_spec(%{"type" => "pandas.series"}), do: quote(do: Pandas.Series.t())
+  def to_spec(%{"type" => "pandas.Series"}), do: quote(do: Pandas.Series.t())
+
+  # Python integer alias
+  def to_spec(%{"type" => "integer"}), do: quote(do: integer())
+
   # Fallback for unknown types
   def to_spec(%{"type" => _}), do: quote(do: term())
   def to_spec(_), do: quote(do: term())

@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - (no changes yet)
 
+## [0.6.0] - 2025-12-27
+
+### Added
+- `Docs.RstParser` for Google, NumPy, Sphinx, and Epytext docstring parsing
+- `MarkdownConverter` to transform parsed docstrings into ExDoc markdown with type mappings
+- `MathRenderer` for reStructuredText math directives (`:math:`, `.. math::`) to KaTeX format
+- `ErrorTranslator` for structured Python exception translation with actionable suggestions
+- `ShapeMismatchError` for tensor dimension parsing with transposition/broadcasting guidance
+- `OutOfMemoryError` for device memory stats and recovery steps (CUDA, MPS)
+- `DtypeMismatchError` for precision conflict detection with casting guidance
+- `:telemetry` instrumentation for scan, introspect, generate, and runtime calls
+- `RuntimeForwarder` to enrich Snakepit execution events with SnakeBridge context
+- `Handlers.Logger` and `Handlers.Metrics` for compilation timing logs and standard metrics
+- Hardware identity in `snakebridge.lock` (accelerator, CUDA version, GPU count, CPU features)
+- `mix snakebridge.verify` to validate lock files against current runtime hardware
+- `WheelSelector` for hardware-specific PyTorch wheel resolution (cu118, cu121, rocm, cpu)
+- `examples/` with 8 demo projects covering docs, types, errors, telemetry, and performance
+- `benchmarks/compile_time_benchmark.exs` for scan and generation performance tracking
+
+### Changed
+- `TypeMapper` now emits specific typespecs for `numpy.ndarray`, `torch.Tensor`, and `pandas.DataFrame`
+- Suppress noisy OTLP/TLS logs during application startup
+
+### Dependencies
+- Requires snakepit ~> 0.8.1
+
 ## [0.5.0] - 2025-12-25
 
 ### Added
@@ -84,6 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type system mapper
 - Basic code generation
 
+[0.6.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/nshkrdotcom/snakebridge/compare/v0.3.1...v0.3.2

@@ -19,7 +19,7 @@ Runtime execution is handled by [Snakepit](https://hex.pm/packages/snakepit).
 # mix.exs
 defp deps do
   [
-    {:snakebridge, "~> 0.5.0",
+    {:snakebridge, "~> 0.6.0",
      libraries: [
        json: :stdlib,
        math: :stdlib,

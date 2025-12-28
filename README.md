@@ -184,12 +184,34 @@ iex> Sympy.Helpers.parse_implicit("2x")
 
 Configure Snakepit separately under `config :snakepit`.
 
-## Example Project
+## Examples
 
-See `examples/math_demo` for a full v3 example with committed generated code.
+The `examples/` directory contains 8 examples demonstrating SnakeBridge's capabilities:
+
+| Example | Description |
+|---------|-------------|
+| **basic** | Core functionality with math, strings, JSON, and OS calls |
+| **math_demo** | Discovery APIs (`__functions__/0`, `__search__/1`) and runtime calls |
+| **proof_pipeline** | Multi-step LaTeX/SymPy pipeline chaining multiple Python libraries |
+| **types_showcase** | Python ↔ Elixir type mapping (int, float, str, list, dict, etc.) |
+| **error_showcase** | ML error translation (ShapeMismatch, OutOfMemory, DtypeMismatch) |
+| **docs_showcase** | Documentation parsing (RST/Google/NumPy docstrings) |
+| **telemetry_showcase** | Telemetry integration with event logging and metrics |
+| **twenty_libraries** | Performance demo with 20 Python stdlib libraries |
+
+Run all examples:
+
+```bash
+cd examples
+./run_all.sh
+```
+
+Or run individually:
 
 ```bash
 cd examples/math_demo
-mix deps.get
-mix compile
+mix deps.get && mix compile
+mix run -e Demo.run
 ```
+
+See [`examples/README.md`](examples/README.md) for detailed documentation.

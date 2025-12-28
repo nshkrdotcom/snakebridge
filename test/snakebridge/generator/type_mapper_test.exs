@@ -233,6 +233,64 @@ defmodule SnakeBridge.Generator.TypeMapperTest do
     end
   end
 
+  describe "to_spec/1 with ML-specific types" do
+    test "maps numpy.ndarray to Numpy.NDArray.t()" do
+      python_type = %{"type" => "numpy.ndarray"}
+      spec_ast = TypeMapper.to_spec(python_type)
+
+      assert Macro.to_string(spec_ast) == "Numpy.NDArray.t()"
+    end
+
+    test "maps numpy.dtype to Numpy.DType.t()" do
+      python_type = %{"type" => "numpy.dtype"}
+      spec_ast = TypeMapper.to_spec(python_type)
+
+      assert Macro.to_string(spec_ast) == "Numpy.DType.t()"
+    end
+
+    test "maps torch.tensor to Torch.Tensor.t()" do
+      python_type = %{"type" => "torch.tensor"}
+      spec_ast = TypeMapper.to_spec(python_type)
+
+      assert Macro.to_string(spec_ast) == "Torch.Tensor.t()"
+    end
+
+    test "maps torch.Tensor (capitalized) to Torch.Tensor.t()" do
+      python_type = %{"type" => "torch.Tensor"}
+      spec_ast = TypeMapper.to_spec(python_type)
+
+      assert Macro.to_string(spec_ast) == "Torch.Tensor.t()"
+    end
+
+    test "maps torch.dtype to Torch.DType.t()" do
+      python_type = %{"type" => "torch.dtype"}
+      spec_ast = TypeMapper.to_spec(python_type)
+
+      assert Macro.to_string(spec_ast) == "Torch.DType.t()"
+    end
+
+    test "maps pandas.dataframe to Pandas.DataFrame.t()" do
+      python_type = %{"type" => "pandas.dataframe"}
+      spec_ast = TypeMapper.to_spec(python_type)
+
+      assert Macro.to_string(spec_ast) == "Pandas.DataFrame.t()"
+    end
+
+    test "maps pandas.DataFrame (capitalized) to Pandas.DataFrame.t()" do
+      python_type = %{"type" => "pandas.DataFrame"}
+      spec_ast = TypeMapper.to_spec(python_type)
+
+      assert Macro.to_string(spec_ast) == "Pandas.DataFrame.t()"
+    end
+
+    test "maps pandas.series to Pandas.Series.t()" do
+      python_type = %{"type" => "pandas.series"}
+      spec_ast = TypeMapper.to_spec(python_type)
+
+      assert Macro.to_string(spec_ast) == "Pandas.Series.t()"
+    end
+  end
+
   describe "to_spec/1 edge cases" do
     test "handles missing element_type in list" do
       python_type = %{"type" => "list"}

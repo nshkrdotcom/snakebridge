@@ -2,6 +2,7 @@ defmodule SnakeBridge.LockTest do
   use ExUnit.Case, async: false
 
   alias SnakeBridge.{Config, Lock}
+  alias SnakeBridge.Test.SnakepitMocks.{MockHardware, MockHardwareCuda}
 
   defmodule TestPythonRuntime do
     def runtime_identity do
@@ -18,13 +19,16 @@ defmodule SnakeBridge.LockTest do
   setup do
     original_packages = Application.get_env(:snakebridge, :python_packages)
     original_runtime = Application.get_env(:snakebridge, :python_runtime)
+    original_hardware = Application.get_env(:snakebridge, :hardware_module)
 
     Application.put_env(:snakebridge, :python_packages, TestPythonPackages)
     Application.put_env(:snakebridge, :python_runtime, TestPythonRuntime)
+    Application.put_env(:snakebridge, :hardware_module, MockHardware)
 
     on_exit(fn ->
       restore_env(:snakebridge, :python_packages, original_packages)
       restore_env(:snakebridge, :python_runtime, original_runtime)
+      restore_env(:snakebridge, :hardware_module, original_hardware)
     end)
 
     :ok
@@ -59,6 +63,71 @@ defmodule SnakeBridge.LockTest do
              "sha256:" <> Lock.compute_packages_hash(lock["python_packages"])
 
     assert lock["environment"]["python_version"] == "3.12.0"
+  end
+
+  describe "hardware section" do
+    test "includes hardware identity in lock" do
+      config = %Config{libraries: []}
+      lock = Lock.build(config)
+
+      assert lock["environment"]["hardware"]["accelerator"] == "cpu"
+      assert lock["environment"]["hardware"]["gpu_count"] == 0
+      assert lock["environment"]["hardware"]["cpu_features"] == ["avx", "avx2"]
+    end
+
+    test "includes platform section in lock" do
+      config = %Config{libraries: []}
+      lock = Lock.build(config)
+
+      assert lock["environment"]["platform"]["os"] == "linux"
+      assert lock["environment"]["platform"]["arch"] == "x86_64"
+    end
+
+    test "includes CUDA info when available" do
+      Application.put_env(:snakebridge, :hardware_module, MockHardwareCuda)
+      config = %Config{libraries: []}
+      lock = Lock.build(config)
+
+      assert lock["environment"]["hardware"]["accelerator"] == "cuda"
+      assert lock["environment"]["hardware"]["cuda_version"] == "12.1"
+      assert lock["environment"]["hardware"]["cudnn_version"] == "8.9.0"
+      assert lock["environment"]["hardware"]["gpu_count"] == 2
+    end
+
+    test "includes compatibility section" do
+      Application.put_env(:snakebridge, :hardware_module, MockHardwareCuda)
+      config = %Config{libraries: []}
+      lock = Lock.build(config)
+
+      assert lock["compatibility"]["cuda_min"] == "12.1"
+    end
+  end
+
+  describe "build_hardware_section/0" do
+    test "builds hardware section from identity" do
+      hardware = Lock.build_hardware_section()
+
+      assert hardware["accelerator"] == "cpu"
+      assert hardware["gpu_count"] == 0
+      assert hardware["cpu_features"] == ["avx", "avx2"]
+    end
+
+    test "includes CUDA version when available" do
+      Application.put_env(:snakebridge, :hardware_module, MockHardwareCuda)
+      hardware = Lock.build_hardware_section()
+
+      assert hardware["cuda_version"] == "12.1"
+      assert hardware["cudnn_version"] == "8.9.0"
+    end
+  end
+
+  describe "build_platform_section/0" do
+    test "parses platform string into os and arch" do
+      platform = Lock.build_platform_section()
+
+      assert platform["os"] == "linux"
+      assert platform["arch"] == "x86_64"
+    end
   end
 
   defp restore_env(app, key, nil), do: Application.delete_env(app, key)

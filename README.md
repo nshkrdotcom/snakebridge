@@ -4,214 +4,198 @@
 
 # SnakeBridge
 
-[![Elixir](https://img.shields.io/badge/elixir-1.14+-purple.svg)](https://elixir-lang.org)
 [![Hex.pm](https://img.shields.io/hexpm/v/snakebridge.svg)](https://hex.pm/packages/snakebridge)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-hexdocs-blue.svg)](https://hexdocs.pm/snakebridge)
 
-SnakeBridge generates type-safe Elixir bindings for Python libraries at **compile time**.
-Runtime execution is handled by [Snakepit](https://hex.pm/packages/snakepit).
+Compile-time generator for type-safe Elixir bindings to Python libraries.
+
+## Installation
+
+Add to your `mix.exs`:
+
+```elixir
+def deps do
+  [
+    {:snakebridge, "~> 0.7.0",
+      libraries: [
+        {:numpy, "1.26.0"},
+        {:pandas, version: "2.0.0", include: ["DataFrame", "read_csv"]}
+      ]}
+  ]
+end
+```
 
 ## Quick Start
 
-### 1. Add Dependency (with libraries)
-
 ```elixir
-# mix.exs
-defp deps do
-  [
-    {:snakebridge, "~> 0.6.0",
-     libraries: [
-       json: :stdlib,
-       math: :stdlib,
-       numpy: "~> 1.26"
-     ]}
-  ]
-end
+# Generated wrappers work like native Elixir
+{:ok, result} = Numpy.mean([1, 2, 3, 4])
+
+# Optional Python arguments via keyword opts
+{:ok, result} = Numpy.mean([[1, 2], [3, 4]], axis: 0)
+
+# Runtime flags (idempotent caching, timeouts)
+{:ok, result} = Numpy.mean([1, 2, 3], idempotent: true)
 ```
 
-### 2. Add Compiler
+## Features
+
+### Generated Wrappers
+
+SnakeBridge generates Elixir modules that wrap Python libraries:
 
 ```elixir
-# mix.exs
-def project do
-  [
-    compilers: [:snakebridge] ++ Mix.compilers(),
-    # ...
-  ]
-end
+# Python: numpy.mean(a, axis=None, dtype=None, keepdims=False)
+# Generated: Numpy.mean(a, opts \\ [])
+
+Numpy.mean([1, 2, 3])                    # Basic call
+Numpy.mean([1, 2, 3], axis: 0)           # With Python kwargs
+Numpy.mean([1, 2, 3], idempotent: true)  # With runtime flags
 ```
 
-### 3. Optional Configuration
+All wrappers accept `opts` for:
+- **Python kwargs**: Passed to the Python function
+- **Runtime flags**: `idempotent`, `__runtime__`, `__args__`
+
+### Class Constructors
+
+Classes generate `new/N` matching their Python `__init__`:
 
 ```elixir
-# config/config.exs
-config :snakebridge,
-  generated_dir: "lib/snakebridge_generated",
-  metadata_dir: ".snakebridge",
-  auto_install: :dev,
-  strict: false,
-  verbose: false,
-  docs: [source: :python, cache_enabled: true]
+# Python: class Point:
+#           def __init__(self, x, y): ...
+# Generated: Geometry.Point.new(x, y, opts \\ [])
+
+{:ok, point} = Geometry.Point.new(10, 20)
+{:ok, x} = Geometry.Point.x(point)  # Attribute access
 ```
 
-`auto_install` supports `:never | :dev | :always` (default: `:dev`).
+### Streaming Functions
 
-### 4. Provision Python Packages (optional)
+Configure streaming functions to generate `*_stream` variants:
+
+```elixir
+# In mix.exs
+{:llm, version: "1.0", streaming: ["generate", "complete"]}
+
+# Generated variants:
+LLM.generate(prompt)                              # Returns complete result
+LLM.generate_stream(prompt, opts, callback)       # Streams chunks to callback
+
+# Usage:
+LLM.generate_stream("Hello", [], fn chunk ->
+  IO.write(chunk)
+end)
+```
+
+### Strict Mode for CI
+
+Enable strict mode to verify generated code integrity:
 
 ```bash
-mix snakebridge.setup
-```
-
-### 5. Compile
-
-```bash
-mix compile
-```
-
-### 6. Use
-
-```elixir
-iex> Math.sqrt(2)
-{:ok, 1.4142135623730951}
-
-iex> Json.dumps(%{"hello" => "world"})
-{:ok, "{\"hello\": \"world\"}"}
-
-iex> Math.__functions__() |> Enum.take(3)
-[
-  {:acos, 1, Math, "Return the arc cosine..."},
-  {:acosh, 1, Math, "Return the inverse hyperbolic cosine..."},
-  {:asin, 1, Math, "Return the arc sine..."}
-]
-```
-
-## How It Works
-
-SnakeBridge is a **pre-pass generator**:
-
-1. Scan the project for library calls.
-2. Introspect Python using the Snakepit-configured runtime.
-3. Generate Elixir modules under `lib/snakebridge_generated/*.ex`.
-
-Generated source is **committed to git**. There are no timestamps and no auto-gitignore.
-
-## Generated Layout
-
-```
-lib/snakebridge_generated/
-├── json.ex
-├── math.ex
-├── numpy.ex
-└── helpers/
-    └── sympy.ex
-```
-
-Metadata and environment identity are tracked alongside source:
-
-```
-.snakebridge/manifest.json
-snakebridge.lock
-```
-
-## Configuration (Library Options)
-
-```elixir
-{:snakebridge, "~> 0.5.0",
- libraries: [
-   numpy: [
-     version: "~> 1.26",
-     module_name: Np,
-     python_name: "numpy",
-     pypi_package: "numpy",
-     extras: ["cuda"],
-     include: ["array", "zeros"],
-     exclude: ["deprecated_fn"],
-     streaming: ["predict"],
-     submodules: true
-   ],
-   json: :stdlib
-]}
-```
-
-## Strict Mode (CI)
-
-Strict mode prevents introspection and fails if generation would be required.
-
-```bash
+# In CI
 SNAKEBRIDGE_STRICT=1 mix compile
 ```
 
-When strict mode fails, run `mix snakebridge.setup`, then `mix compile`,
-commit the updated manifest and generated files, and retry CI.
+Strict mode verifies:
+1. All used symbols are in the manifest
+2. All generated files exist
+3. Expected functions are present in generated files
 
-## Runtime
+### Documentation Conversion
 
-SnakeBridge is compile-time only. Runtime behavior belongs to Snakepit.
-The generated wrappers send payloads to Snakepit tools:
+Python docstrings are converted to ExDoc Markdown:
 
-- `snakebridge.call`
-- `snakebridge.stream`
+- NumPy style -> Markdown sections
+- Google style -> Markdown sections
+- RST math (``:math:`E=mc^2``) -> KaTeX (`$E=mc^2$`)
 
-## Helpers
+### Telemetry
 
-Helpers are opt-in Python functions registered explicitly in helper modules.
-They are discovered at compile time and wrapped under `lib/snakebridge_generated/helpers/`.
-
-```python
-# priv/python/helpers/sympy_helpers.py
-def parse_implicit(expr):
-    # custom logic here
-    return expr
-
-__snakebridge_helpers__ = {
-    "sympy.parse_implicit": parse_implicit
-}
-```
+The compile pipeline emits telemetry events:
 
 ```elixir
+# Attach handler
+:telemetry.attach("my-handler", [:snakebridge, :compile, :stop], fn _, measurements, _, _ ->
+  IO.puts("Compiled #{measurements.symbols_generated} symbols")
+end, nil)
+```
+
+Events:
+- `[:snakebridge, :compile, :start]`
+- `[:snakebridge, :compile, :stop]`
+- `[:snakebridge, :compile, :exception]`
+
+## Configuration
+
+```elixir
+# mix.exs
+{:snakebridge, "~> 0.7.0",
+  libraries: [
+    # Simple: name and version
+    {:numpy, "1.26.0"},
+
+    # Full options
+    {:pandas,
+      version: "2.0.0",
+      pypi_package: "pandas",
+      include: ["DataFrame", "read_csv", "read_json"],
+      exclude: ["testing"],
+      streaming: ["read_csv_chunked"],
+      submodules: true}
+  ],
+  generated_dir: "lib/python_bindings",
+  metadata_dir: ".snakebridge"
+}
+
 # config/config.exs
 config :snakebridge,
-  helper_paths: ["priv/python/helpers"],
-  helper_pack_enabled: true,
-  helper_allowlist: :all,
-  inline_enabled: false
+  auto_install: :dev,      # :never | :dev | :always
+  strict: false,           # or SNAKEBRIDGE_STRICT=1
+  verbose: false
 ```
 
-```elixir
-iex> Sympy.Helpers.parse_implicit("2x")
-{:ok, "2x"}
-```
+## Mix Tasks
 
-Configure Snakepit separately under `config :snakepit`.
+```bash
+mix snakebridge.setup          # Install Python packages
+mix snakebridge.setup --check  # Verify packages installed
+mix snakebridge.verify         # Verify hardware compatibility
+mix snakebridge.verify --strict # Fail on any mismatch
+```
 
 ## Examples
 
-The `examples/` directory contains 8 examples demonstrating SnakeBridge's capabilities:
-
-| Example | Description |
-|---------|-------------|
-| **basic** | Core functionality with math, strings, JSON, and OS calls |
-| **math_demo** | Discovery APIs (`__functions__/0`, `__search__/1`) and runtime calls |
-| **proof_pipeline** | Multi-step LaTeX/SymPy pipeline chaining multiple Python libraries |
-| **types_showcase** | Python ↔ Elixir type mapping (int, float, str, list, dict, etc.) |
-| **error_showcase** | ML error translation (ShapeMismatch, OutOfMemory, DtypeMismatch) |
-| **docs_showcase** | Documentation parsing (RST/Google/NumPy docstrings) |
-| **telemetry_showcase** | Telemetry integration with event logging and metrics |
-| **twenty_libraries** | Performance demo with 20 Python stdlib libraries |
-
-Run all examples:
+See the `examples/` directory:
 
 ```bash
-cd examples
-./run_all.sh
+# Run all examples
+./examples/run_all.sh
+
+# Individual examples
+cd examples/wrapper_args_example && mix run -e Demo.run
+cd examples/class_constructor_example && mix run -e Demo.run
+cd examples/streaming_example && mix run -e Demo.run
+cd examples/strict_mode_example && mix run -e Demo.run
 ```
 
-Or run individually:
+## Architecture
 
-```bash
-cd examples/math_demo
-mix deps.get && mix compile
-mix run -e Demo.run
-```
+SnakeBridge is a compile-time code generator:
 
-See [`examples/README.md`](examples/README.md) for detailed documentation.
+1. **Scan**: Find calls to configured library modules in your code
+2. **Introspect**: Query Python for function/class signatures
+3. **Generate**: Create Elixir wrapper modules with proper arities
+4. **Lock**: Record environment for reproducibility
+
+Runtime calls delegate to [Snakepit](https://hex.pm/packages/snakepit).
+
+## Requirements
+
+- Elixir ~> 1.14
+- Python 3.8+
+- Snakepit ~> 0.8.1
+
+## License
+
+MIT

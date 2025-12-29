@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - (no changes yet)
 
+## [0.7.0] - 2025-12-28
+
+### Added
+- **Wrapper argument surface fix**: All generated wrappers now accept `opts \\ []` for runtime flags (`idempotent`, `__runtime__`, `__args__`) and Python kwargs
+- **Streaming generation**: Functions in `streaming:` config now generate `*_stream` variants with proper `@spec`
+- **Strict mode verification**: Now verifies generated files exist and contain expected functions
+- **Documentation pipeline**: Docstrings are converted from RST/NumPy/Google style to ExDoc Markdown
+- **Telemetry emission**: Compile pipeline now emits `[:snakebridge, :compile, :start|:stop|:exception]` events
+
+### Changed
+- Class constructors now match Python `__init__` signatures instead of hardcoded `new(arg, opts)`
+- File writes use atomic temp files with unique names for concurrency safety
+- File writes skip when content unchanged (no more mtime churn)
+
+### Fixed
+- Functions with `POSITIONAL_OR_KEYWORD` defaulted parameters now accept opts
+- `VAR_POSITIONAL` parameters are now recognized for opts enablement
+- Classes with 0, 2+, or optional `__init__` args now construct correctly
+
+### Developer Experience
+- New examples: `wrapper_args_example`, `class_constructor_example`, `streaming_example`, `strict_mode_example`
+- Updated `run_all.sh` with new examples
+
 ## [0.6.0] - 2025-12-27
 
 ### Added
@@ -110,6 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type system mapper
 - Basic code generation
 
+[0.7.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.3.2...v0.4.0

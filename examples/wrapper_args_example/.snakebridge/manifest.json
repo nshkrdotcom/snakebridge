@@ -1,0 +1,54 @@
+{
+  "classes": {},
+  "symbols": {
+    "Elixir.WrapperArgs.join_values/0": {
+      "docstring": "Join values with a separator, demonstrating Python varargs.",
+      "function": "join_values",
+      "module": "WrapperArgs",
+      "name": "join_values",
+      "parameters": [
+        {
+          "kind": "VAR_POSITIONAL",
+          "name": "values"
+        },
+        {
+          "default": "' '",
+          "kind": "KEYWORD_ONLY",
+          "name": "sep"
+        }
+      ],
+      "python_module": "wrapper_args_example",
+      "return_annotation": null
+    },
+    "Elixir.WrapperArgs.mean/1": {
+      "docstring": "Compute a simple mean with optional axis and dtype placeholders.",
+      "function": "mean",
+      "module": "WrapperArgs",
+      "name": "mean",
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "values"
+        },
+        {
+          "default": "None",
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "axis"
+        },
+        {
+          "default": "None",
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "dtype"
+        },
+        {
+          "default": "False",
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "keepdims"
+        }
+      ],
+      "python_module": "wrapper_args_example",
+      "return_annotation": null
+    }
+  },
+  "version": "0.7.0"
+}

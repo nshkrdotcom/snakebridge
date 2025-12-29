@@ -49,7 +49,7 @@ defmodule SnakeBridge.Telemetry do
   """
   @spec compile_start([atom()], boolean()) :: :ok
   def compile_start(libraries, strict) do
-    :telemetry.execute(
+    emit(
       [:snakebridge, :compile, :start],
       %{system_time: System.system_time()},
       %{libraries: libraries, strict: strict}
@@ -73,7 +73,7 @@ defmodule SnakeBridge.Telemetry do
   @spec compile_stop(integer(), non_neg_integer(), non_neg_integer(), [atom()], :normal | :strict) ::
           :ok
   def compile_stop(start_time, symbols, files, libraries, mode) do
-    :telemetry.execute(
+    emit(
       [:snakebridge, :compile, :stop],
       %{
         duration: System.monotonic_time() - start_time,
@@ -98,7 +98,7 @@ defmodule SnakeBridge.Telemetry do
   """
   @spec compile_exception(integer(), term(), list()) :: :ok
   def compile_exception(start_time, reason, stacktrace) do
-    :telemetry.execute(
+    emit(
       [:snakebridge, :compile, :exception],
       %{duration: System.monotonic_time() - start_time},
       %{reason: reason, stacktrace: stacktrace}
@@ -124,7 +124,7 @@ defmodule SnakeBridge.Telemetry do
   """
   @spec scan_stop(integer(), non_neg_integer(), non_neg_integer(), [String.t()]) :: :ok
   def scan_stop(start_time, files, symbols, paths) do
-    :telemetry.execute(
+    emit(
       [:snakebridge, :scan, :stop],
       %{
         duration: System.monotonic_time() - start_time,
@@ -153,7 +153,7 @@ defmodule SnakeBridge.Telemetry do
   """
   @spec introspect_start(atom(), non_neg_integer()) :: :ok
   def introspect_start(library, batch_size) do
-    :telemetry.execute(
+    emit(
       [:snakebridge, :introspect, :start],
       %{system_time: System.system_time()},
       %{library: library, batch_size: batch_size}
@@ -176,7 +176,7 @@ defmodule SnakeBridge.Telemetry do
   """
   @spec introspect_stop(integer(), atom(), non_neg_integer(), non_neg_integer(), integer()) :: :ok
   def introspect_stop(start_time, library, symbols, cache_hits, python_time) do
-    :telemetry.execute(
+    emit(
       [:snakebridge, :introspect, :stop],
       %{
         duration: System.monotonic_time() - start_time,
@@ -215,7 +215,7 @@ defmodule SnakeBridge.Telemetry do
           non_neg_integer()
         ) :: :ok
   def generate_stop(start_time, library, file, bytes, functions, classes) do
-    :telemetry.execute(
+    emit(
       [:snakebridge, :generate, :stop],
       %{
         duration: System.monotonic_time() - start_time,
@@ -246,7 +246,7 @@ defmodule SnakeBridge.Telemetry do
   """
   @spec docs_fetch(integer(), module(), atom(), :cache | :python | :metadata) :: :ok
   def docs_fetch(start_time, module, function, source) do
-    :telemetry.execute(
+    emit(
       [:snakebridge, :docs, :fetch],
       %{duration: System.monotonic_time() - start_time},
       %{module: module, function: function, source: source}
@@ -271,10 +271,17 @@ defmodule SnakeBridge.Telemetry do
   """
   @spec lock_verify(integer(), :ok | :warning | :error, [String.t()]) :: :ok
   def lock_verify(start_time, result, warnings \\ []) do
-    :telemetry.execute(
+    emit(
       [:snakebridge, :lock, :verify],
       %{duration: System.monotonic_time() - start_time},
       %{result: result, warnings: warnings}
     )
+  end
+
+  defp emit(event, measurements, metadata) do
+    case Application.ensure_all_started(:telemetry) do
+      {:ok, _} -> :telemetry.execute(event, measurements, metadata)
+      {:error, _} -> :ok
+    end
   end
 end

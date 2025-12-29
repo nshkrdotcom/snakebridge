@@ -25,6 +25,7 @@ import uuid
 import os
 import glob
 import hashlib
+from contextlib import nullcontext
 from typing import Any, Dict, List, Tuple, Optional
 
 # Import the SnakeBridge type encoding system
@@ -35,6 +36,11 @@ except ImportError:
     import os
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from snakebridge_types import decode, encode, encode_result, encode_error
+
+try:
+    from snakepit_bridge import telemetry as snakepit_telemetry
+except Exception:
+    snakepit_telemetry = None
 
 
 # Module cache to avoid repeated imports
@@ -55,6 +61,44 @@ class SnakeBridgeHelperLoadError(Exception):
 
 class SnakeBridgeSerializationError(Exception):
     pass
+
+
+def _call_telemetry_span(metadata: Dict[str, Any]):
+    if snakepit_telemetry is None:
+        return nullcontext()
+    try:
+        return snakepit_telemetry.span("python.call", metadata)
+    except Exception:
+        return nullcontext()
+
+
+def _call_function_name(call_type: str, function: Optional[str], arguments: Dict[str, Any]) -> str:
+    if function:
+        return str(function)
+    if call_type == "class":
+        return str(arguments.get("class") or arguments.get("class_name") or "unknown")
+    if call_type in ("get_attr", "set_attr"):
+        return str(arguments.get("attr") or "unknown")
+    if call_type == "helper":
+        return str(arguments.get("helper") or "unknown")
+    return "unknown"
+
+
+def _call_metadata(
+    call_type: str,
+    library: Optional[str],
+    python_module: Optional[str],
+    function: Optional[str],
+    arguments: Dict[str, Any],
+) -> Dict[str, Any]:
+    metadata = {
+        "library": str(library or "unknown"),
+        "function": _call_function_name(call_type, function, arguments),
+        "call_type": str(call_type),
+    }
+    if python_module:
+        metadata["python_module"] = str(python_module)
+    return metadata
 
 
 def snakebridge_call(module: str, function: str, args: dict) -> dict:
@@ -538,50 +582,52 @@ class SnakeBridgeAdapter:
         args = arguments.get("args") or []
         kwargs = arguments.get("kwargs") or {}
         library = arguments.get("library") or (python_module.split(".")[0] if python_module else None)
+        metadata = _call_metadata(call_type, library, python_module, function, arguments)
 
-        if call_type == "class":
-            class_name = arguments.get("class") or arguments.get("class_name")
+        with _call_telemetry_span(metadata):
+            if call_type == "class":
+                class_name = arguments.get("class") or arguments.get("class_name")
+                mod = _import_module(python_module)
+                cls = getattr(mod, class_name)
+                instance = cls(*args, **kwargs)
+                return _make_ref(session_id, instance, python_module, library)
+
+            if call_type == "method":
+                instance = _resolve_ref(arguments.get("instance"), session_id)
+                method = getattr(instance, function)
+                return method(*args, **kwargs)
+
+            if call_type == "get_attr":
+                instance = _resolve_ref(arguments.get("instance"), session_id)
+                attr = arguments.get("attr") or function
+                return getattr(instance, attr)
+
+            if call_type == "set_attr":
+                instance = _resolve_ref(arguments.get("instance"), session_id)
+                attr = arguments.get("attr") or function
+                value = args[0] if args else None
+                setattr(instance, attr, value)
+                return True
+
+            if call_type == "helper":
+                helper_name = arguments.get("helper") or function
+                helper_config = arguments.get("helper_config") or {}
+
+                if not helper_name:
+                    raise SnakeBridgeHelperNotFoundError("Helper name is required")
+
+                registry = _load_helper_registry(helper_config)
+                if helper_name not in registry:
+                    raise SnakeBridgeHelperNotFoundError(f"Helper '{helper_name}' not found")
+
+                return registry[helper_name](*args, **kwargs)
+
+            if not python_module:
+                raise ValueError("snakebridge.call requires python_module")
+
             mod = _import_module(python_module)
-            cls = getattr(mod, class_name)
-            instance = cls(*args, **kwargs)
-            return _make_ref(session_id, instance, python_module, library)
-
-        if call_type == "method":
-            instance = _resolve_ref(arguments.get("instance"), session_id)
-            method = getattr(instance, function)
-            return method(*args, **kwargs)
-
-        if call_type == "get_attr":
-            instance = _resolve_ref(arguments.get("instance"), session_id)
-            attr = arguments.get("attr") or function
-            return getattr(instance, attr)
-
-        if call_type == "set_attr":
-            instance = _resolve_ref(arguments.get("instance"), session_id)
-            attr = arguments.get("attr") or function
-            value = args[0] if args else None
-            setattr(instance, attr, value)
-            return True
-
-        if call_type == "helper":
-            helper_name = arguments.get("helper") or function
-            helper_config = arguments.get("helper_config") or {}
-
-            if not helper_name:
-                raise SnakeBridgeHelperNotFoundError("Helper name is required")
-
-            registry = _load_helper_registry(helper_config)
-            if helper_name not in registry:
-                raise SnakeBridgeHelperNotFoundError(f"Helper '{helper_name}' not found")
-
-            return registry[helper_name](*args, **kwargs)
-
-        if not python_module:
-            raise ValueError("snakebridge.call requires python_module")
-
-        mod = _import_module(python_module)
-        func = getattr(mod, function)
-        return func(*args, **kwargs)
+            func = getattr(mod, function)
+            return func(*args, **kwargs)
 
 
 # Make the module callable for testing

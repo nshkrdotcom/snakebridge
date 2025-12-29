@@ -24,6 +24,10 @@ Or run individual examples:
 ```bash
 cd basic && mix run -e Demo.run
 cd math_demo && mix run -e Demo.run
+cd wrapper_args_example && mix run -e Demo.run
+cd class_constructor_example && mix run -e Demo.run
+cd streaming_example && mix run -e Demo.run
+cd strict_mode_example && mix run -e Demo.run
 # etc.
 ```
 
@@ -39,6 +43,10 @@ cd math_demo && mix run -e Demo.run
 | **docs_showcase** | Documentation parsing | RST/Google/NumPy docstrings, math rendering |
 | **telemetry_showcase** | Telemetry integration | Event logging, timing, metrics |
 | **twenty_libraries** | 20 Python stdlib libraries | Performance demo with 40 sequential gRPC calls |
+| **wrapper_args_example** | Wrapper opts and varargs | Optional kwargs, runtime flags, `__args__` |
+| **class_constructor_example** | Class constructors | `new/N` generation from `__init__`, method calls |
+| **streaming_example** | Streaming wrappers | `*_stream` variants with callbacks |
+| **strict_mode_example** | Strict mode verification | Manifest and generated file checks |
 
 ## Verbose Output Format
 
@@ -117,6 +125,32 @@ Shows telemetry integration:
 - Error events
 - Concurrent call tracking
 - Aggregate metrics
+
+### wrapper_args_example
+
+Shows wrapper args handling:
+- Optional keyword arguments via `opts`
+- Runtime flags like `idempotent`
+- `__args__` varargs support
+
+### class_constructor_example
+
+Demonstrates class constructors generated from `__init__`:
+- `new/0` for empty constructors
+- `new/2` for required args
+- Optional kwargs for configuration
+
+### streaming_example
+
+Demonstrates streaming wrapper generation:
+- `*_stream` variants with callbacks
+- Runtime opts passed through `opts`
+
+### strict_mode_example
+
+Demonstrates strict mode verification:
+- Strict compile checks enabled in config
+- Generated files and manifest stay in sync
 
 ### twenty_libraries
 

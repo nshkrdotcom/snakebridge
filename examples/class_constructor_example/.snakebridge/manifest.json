@@ -1,0 +1,77 @@
+{
+  "classes": {
+    "ClassConstructor.Config": {
+      "attributes": [],
+      "class": "Config",
+      "docstring": "A class with an optional __init__ argument.",
+      "methods": [
+        {
+          "docstring": "Initialize self.  See help(type(self)) for accurate signature.",
+          "name": "__init__",
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "path"
+            },
+            {
+              "default": "False",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "readonly"
+            }
+          ]
+        },
+        {
+          "docstring": "",
+          "name": "summary",
+          "parameters": []
+        }
+      ],
+      "module": "ClassConstructor.Config",
+      "python_module": "class_constructor_example"
+    },
+    "ClassConstructor.EmptyClass": {
+      "attributes": [],
+      "class": "EmptyClass",
+      "docstring": "A class with no __init__ arguments.",
+      "methods": [
+        {
+          "docstring": "Initialize self.  See help(type(self)) for accurate signature.",
+          "name": "__init__",
+          "parameters": []
+        }
+      ],
+      "module": "ClassConstructor.EmptyClass",
+      "python_module": "class_constructor_example"
+    },
+    "ClassConstructor.Point": {
+      "attributes": [],
+      "class": "Point",
+      "docstring": "A class with two required __init__ arguments.",
+      "methods": [
+        {
+          "docstring": "Initialize self.  See help(type(self)) for accurate signature.",
+          "name": "__init__",
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "x"
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "y"
+            }
+          ]
+        },
+        {
+          "docstring": "",
+          "name": "magnitude",
+          "parameters": []
+        }
+      ],
+      "module": "ClassConstructor.Point",
+      "python_module": "class_constructor_example"
+    }
+  },
+  "symbols": {},
+  "version": "0.7.0"
+}

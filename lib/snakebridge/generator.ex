@@ -3,6 +3,8 @@ defmodule SnakeBridge.Generator do
   Generates Elixir source files from introspection data.
   """
 
+  alias SnakeBridge.Docs.{MarkdownConverter, RstParser}
+
   @spec render_library(SnakeBridge.Config.Library.t(), list(), list(), keyword()) :: String.t()
   def render_library(library, functions, classes, opts \\ []) do
     version = Keyword.get(opts, :version, Application.spec(:snakebridge, :vsn) |> to_string())
@@ -33,14 +35,14 @@ defmodule SnakeBridge.Generator do
     function_defs =
       base_functions
       |> Enum.sort_by(& &1["name"])
-      |> Enum.map_join("\n\n", &render_function/1)
+      |> Enum.map_join("\n\n", &render_function(&1, library))
 
     submodule_defs =
       functions_by_module
       |> Map.drop([library.python_name])
       |> Enum.sort_by(fn {python_module, _} -> python_module end)
       |> Enum.map_join("\n\n", fn {python_module, funcs} ->
-        render_submodule(python_module, funcs)
+        render_submodule(python_module, funcs, library)
       end)
 
     class_defs =
@@ -76,22 +78,58 @@ defmodule SnakeBridge.Generator do
     source =
       render_library(library, functions, classes, version: Application.spec(:snakebridge, :vsn))
 
-    File.write!(path, source)
+    write_if_changed(path, source)
+    :ok
   end
 
-  defp render_function(info) do
+  @spec write_if_changed(String.t(), String.t()) :: :written | :unchanged
+  def write_if_changed(path, new_content) do
+    case File.read(path) do
+      {:ok, existing} when existing == new_content ->
+        :unchanged
+
+      _ ->
+        temp_path = "#{path}.tmp.#{System.unique_integer([:positive])}"
+
+        try do
+          File.write!(temp_path, new_content)
+          File.rename!(temp_path, path)
+          :written
+        after
+          File.rm(temp_path)
+        end
+    end
+  end
+
+  @spec render_function(map(), SnakeBridge.Config.Library.t()) :: String.t()
+  def render_function(info, library) do
     name = info["name"]
     params = info["parameters"] || []
     doc = info["docstring"] || ""
 
     {param_names, has_opts} = build_params(params)
     args = "[" <> Enum.join(param_names, ", ") <> "]"
+
+    is_streaming = name in (library.streaming || [])
+
+    normal = render_normal_function(name, param_names, has_opts, args, doc)
+
+    if is_streaming do
+      streaming = render_streaming_variant(name, param_names, args, has_opts)
+      normal <> "\n\n" <> streaming
+    else
+      normal
+    end
+  end
+
+  defp render_normal_function(name, param_names, has_opts, args, doc) do
     call = runtime_call(name, args, has_opts)
     spec = function_spec(name, param_names, has_opts, "term()")
+    formatted_doc = format_docstring(doc)
 
     """
       @doc \"\"\"
-      #{String.trim(doc)}
+      #{String.trim(formatted_doc)}
       \"\"\"
       #{spec}
       def #{name}(#{param_list(param_names, has_opts)}) do
@@ -100,7 +138,31 @@ defmodule SnakeBridge.Generator do
     """
   end
 
-  defp render_submodule(python_module, functions) do
+  defp render_streaming_variant(name, param_names, args, _has_opts) do
+    stream_params = param_names ++ ["opts \\\\ []", "callback"]
+    stream_params_str = Enum.join(stream_params, ", ")
+
+    stream_call = "SnakeBridge.Runtime.stream(__MODULE__, :#{name}, #{args}, opts, callback)"
+
+    spec_args = Enum.map(param_names, fn _ -> "term()" end) ++ ["keyword()", "(term() -> any())"]
+    spec_args_str = Enum.join(spec_args, ", ")
+
+    base_arity = length(param_names) + 1
+
+    """
+      @doc \"\"\"
+      Streaming variant of `#{name}/#{base_arity}`.
+
+      The callback receives chunks as they arrive.
+      \"\"\"
+      @spec #{name}_stream(#{spec_args_str}) :: :ok | {:error, Snakepit.Error.t()}
+      def #{name}_stream(#{stream_params_str}) when is_function(callback, 1) do
+        #{stream_call}
+      end
+    """
+  end
+
+  defp render_submodule(python_module, functions, library) do
     module_name =
       python_module
       |> String.split(".")
@@ -110,7 +172,7 @@ defmodule SnakeBridge.Generator do
     function_defs =
       functions
       |> Enum.sort_by(& &1["name"])
-      |> Enum.map_join("\n\n", &render_function/1)
+      |> Enum.map_join("\n\n", &render_function(&1, library))
 
     """
       defmodule #{module_name} do
@@ -121,7 +183,8 @@ defmodule SnakeBridge.Generator do
     """
   end
 
-  defp render_class(class_info, library) do
+  @spec render_class(map(), SnakeBridge.Config.Library.t()) :: String.t()
+  def render_class(class_info, library) do
     class_name = class_name(class_info)
     python_module = class_python_module(class_info, library)
     module_name = class_module_name(class_info, library)
@@ -130,8 +193,14 @@ defmodule SnakeBridge.Generator do
     methods = class_info["methods"] || []
     attrs = class_info["attributes"] || []
 
+    init_method = Enum.find(methods, fn method -> method["name"] == "__init__" end)
+    init_params = if init_method, do: init_method["parameters"] || [], else: []
+    {param_names, has_opts} = build_params(init_params)
+    constructor = render_constructor(param_names, has_opts)
+
     methods_source =
       methods
+      |> Enum.reject(fn method -> method["name"] == "__init__" end)
       |> Enum.map_join("\n\n", &render_method/1)
 
     attrs_source =
@@ -143,15 +212,31 @@ defmodule SnakeBridge.Generator do
         def __snakebridge_python_name__, do: "#{python_module}"
         def __snakebridge_python_class__, do: "#{class_name}"
 
-        @spec new(term(), keyword()) :: {:ok, Snakepit.PyRef.t()} | {:error, Snakepit.Error.t()}
-        def new(arg, opts \\\\ []) do
-          SnakeBridge.Runtime.call_class(__MODULE__, :__init__, [arg], opts)
-        end
+    #{indent(constructor, 4)}
 
     #{indent(methods_source, 4)}
 
     #{indent(attrs_source, 4)}
       end
+    """
+  end
+
+  defp render_constructor(param_names, _has_opts) do
+    args = "[" <> Enum.join(param_names, ", ") <> "]"
+
+    param_list = Enum.join(param_names ++ ["opts \\\\ []"], ", ")
+
+    call = "SnakeBridge.Runtime.call_class(__MODULE__, :__init__, #{args}, opts)"
+
+    spec_args = Enum.map(param_names, fn _ -> "term()" end)
+    spec_args = spec_args ++ ["keyword()"]
+    spec_args_str = Enum.join(spec_args, ", ")
+
+    """
+        @spec new(#{spec_args_str}) :: {:ok, Snakepit.PyRef.t()} | {:error, Snakepit.Error.t()}
+        def new(#{param_list}) do
+          #{call}
+        end
     """
   end
 
@@ -225,18 +310,27 @@ defmodule SnakeBridge.Generator do
     """
   end
 
-  defp build_params(params) do
+  @spec format_docstring(String.t() | nil) :: String.t()
+  def format_docstring(nil), do: ""
+  def format_docstring(""), do: ""
+
+  def format_docstring(raw_doc) when is_binary(raw_doc) do
+    raw_doc
+    |> RstParser.parse()
+    |> MarkdownConverter.convert()
+  rescue
+    _ -> raw_doc
+  end
+
+  @spec build_params(list()) :: {[String.t()], boolean()}
+  def build_params(params) do
     required =
       params
       |> Enum.filter(&(&1["kind"] in ["POSITIONAL_ONLY", "POSITIONAL_OR_KEYWORD"]))
       |> Enum.reject(&Map.has_key?(&1, "default"))
 
-    optional =
-      params
-      |> Enum.filter(&(&1["kind"] in ["KEYWORD_ONLY", "VAR_KEYWORD"]))
-
     param_names = Enum.map(required, &sanitize_name/1)
-    {param_names, optional != []}
+    {param_names, true}
   end
 
   defp required_arity(params) do
@@ -246,43 +340,35 @@ defmodule SnakeBridge.Generator do
     |> length()
   end
 
-  defp param_list(param_names, true), do: Enum.join(param_names ++ ["opts \\\\ []"], ", ")
-  defp param_list(param_names, false), do: Enum.join(param_names, ", ")
+  defp param_list(param_names, _has_opts) do
+    Enum.join(param_names ++ ["opts \\\\ []"], ", ")
+  end
 
-  defp runtime_call(name, args, true),
-    do: "SnakeBridge.Runtime.call(__MODULE__, :#{name}, #{args}, opts)"
+  defp runtime_call(name, args, _has_opts) do
+    "SnakeBridge.Runtime.call(__MODULE__, :#{name}, #{args}, opts)"
+  end
 
-  defp runtime_call(name, args, false),
-    do: "SnakeBridge.Runtime.call(__MODULE__, :#{name}, #{args})"
-
-  defp function_spec(name, param_names, has_opts, return_type) do
-    args = Enum.map(param_names, fn _ -> "term()" end)
-    args = if has_opts, do: args ++ ["keyword()"], else: args
+  defp function_spec(name, param_names, _has_opts, return_type) do
+    args = Enum.map(param_names, fn _ -> "term()" end) ++ ["keyword()"]
 
     "@spec #{name}(#{Enum.join(args, ", ")}) :: {:ok, #{return_type}} | {:error, Snakepit.Error.t()}"
   end
 
-  defp method_spec(name, param_names, has_opts) do
-    args = ["Snakepit.PyRef.t()"] ++ Enum.map(param_names, fn _ -> "term()" end)
-    args = if has_opts, do: args ++ ["keyword()"], else: args
+  defp method_spec(name, param_names, _has_opts) do
+    args = ["Snakepit.PyRef.t()"] ++ Enum.map(param_names, fn _ -> "term()" end) ++ ["keyword()"]
 
     "@spec #{name}(#{Enum.join(args, ", ")}) :: {:ok, Snakepit.PyRef.t()} | {:error, Snakepit.Error.t()}"
   end
 
-  defp runtime_method_call(name, param_names, true) do
+  defp runtime_method_call(name, param_names, _has_opts) do
     args = "[" <> Enum.join(param_names, ", ") <> "]"
     "SnakeBridge.Runtime.call_method(ref, :#{name}, #{args}, opts)"
   end
 
-  defp runtime_method_call(name, param_names, false) do
-    args = "[" <> Enum.join(param_names, ", ") <> "]"
-    "SnakeBridge.Runtime.call_method(ref, :#{name}, #{args})"
-  end
+  defp method_param_suffix([], _has_opts), do: ", opts \\\\ []"
 
-  defp method_param_suffix([], true), do: ", opts \\\\ []"
-  defp method_param_suffix([], false), do: ""
-  defp method_param_suffix(params, true), do: ", " <> Enum.join(params, ", ") <> ", opts \\\\ []"
-  defp method_param_suffix(params, false), do: ", " <> Enum.join(params, ", ")
+  defp method_param_suffix(params, _has_opts),
+    do: ", " <> Enum.join(params, ", ") <> ", opts \\\\ []"
 
   defp sanitize_name(%{"name" => name}), do: sanitize_name(name)
 

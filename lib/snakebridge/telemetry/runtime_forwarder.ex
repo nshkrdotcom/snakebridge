@@ -9,9 +9,9 @@ defmodule SnakeBridge.Telemetry.RuntimeForwarder do
   ## Events
 
   Original Snakepit events:
-  - `[:snakepit, :call, :start]`
-  - `[:snakepit, :call, :stop]`
-  - `[:snakepit, :call, :exception]`
+  - `[:snakepit, :python, :call, :start]`
+  - `[:snakepit, :python, :call, :stop]`
+  - `[:snakepit, :python, :call, :exception]`
 
   Are forwarded as:
   - `[:snakebridge, :runtime, :call, :start]`
@@ -32,9 +32,9 @@ defmodule SnakeBridge.Telemetry.RuntimeForwarder do
   @handler_id "snakebridge-runtime-enricher"
 
   @events [
-    [:snakepit, :call, :start],
-    [:snakepit, :call, :stop],
-    [:snakepit, :call, :exception]
+    [:snakepit, :python, :call, :start],
+    [:snakepit, :python, :call, :stop],
+    [:snakepit, :python, :call, :exception]
   ]
 
   @doc """
@@ -61,7 +61,7 @@ defmodule SnakeBridge.Telemetry.RuntimeForwarder do
   end
 
   @doc false
-  def handle_event([:snakepit, :call, :start], measurements, metadata, _config) do
+  def handle_event([:snakepit, :python, :call, :start], measurements, metadata, _config) do
     enriched = enrich_metadata(metadata)
 
     :telemetry.execute(
@@ -71,7 +71,7 @@ defmodule SnakeBridge.Telemetry.RuntimeForwarder do
     )
   end
 
-  def handle_event([:snakepit, :call, :stop], measurements, metadata, _config) do
+  def handle_event([:snakepit, :python, :call, :stop], measurements, metadata, _config) do
     enriched = enrich_metadata(metadata)
 
     :telemetry.execute(
@@ -81,7 +81,7 @@ defmodule SnakeBridge.Telemetry.RuntimeForwarder do
     )
   end
 
-  def handle_event([:snakepit, :call, :exception], measurements, metadata, _config) do
+  def handle_event([:snakepit, :python, :call, :exception], measurements, metadata, _config) do
     enriched = enrich_metadata(metadata)
 
     :telemetry.execute(

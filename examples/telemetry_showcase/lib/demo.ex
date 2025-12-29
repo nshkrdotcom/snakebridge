@@ -17,28 +17,31 @@ defmodule Demo do
     # Start the telemetry handler agent
     {:ok, _pid} = TelemetryHandler.start_link()
 
-    # Attach telemetry handlers BEFORE any calls
-    TelemetryHandler.attach()
-
-    # Also attach the SnakeBridge runtime forwarder for enriched events
-    SnakeBridge.Telemetry.RuntimeForwarder.attach()
-
     Snakepit.run_as_script(fn ->
-      print_header()
+      # Attach telemetry handlers AFTER Snakepit startup.
+      TelemetryHandler.attach()
+      SnakeBridge.Telemetry.RuntimeForwarder.attach()
 
-      # Section 1: Basic calls with telemetry
-      demo_basic_calls_with_telemetry()
+      try do
+        print_header()
 
-      # Section 2: Error handling with telemetry
-      demo_error_telemetry()
+        # Section 1: Basic calls with telemetry
+        demo_basic_calls_with_telemetry()
 
-      # Section 3: Concurrent calls showing interleaving
-      demo_concurrent_calls()
+        # Section 2: Error handling with telemetry
+        demo_error_telemetry()
 
-      # Section 4: Aggregate metrics
-      TelemetryHandler.print_summary()
+        # Section 3: Concurrent calls showing interleaving
+        demo_concurrent_calls()
 
-      print_footer()
+        # Section 4: Aggregate metrics
+        TelemetryHandler.print_summary()
+
+        print_footer()
+      after
+        TelemetryHandler.detach()
+        SnakeBridge.Telemetry.RuntimeForwarder.detach()
+      end
     end)
     |> case do
       {:error, reason} ->
@@ -47,10 +50,6 @@ defmodule Demo do
       _ ->
         :ok
     end
-
-    # Cleanup
-    TelemetryHandler.detach()
-    SnakeBridge.Telemetry.RuntimeForwarder.detach()
   end
 
   # ============================================================
@@ -302,6 +301,8 @@ defmodule Demo do
 
   # Helper to call Python via Snakepit with proper payload format
   defp snakepit_call(python_module, python_function, args) do
+    start_time = System.monotonic_time()
+
     payload = %{
       "library" => python_module |> String.split(".") |> List.first(),
       "python_module" => python_module,
@@ -311,10 +312,54 @@ defmodule Demo do
       "idempotent" => false
     }
 
-    case Snakepit.execute("snakebridge.call", payload) do
-      {:ok, value} -> {:ok, value}
-      {:error, reason} -> {:error, reason}
-      other -> {:ok, other}
+    metadata = %{
+      module: python_module,
+      function: python_function,
+      library: payload["library"]
+    }
+
+    emit_call_event(
+      [:snakepit, :python, :call, :start],
+      %{system_time: System.system_time()},
+      metadata
+    )
+
+    result = Snakepit.execute("snakebridge.call", payload)
+
+    case result do
+      {:ok, value} ->
+        emit_call_event(
+          [:snakepit, :python, :call, :stop],
+          %{duration: System.monotonic_time() - start_time},
+          metadata
+        )
+
+        {:ok, value}
+
+      {:error, reason} ->
+        emit_call_event(
+          [:snakepit, :python, :call, :exception],
+          %{duration: System.monotonic_time() - start_time},
+          Map.put(metadata, :error, reason)
+        )
+
+        {:error, reason}
+
+      other ->
+        emit_call_event(
+          [:snakepit, :python, :call, :stop],
+          %{duration: System.monotonic_time() - start_time},
+          metadata
+        )
+
+        {:ok, other}
+    end
+  end
+
+  defp emit_call_event(event, measurements, metadata) do
+    case Application.ensure_all_started(:telemetry) do
+      {:ok, _} -> :telemetry.execute(event, measurements, metadata)
+      {:error, _} -> :ok
     end
   end
 end

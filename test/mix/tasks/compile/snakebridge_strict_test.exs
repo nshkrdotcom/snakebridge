@@ -1,0 +1,124 @@
+defmodule Mix.Tasks.Compile.SnakebridgeStrictTest do
+  use ExUnit.Case
+
+  alias Mix.Tasks.Compile.Snakebridge
+
+  describe "strict mode verification" do
+    @describetag :tmp_dir
+    test "fails when generated file is missing", %{tmp_dir: tmp_dir} do
+      config = %SnakeBridge.Config{
+        libraries: [
+          %SnakeBridge.Config.Library{
+            name: :testlib,
+            python_name: "testlib",
+            module_name: Testlib
+          }
+        ],
+        generated_dir: Path.join(tmp_dir, "generated"),
+        metadata_dir: Path.join(tmp_dir, "metadata"),
+        strict: true
+      }
+
+      # Create manifest but NOT the generated file
+      File.mkdir_p!(config.metadata_dir)
+      manifest = %{"version" => "0.7.0", "symbols" => %{}, "classes" => %{}}
+      File.write!(Path.join(config.metadata_dir, "manifest.json"), Jason.encode!(manifest))
+
+      assert_raise SnakeBridge.CompileError, ~r/Generated file missing/, fn ->
+        Snakebridge.verify_generated_files_exist!(config)
+      end
+    end
+
+    test "fails when expected function missing from generated file", %{tmp_dir: tmp_dir} do
+      config = %SnakeBridge.Config{
+        libraries: [
+          %SnakeBridge.Config.Library{
+            name: :testlib,
+            python_name: "testlib",
+            module_name: Testlib
+          }
+        ],
+        generated_dir: Path.join(tmp_dir, "generated"),
+        metadata_dir: Path.join(tmp_dir, "metadata"),
+        strict: true
+      }
+
+      # Create generated file WITHOUT the expected function
+      File.mkdir_p!(config.generated_dir)
+
+      File.write!(
+        Path.join(config.generated_dir, "testlib.ex"),
+        "defmodule Testlib do\nend"
+      )
+
+      # Create manifest WITH the function
+      manifest = %{
+        "version" => "0.7.0",
+        "symbols" => %{
+          "Testlib.compute/1" => %{
+            "name" => "compute",
+            "python_module" => "testlib",
+            "module" => "Testlib"
+          }
+        },
+        "classes" => %{}
+      }
+
+      File.mkdir_p!(config.metadata_dir)
+      File.write!(Path.join(config.metadata_dir, "manifest.json"), Jason.encode!(manifest))
+
+      assert_raise SnakeBridge.CompileError, ~r/missing expected functions/, fn ->
+        Snakebridge.verify_symbols_present!(config, manifest)
+      end
+    end
+
+    test "passes when all symbols present in generated file", %{tmp_dir: tmp_dir} do
+      config = %SnakeBridge.Config{
+        libraries: [
+          %SnakeBridge.Config.Library{
+            name: :testlib,
+            python_name: "testlib",
+            module_name: Testlib
+          }
+        ],
+        generated_dir: Path.join(tmp_dir, "generated"),
+        metadata_dir: Path.join(tmp_dir, "metadata"),
+        strict: true
+      }
+
+      # Create generated file WITH the expected function
+      File.mkdir_p!(config.generated_dir)
+
+      File.write!(
+        Path.join(config.generated_dir, "testlib.ex"),
+        """
+        defmodule Testlib do
+          def compute(x, opts \\ []) do
+            SnakeBridge.Runtime.call(__MODULE__, :compute, [x], opts)
+          end
+        end
+        """
+      )
+
+      # Create manifest WITH the function
+      manifest = %{
+        "version" => "0.7.0",
+        "symbols" => %{
+          "Testlib.compute/1" => %{
+            "name" => "compute",
+            "python_module" => "testlib",
+            "module" => "Testlib"
+          }
+        },
+        "classes" => %{}
+      }
+
+      File.mkdir_p!(config.metadata_dir)
+      File.write!(Path.join(config.metadata_dir, "manifest.json"), Jason.encode!(manifest))
+
+      # Should not raise
+      assert :ok == Snakebridge.verify_generated_files_exist!(config)
+      assert :ok == Snakebridge.verify_symbols_present!(config, manifest)
+    end
+  end
+end

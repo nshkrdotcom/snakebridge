@@ -24,6 +24,7 @@ BOLD='\033[1m'
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Track timing
 START_TIME=$(date +%s)
@@ -206,6 +207,31 @@ run_example() {
     fi
 }
 
+run_script_example() {
+    local script_path=$1
+    local name=$(basename "$script_path")
+    local example_start=$(date +%s)
+
+    cd "$ROOT_DIR"
+
+    echo -e "${YELLOW}Running script...${NC}"
+    echo ""
+
+    if elixir "$script_path" 2>&1; then
+        local example_end=$(date +%s)
+        local example_duration=$((example_end - example_start))
+        EXAMPLE_RESULTS+=("0")
+        EXAMPLE_DURATIONS+=("$example_duration")
+        print_success "$name" "$example_duration"
+        return 0
+    else
+        EXAMPLE_RESULTS+=("1")
+        EXAMPLE_DURATIONS+=("0")
+        print_failure "$name"
+        return 1
+    fi
+}
+
 # Arrays to track results
 declare -a EXAMPLE_NAMES
 declare -a EXAMPLE_RESULTS
@@ -226,6 +252,10 @@ main() {
         "telemetry_showcase"
         "proof_pipeline"
         "twenty_libraries"
+        "wrapper_args_example"
+        "class_constructor_example"
+        "streaming_example"
+        "strict_mode_example"
     )
 
     local total=${#examples[@]}
@@ -239,8 +269,12 @@ main() {
             EXAMPLE_NAMES+=("$example")
             print_example_header "$example" "$current" "$total"
             run_example "$example_dir" || true
+        elif [ -f "$example_dir" ]; then
+            EXAMPLE_NAMES+=("$example")
+            print_example_header "$example" "$current" "$total"
+            run_script_example "$example_dir" || true
         else
-            echo -e "${YELLOW}Skipping $example (directory not found)${NC}"
+            echo -e "${YELLOW}Skipping $example (path not found)${NC}"
             EXAMPLE_NAMES+=("$example")
             EXAMPLE_RESULTS+=("1")
             EXAMPLE_DURATIONS+=("0")

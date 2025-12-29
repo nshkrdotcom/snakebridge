@@ -46,12 +46,33 @@ defmodule Mix.Tasks.Compile.SnakebridgeTest do
   test "strict mode succeeds when manifest covers all symbols" do
     fixture_path = fixture_path()
     manifest_path = Path.join([fixture_path, ".snakebridge", "manifest.json"])
+    generated_path = Path.join([fixture_path, "lib", "snakebridge_generated", "numpy.ex"])
 
     key = SnakeBridge.Manifest.symbol_key({Numpy, :array, 1})
 
     write_manifest(manifest_path, %{
-      key => %{"module" => "Numpy", "function" => "array"}
+      key => %{
+        "module" => "Numpy",
+        "function" => "array",
+        "name" => "array",
+        "python_module" => "numpy"
+      }
     })
+
+    File.mkdir_p!(Path.dirname(generated_path))
+
+    File.write!(
+      generated_path,
+      """
+      defmodule Numpy do
+        @moduledoc false
+
+        def array(x, opts \\\\ []) do
+          SnakeBridge.Runtime.call(__MODULE__, :array, [x], opts)
+        end
+      end
+      """
+    )
 
     System.put_env("SNAKEBRIDGE_STRICT", "1")
 

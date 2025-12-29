@@ -1,0 +1,35 @@
+{
+  "classes": {},
+  "symbols": {
+    "Elixir.Streaming.generate/1": {
+      "docstring": "Generate either a full response or a stream of chunks.",
+      "function": "generate",
+      "module": "Streaming",
+      "name": "generate",
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "prompt"
+        },
+        {
+          "default": "False",
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "stream"
+        },
+        {
+          "default": "3",
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "count"
+        },
+        {
+          "default": "0.01",
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "delay"
+        }
+      ],
+      "python_module": "streaming_example",
+      "return_annotation": null
+    }
+  },
+  "version": "0.7.0"
+}

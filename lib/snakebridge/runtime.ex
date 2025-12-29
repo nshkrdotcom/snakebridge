@@ -16,7 +16,11 @@ defmodule SnakeBridge.Runtime do
   def call(module, function, args \\ [], opts \\ []) do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
     payload = base_payload(module, function, args ++ extra_args, kwargs, idempotent)
-    runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    metadata = call_metadata(payload, module, function, "function")
+
+    execute_with_telemetry(metadata, fn ->
+      runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    end)
   end
 
   @spec call_helper(String.t(), args(), opts() | map()) :: {:ok, term()} | {:error, term()}
@@ -24,16 +28,22 @@ defmodule SnakeBridge.Runtime do
 
   def call_helper(helper, args, opts) when is_map(opts) do
     payload = helper_payload(helper, args, stringify_keys(opts), false)
+    metadata = helper_metadata(helper)
 
-    runtime_client().execute("snakebridge.call", payload, [])
+    execute_with_telemetry(metadata, fn ->
+      runtime_client().execute("snakebridge.call", payload, [])
+    end)
     |> classify_helper_result(helper)
   end
 
   def call_helper(helper, args, opts) when is_list(opts) do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
     payload = helper_payload(helper, args ++ extra_args, kwargs, idempotent)
+    metadata = helper_metadata(helper)
 
-    runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    execute_with_telemetry(metadata, fn ->
+      runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    end)
     |> classify_helper_result(helper)
   end
 
@@ -43,7 +53,11 @@ defmodule SnakeBridge.Runtime do
       when is_function(callback, 1) do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
     payload = base_payload(module, function, args ++ extra_args, kwargs, idempotent)
-    runtime_client().execute_stream("snakebridge.stream", payload, callback, runtime_opts)
+    metadata = call_metadata(payload, module, function, "stream")
+
+    execute_with_telemetry(metadata, fn ->
+      runtime_client().execute_stream("snakebridge.stream", payload, callback, runtime_opts)
+    end)
   end
 
   @spec call_class(module_ref(), function_name(), args(), opts()) ::
@@ -57,7 +71,11 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("call_type", "class")
       |> Map.put("class", python_class_name(module))
 
-    runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    metadata = call_metadata(payload, module, function, "class")
+
+    execute_with_telemetry(metadata, fn ->
+      runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    end)
   end
 
   @spec call_method(Snakepit.PyRef.t(), function_name(), args(), opts()) ::
@@ -71,7 +89,11 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("call_type", "method")
       |> Map.put("instance", ref)
 
-    runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    metadata = ref_metadata(payload, function, "method")
+
+    execute_with_telemetry(metadata, fn ->
+      runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    end)
   end
 
   @spec get_attr(Snakepit.PyRef.t(), atom() | String.t(), opts()) ::
@@ -86,7 +108,11 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("instance", ref)
       |> Map.put("attr", to_string(attr))
 
-    runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    metadata = ref_metadata(payload, attr, "get_attr")
+
+    execute_with_telemetry(metadata, fn ->
+      runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    end)
   end
 
   @spec set_attr(Snakepit.PyRef.t(), atom() | String.t(), term(), opts()) ::
@@ -101,11 +127,93 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("instance", ref)
       |> Map.put("attr", to_string(attr))
 
-    runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    metadata = ref_metadata(payload, attr, "set_attr")
+
+    execute_with_telemetry(metadata, fn ->
+      runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    end)
   end
 
   defp runtime_client do
     Application.get_env(:snakebridge, :runtime_client, Snakepit)
+  end
+
+  defp execute_with_telemetry(metadata, fun) do
+    start_time = System.monotonic_time()
+
+    emit_runtime_event(
+      [:snakepit, :python, :call, :start],
+      %{system_time: System.system_time()},
+      metadata
+    )
+
+    try do
+      result = fun.()
+
+      case result do
+        {:error, reason} ->
+          emit_runtime_event(
+            [:snakepit, :python, :call, :exception],
+            %{duration: System.monotonic_time() - start_time},
+            Map.put(metadata, :error, reason)
+          )
+
+        _ ->
+          emit_runtime_event(
+            [:snakepit, :python, :call, :stop],
+            %{duration: System.monotonic_time() - start_time},
+            metadata
+          )
+      end
+
+      result
+    rescue
+      exception ->
+        emit_runtime_event(
+          [:snakepit, :python, :call, :exception],
+          %{duration: System.monotonic_time() - start_time},
+          Map.put(metadata, :reason, exception)
+        )
+
+        reraise exception, __STACKTRACE__
+    end
+  end
+
+  defp emit_runtime_event(event, measurements, metadata) do
+    case Application.ensure_all_started(:telemetry) do
+      {:ok, _} -> :telemetry.execute(event, measurements, metadata)
+      {:error, _} -> :ok
+    end
+  end
+
+  defp call_metadata(payload, module, function, call_type) do
+    %{
+      module: module,
+      function: to_string(function),
+      library: payload["library"],
+      python_module: payload["python_module"],
+      call_type: call_type
+    }
+  end
+
+  defp ref_metadata(payload, function, call_type) do
+    %{
+      module: payload["python_module"],
+      function: to_string(function),
+      library: payload["library"],
+      python_module: payload["python_module"],
+      call_type: call_type
+    }
+  end
+
+  defp helper_metadata(helper) do
+    %{
+      module: helper,
+      function: helper,
+      library: helper_library(helper),
+      python_module: helper_library(helper),
+      call_type: "helper"
+    }
   end
 
   defp split_opts(opts) do

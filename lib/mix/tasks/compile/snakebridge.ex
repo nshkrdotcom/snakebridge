@@ -14,7 +14,8 @@ defmodule Mix.Tasks.Compile.Snakebridge do
     Lock,
     Manifest,
     PythonEnv,
-    Scanner
+    Scanner,
+    Telemetry
   }
 
   @impl Mix.Task.Compiler
@@ -306,27 +307,88 @@ defmodule Mix.Tasks.Compile.Snakebridge do
       """
     end
 
+    verify_generated_files_exist!(config)
+    verify_symbols_present!(config, manifest)
+
     {:ok, []}
   end
 
   defp run_normal(config) do
-    detected = scanner_module().scan_project(config)
-    manifest = Manifest.load(config)
-    missing = Manifest.missing(manifest, detected)
-    targets = build_targets(missing, config, manifest)
+    start_time = System.monotonic_time()
+    libraries = Enum.map(config.libraries, & &1.name)
+    Telemetry.compile_start(libraries, false)
 
-    updated_manifest =
-      if targets != [] do
-        update_manifest(manifest, targets)
-      else
-        manifest
+    try do
+      detected = scanner_module().scan_project(config)
+      manifest = Manifest.load(config)
+      missing = Manifest.missing(manifest, detected)
+      targets = build_targets(missing, config, manifest)
+
+      updated_manifest =
+        if targets != [] do
+          update_manifest(manifest, targets)
+        else
+          manifest
+        end
+
+      Manifest.save(config, updated_manifest)
+      generate_from_manifest(config, updated_manifest)
+      generate_helper_wrappers(config)
+      Lock.update(config)
+
+      symbol_count = count_symbols(updated_manifest)
+      file_count = length(config.libraries)
+      Telemetry.compile_stop(start_time, symbol_count, file_count, libraries, :normal)
+      {:ok, []}
+    rescue
+      e ->
+        Telemetry.compile_exception(start_time, e, __STACKTRACE__)
+        reraise e, __STACKTRACE__
+    end
+  end
+
+  @spec verify_generated_files_exist!(Config.t()) :: :ok
+  def verify_generated_files_exist!(config) do
+    Enum.each(config.libraries, fn library ->
+      path = Path.join(config.generated_dir, "#{library.python_name}.ex")
+
+      unless File.exists?(path) do
+        raise SnakeBridge.CompileError, """
+        Strict mode: Generated file missing: #{path}
+
+        Run `mix compile` locally and commit the generated files.
+        """
       end
+    end)
 
-    Manifest.save(config, updated_manifest)
-    generate_from_manifest(config, updated_manifest)
-    generate_helper_wrappers(config)
-    Lock.update(config)
-    {:ok, []}
+    :ok
+  end
+
+  @spec verify_symbols_present!(Config.t(), map()) :: :ok
+  def verify_symbols_present!(config, manifest) do
+    symbols = Map.get(manifest, "symbols", %{})
+
+    Enum.each(config.libraries, fn library ->
+      path = Path.join(config.generated_dir, "#{library.python_name}.ex")
+      content = read_generated_file!(path)
+      expected_functions = expected_functions_for_library(symbols, library)
+
+      missing_in_file =
+        Enum.reject(expected_functions, fn name ->
+          String.contains?(content, "def #{name}(")
+        end)
+
+      if missing_in_file != [] do
+        raise SnakeBridge.CompileError, """
+        Strict mode: Generated file #{path} is missing expected functions:
+        #{Enum.map_join(missing_in_file, "\n", &"  - #{&1}")}
+
+        Run `mix compile` locally to regenerate and commit the updated files.
+        """
+      end
+    end)
+
+    :ok
   end
 
   defp required_arity(params) do
@@ -347,6 +409,34 @@ defmodule Mix.Tasks.Compile.Snakebridge do
 
   defp scanner_module do
     Application.get_env(:snakebridge, :scanner, Scanner)
+  end
+
+  defp read_generated_file!(path) do
+    case File.read(path) do
+      {:ok, content} ->
+        content
+
+      {:error, reason} ->
+        raise SnakeBridge.CompileError, """
+        Strict mode: Cannot read generated file #{path}: #{inspect(reason)}
+        """
+    end
+  end
+
+  defp expected_functions_for_library(symbols, library) do
+    symbols
+    |> Map.values()
+    |> Enum.filter(fn info ->
+      python_module = info["python_module"] || ""
+      String.starts_with?(python_module, library.python_name)
+    end)
+    |> Enum.map(& &1["name"])
+  end
+
+  defp count_symbols(manifest) do
+    symbols = Map.get(manifest, "symbols", %{}) |> map_size()
+    classes = Map.get(manifest, "classes", %{}) |> map_size()
+    symbols + classes
   end
 
   defp generate_helper_wrappers(config) do

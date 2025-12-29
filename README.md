@@ -16,7 +16,7 @@ Add to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:snakebridge, "~> 0.7.0",
+    {:snakebridge, "~> 0.7.1",
       libraries: [
         {:numpy, "1.26.0"},
         {:pandas, version: "2.0.0", include: ["DataFrame", "read_csv"]}
@@ -70,6 +70,18 @@ Classes generate `new/N` matching their Python `__init__`:
 {:ok, x} = Geometry.Point.x(point)  # Attribute access
 ```
 
+### Instance Attributes
+
+Read and write Python object attributes:
+
+```elixir
+# Get attribute
+{:ok, value} = SnakeBridge.get_attr(instance, "attribute_name")
+
+# Set attribute
+:ok = SnakeBridge.set_attr(instance, "attribute_name", new_value)
+```
+
 ### Streaming Functions
 
 Configure streaming functions to generate `*_stream` variants:
@@ -108,7 +120,25 @@ Python docstrings are converted to ExDoc Markdown:
 
 - NumPy style -> Markdown sections
 - Google style -> Markdown sections
+- Sphinx/Epytext styles supported
 - RST math (``:math:`E=mc^2``) -> KaTeX (`$E=mc^2$`)
+
+### ML Error Translation
+
+Python ML exceptions are translated to structured Elixir errors:
+
+```elixir
+# Shape mismatches with tensor dimensions
+%SnakeBridge.Error.ShapeMismatchError{expected: [3, 4], actual: [4, 3]}
+
+# Out of memory with device info
+%SnakeBridge.Error.OutOfMemoryError{device: :cuda, available: 1024, requested: 2048}
+
+# Dtype conflicts with casting guidance
+%SnakeBridge.Error.DtypeMismatchError{expected: :float32, actual: :float64}
+```
+
+Use `SnakeBridge.ErrorTranslator.translate/1` for manual translation.
 
 ### Telemetry
 
@@ -121,16 +151,20 @@ The compile pipeline emits telemetry events:
 end, nil)
 ```
 
-Events:
-- `[:snakebridge, :compile, :start]`
-- `[:snakebridge, :compile, :stop]`
-- `[:snakebridge, :compile, :exception]`
+Compile events:
+- `[:snakebridge, :compile, :start|:stop|:exception]`
+- `[:snakebridge, :scan, :start|:stop]`
+- `[:snakebridge, :introspect, :start|:stop]`
+- `[:snakebridge, :generate, :start|:stop]`
+
+Runtime events (forwarded from Snakepit):
+- `[:snakebridge, :call, :start|:stop|:exception]`
 
 ## Configuration
 
 ```elixir
 # mix.exs
-{:snakebridge, "~> 0.7.0",
+{:snakebridge, "~> 0.7.1",
   libraries: [
     # Simple: name and version
     {:numpy, "1.26.0"},
@@ -139,13 +173,16 @@ Events:
     {:pandas,
       version: "2.0.0",
       pypi_package: "pandas",
+      extras: ["sql", "excel"],      # pip extras
       include: ["DataFrame", "read_csv", "read_json"],
       exclude: ["testing"],
       streaming: ["read_csv_chunked"],
       submodules: true}
   ],
   generated_dir: "lib/python_bindings",
-  metadata_dir: ".snakebridge"
+  metadata_dir: ".snakebridge",
+  scan_paths: ["lib"],               # Paths to scan for usage
+  scan_exclude: ["lib/generated"]    # Patterns to exclude
 }
 
 # config/config.exs
@@ -153,6 +190,11 @@ config :snakebridge,
   auto_install: :dev,      # :never | :dev | :always
   strict: false,           # or SNAKEBRIDGE_STRICT=1
   verbose: false
+
+# Advanced introspection config
+config :snakebridge, :introspector,
+  max_concurrency: 4,
+  timeout: 30_000
 ```
 
 ## Mix Tasks
@@ -179,6 +221,18 @@ cd examples/streaming_example && mix run -e Demo.run
 cd examples/strict_mode_example && mix run -e Demo.run
 ```
 
+## Direct Runtime API
+
+For dynamic calls when module/function names aren't known at compile time:
+
+```elixir
+# Direct call
+{:ok, result} = SnakeBridge.call("math", "sqrt", [16])
+
+# Streaming call
+SnakeBridge.stream("llm", "generate", ["prompt"], [], fn chunk -> IO.write(chunk) end)
+```
+
 ## Architecture
 
 SnakeBridge is a compile-time code generator:
@@ -194,7 +248,7 @@ Runtime calls delegate to [Snakepit](https://hex.pm/packages/snakepit).
 
 - Elixir ~> 1.14
 - Python 3.8+
-- Snakepit ~> 0.8.1
+- Snakepit ~> 0.8.2
 
 ## License
 

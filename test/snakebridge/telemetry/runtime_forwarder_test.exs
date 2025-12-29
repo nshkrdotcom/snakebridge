@@ -22,7 +22,17 @@ defmodule SnakeBridge.Telemetry.RuntimeForwarderTest do
 
   describe "event forwarding" do
     setup do
-      RuntimeForwarder.attach()
+      # Ensure handler is attached successfully - fail fast if not
+      case RuntimeForwarder.attach() do
+        :ok ->
+          :ok
+
+        {:error, :already_exists} ->
+          # Handler already attached, detach and reattach to ensure clean state
+          :telemetry.detach("snakebridge-runtime-enricher")
+          :ok = RuntimeForwarder.attach()
+      end
+
       :ok
     end
 
@@ -43,7 +53,7 @@ defmodule SnakeBridge.Telemetry.RuntimeForwarderTest do
 
       # Simulate Snakepit emitting a call start event
       :telemetry.execute(
-        [:snakepit, :call, :start],
+        [:snakepit, :python, :call, :start],
         %{system_time: System.system_time()},
         %{library: "numpy", function: "array"}
       )
@@ -71,7 +81,7 @@ defmodule SnakeBridge.Telemetry.RuntimeForwarderTest do
       on_exit(fn -> :telemetry.detach("test-forwarder") end)
 
       :telemetry.execute(
-        [:snakepit, :call, :stop],
+        [:snakepit, :python, :call, :stop],
         %{duration: 1000, queue_time: 100},
         %{library: "torch", function: "tensor", result: :ok}
       )
@@ -99,7 +109,7 @@ defmodule SnakeBridge.Telemetry.RuntimeForwarderTest do
       on_exit(fn -> :telemetry.detach("test-forwarder") end)
 
       :telemetry.execute(
-        [:snakepit, :call, :exception],
+        [:snakepit, :python, :call, :exception],
         %{duration: 500},
         %{library: "numpy", function: "array", kind: :error, reason: %RuntimeError{}}
       )

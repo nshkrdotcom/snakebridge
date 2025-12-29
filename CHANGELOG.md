@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - (no changes yet)
 
+## [0.7.1] - 2025-12-29
+
+### Changed
+- Upgrade snakepit dependency from 0.8.1 to 0.8.2
+- Example runner (`run_all.sh`) now updates all dependencies upfront before running examples
+- Example runner now fails fast on compilation errors instead of silently continuing
+
+### Fixed
+- Telemetry event paths updated from `[:snakepit, :call, :*]` to `[:snakepit, :python, :call, :*]` to align with snakepit 0.8.2
+- RuntimeForwarder test setup now handles already-attached handlers gracefully
+
 ## [0.7.0] - 2025-12-28
 
 ### Added
@@ -133,6 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type system mapper
 - Basic code generation
 
+[0.7.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.4.0...v0.5.0

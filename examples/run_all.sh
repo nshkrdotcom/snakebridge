@@ -178,15 +178,14 @@ run_example() {
 
     cd "$dir"
 
-    # Get deps if needed
-    if [ ! -d "deps" ] || [ ! -d "_build" ]; then
-        echo -e "${YELLOW}Installing dependencies...${NC}"
-        mix deps.get --quiet 2>/dev/null || true
-    fi
-
-    # Compile
+    # Compile (deps already updated in upfront phase)
     echo -e "${YELLOW}Compiling...${NC}"
-    mix compile --quiet 2>/dev/null || true
+    if ! mix compile --quiet 2>&1; then
+        EXAMPLE_RESULTS+=("1")
+        EXAMPLE_DURATIONS+=("0")
+        print_failure "$name"
+        return 1
+    fi
 
     # Run the demo
     echo -e "${YELLOW}Running demo...${NC}"
@@ -237,31 +236,83 @@ declare -a EXAMPLE_NAMES
 declare -a EXAMPLE_RESULTS
 declare -a EXAMPLE_DURATIONS
 
+# Define examples to run (in order)
+EXAMPLES=(
+    "basic"
+    "math_demo"
+    "types_showcase"
+    "error_showcase"
+    "docs_showcase"
+    "telemetry_showcase"
+    "proof_pipeline"
+    "twenty_libraries"
+    "wrapper_args_example"
+    "class_constructor_example"
+    "streaming_example"
+    "strict_mode_example"
+)
+
+print_deps_header() {
+    echo ""
+    echo -e "${CYAN}───────────────────────────────────────────────────────────────────────────${NC}"
+    echo -e "${BOLD}                    Updating Dependencies${NC}"
+    echo -e "${CYAN}───────────────────────────────────────────────────────────────────────────${NC}"
+    echo ""
+}
+
+update_all_deps() {
+    print_deps_header
+
+    local total=${#EXAMPLES[@]}
+    local current=0
+    local failed=0
+
+    for example in "${EXAMPLES[@]}"; do
+        ((current++))
+        local example_dir="$SCRIPT_DIR/$example"
+
+        if [ -d "$example_dir" ]; then
+            printf "  [%2d/%d] %-30s " "$current" "$total" "$example"
+            cd "$example_dir"
+
+            # Update deps (quiet, but capture errors)
+            if mix deps.get --quiet 2>&1 | grep -v "^$" > /tmp/deps_output_$$.txt 2>&1; then
+                echo -e "${GREEN}✓${NC}"
+            else
+                # Check if it's just a warning or actual error
+                if mix deps.get 2>&1 | grep -q "error\|Error\|ERROR"; then
+                    echo -e "${RED}✗${NC}"
+                    ((failed++))
+                else
+                    echo -e "${GREEN}✓${NC}"
+                fi
+            fi
+            rm -f /tmp/deps_output_$$.txt
+        fi
+    done
+
+    echo ""
+    if [ $failed -eq 0 ]; then
+        echo -e "${GREEN}All dependencies updated successfully!${NC}"
+    else
+        echo -e "${YELLOW}Warning: $failed example(s) had dependency issues${NC}"
+    fi
+    echo ""
+    echo -e "${CYAN}───────────────────────────────────────────────────────────────────────────${NC}"
+}
+
 # Main execution
 main() {
     print_header
     print_start_info
 
-    # Define examples to run (in order)
-    local examples=(
-        "basic"
-        "math_demo"
-        "types_showcase"
-        "error_showcase"
-        "docs_showcase"
-        "telemetry_showcase"
-        "proof_pipeline"
-        "twenty_libraries"
-        "wrapper_args_example"
-        "class_constructor_example"
-        "streaming_example"
-        "strict_mode_example"
-    )
+    # Update all dependencies first
+    update_all_deps
 
-    local total=${#examples[@]}
+    local total=${#EXAMPLES[@]}
     local current=0
 
-    for example in "${examples[@]}"; do
+    for example in "${EXAMPLES[@]}"; do
         ((current++))
         local example_dir="$SCRIPT_DIR/$example"
 

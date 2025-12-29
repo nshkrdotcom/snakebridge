@@ -204,6 +204,54 @@ For MVP, the current lock is adequate for hardware compatibility. Full reproduci
 
 ---
 
+## Gap #12: Docs Metadata Source Is A Stub
+
+**Status:** VERIFIED TRUE (Missing from original analysis)
+
+**Claim:** The `source:` configuration in docs supports `:python | :metadata | :hybrid`, but `:metadata` is not implemented.
+
+**Evidence:**
+
+`fetch_from_metadata/2` in `SnakeBridge.Docs` always returns `nil`:
+
+```elixir
+defp fetch_from_metadata(_module, _function) do
+  nil
+end
+```
+
+The `get/2` function dispatches based on source:
+
+```elixir
+doc =
+  case docs_source() do
+    :python ->
+      fetch_from_python(module, function)
+
+    :metadata ->
+      fetch_from_metadata(module, function) || "Documentation unavailable."
+
+    :hybrid ->
+      fetch_from_metadata(module, function) ||
+        fetch_from_python(module, function)
+  end
+```
+
+**Impact:**
+- `:metadata` mode always returns "Documentation unavailable."
+- `:hybrid` mode is functionally identical to `:python` (the fallback always triggers)
+- Users configuring `docs: [source: :metadata]` get broken behavior with no warning
+
+**MVP Implications:**
+If the intention is "Python docs are the MVP source," this is acceptable but should be documented. The config option creates an expectation that isn't met.
+
+**Options:**
+1. Remove `:metadata` and `:hybrid` from public config until implemented
+2. Add a warning when non-python source is configured
+3. Implement metadata source (requires storing docs in manifest or separate file)
+
+---
+
 ## Additional Observations
 
 ### Attribute Setters Not Generated

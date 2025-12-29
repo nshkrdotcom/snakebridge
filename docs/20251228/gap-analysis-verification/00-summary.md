@@ -21,21 +21,30 @@ Each claim was verified by:
 | Category | Total | Verified True | Verified Partially | False/Overstated |
 |----------|-------|---------------|-------------------|------------------|
 | P0 Critical Gaps | 6 | **6** | 0 | 0 |
-| P1 High-Value Gaps | 5 | **4** | 1 | 0 |
-| Implementation Claims | 12 | **12** | 0 | 0 |
+| P1 High-Value Gaps | 6 | **5** | 1 | 0 |
+| Implementation Claims | 12 | **10** | **2** | 0 |
 
 **Verdict:** The gap analysis is **accurate and well-researched**. All P0 critical gaps were verified as true. The analysis correctly identifies both strengths and weaknesses in the current implementation.
+
+**Corrections Applied:**
+- Added Gap #12 (docs metadata source is a stub) - missing from original analysis
+- Downgraded "Lock persistence determinism" to partially true (manifest is sorted; lock JSON key order is not guaranteed)
+- Downgraded "Docs plumbing" to partially true (`:metadata` and `:hybrid` sources are stubs)
 
 ### Key Findings
 
 #### Critical Issues Confirmed (P0)
 
-1. **Wrapper Argument Surface** - Functions with defaulted `POSITIONAL_OR_KEYWORD` parameters cannot accept optional args from Elixir
+1. **Wrapper Argument Surface** - Functions with defaulted `POSITIONAL_OR_KEYWORD` parameters cannot accept optional args from Elixir. Additionally, the `opts` keyword list conflates Python kwargs with runtime flags (`idempotent`, `__runtime__`, `__args__`), requiring a design decision.
 2. **Class Constructors** - All classes get hardcoded `new(arg, opts \\ [])` regardless of actual `__init__` signature
-3. **Streaming Not Generated** - Config supports `streaming:` but generator always emits `Runtime.call`
-4. **File Rewrite Churn** - Generated files are rewritten every compile, no content comparison
-5. **Strict Mode Incomplete** - Only checks manifest presence, not file/content integrity
+3. **Streaming Not Generated** - Config supports `streaming:` but generator always emits `Runtime.call`. Streaming wrappers also need `@spec` and runtime opts access.
+4. **File Rewrite Churn** - Generated files are rewritten every compile, no content comparison. Atomic writes need unique temp files for concurrency safety.
+5. **Strict Mode Incomplete** - Only checks manifest presence, not file/content integrity. Recommended phased approach: file existence → symbol presence → content hash → lock identity.
 6. **Varargs Not Exposed** - `VAR_POSITIONAL` parameters are ignored in wrapper generation
+
+#### Additional Gap Found (P1)
+
+- **Docs Metadata Source Stub** - `fetch_from_metadata/2` returns `nil`, making `:metadata` and `:hybrid` sources non-functional
 
 #### Architecture Strengths Confirmed
 

@@ -101,11 +101,14 @@ For classes:
 
 ---
 
-## 5. Manifest + Lock Persistence with Sorted Keys
+## 5. Manifest + Lock Persistence
 
-**Status:** VERIFIED TRUE
+**Status:** VERIFIED PARTIALLY TRUE
 
-**Manifest** (`lib/snakebridge/manifest.ex:92-104`):
+### Manifest: Deterministic (TRUE)
+
+**Location:** `SnakeBridge.Manifest.sort_manifest/1`
+
 ```elixir
 defp sort_manifest(manifest) do
   manifest
@@ -122,11 +125,22 @@ defp sort_manifest(manifest) do
 end
 ```
 
-**Lock** (`lib/snakebridge/lock.ex`) builds comprehensive lock structure with:
+The manifest explicitly sorts keys before serialization, ensuring deterministic output across runs and machines.
+
+### Lock: Content Stable, Key Order NOT Guaranteed (PARTIALLY TRUE)
+
+**Location:** `lib/snakebridge/lock.ex`
+
+The lock file builds a comprehensive structure with:
 - `version`, `environment` (including hardware and platform sections)
 - `compatibility` section
 - `libraries` and `python_packages` sections
-- Uses `Jason.encode!(pretty: true)` for deterministic output
+
+**Determinism Caveat:** The lock uses `Jason.encode!(pretty: true)` without explicit key sorting. While map enumeration order may appear stable on a given OTP version, this is NOT the same as a deliberate determinism guarantee. JSON key ordering is not normalized, which can cause:
+- Spurious git diffs when lock is regenerated on different machines/OTP versions
+- Merge conflicts in team workflows even when semantic content is identical
+
+**Recommendation:** For true determinism, the lock should apply recursive key sorting before JSON encoding, similar to how the manifest does.
 
 ---
 
@@ -156,15 +170,30 @@ All support:
 
 ## 7. Docs Plumbing with ETS Caching
 
-**Status:** VERIFIED TRUE
+**Status:** VERIFIED PARTIALLY TRUE
 
 **Location:** `lib/snakebridge/docs.ex`
 
-- `get/2` fetches docs with cache lookup (lines 9-33)
-- Uses ETS table `:snakebridge_docs` (line 6)
-- `lookup_cache/1` and `maybe_cache/2` handle caching (lines 124-142)
-- `search/2` uses `__functions__/0` for discovery (lines 35-48)
+- `get/2` fetches docs with cache lookup
+- Uses ETS table `:snakebridge_docs`
+- `lookup_cache/1` and `maybe_cache/2` handle caching
+- `search/2` uses `__functions__/0` for discovery
 - Configurable `source:` option (`:python`, `:metadata`, `:hybrid`)
+
+**Important Limitation:** The `:metadata` source is a stub. `fetch_from_metadata/2` always returns `nil`:
+
+```elixir
+defp fetch_from_metadata(_module, _function) do
+  nil
+end
+```
+
+This means:
+- `:metadata` mode always results in "Documentation unavailable."
+- `:hybrid` mode behaves identically to `:python` (always falls back)
+- Only `:python` source actually works
+
+See Gap #12 in `03-partial-findings.md` for details.
 
 ---
 

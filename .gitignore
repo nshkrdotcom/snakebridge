@@ -63,3 +63,4 @@ examples/*/.fetch
 examples/*/snakepit/
 examples/*/pythonLibs/
 /docs/20251227/
+/logs/

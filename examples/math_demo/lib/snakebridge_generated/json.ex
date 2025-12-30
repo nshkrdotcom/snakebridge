@@ -15,13 +15,21 @@ defmodule Json do
 
   Parameters:
   - `obj` (term())
-  - `skipkeys` (term())
+  - `skipkeys` (term() keyword-only, required)
 
   Returns:
   - `term()`
   """
   @spec dumps(term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
   def dumps(obj, opts \\ []) do
+    kw_keys = opts |> Keyword.keys() |> Enum.map(&to_string/1)
+    missing_kw = ["skipkeys"] |> Enum.reject(&(&1 in kw_keys))
+
+    if missing_kw != [] do
+      raise ArgumentError,
+            "Missing required keyword-only arguments: " <> Enum.join(missing_kw, ", ")
+    end
+
     SnakeBridge.Runtime.call(__MODULE__, :dumps, [obj], opts)
   end
 

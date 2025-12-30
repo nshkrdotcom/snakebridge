@@ -1,0 +1,24 @@
+{
+  "packages": {
+    "torch": {
+      "variants": ["cpu", "cu118", "cu121", "cu124", "rocm5.7"]
+    },
+    "torchvision": {
+      "variants": ["cpu", "cu118", "cu121", "cu124", "rocm5.7"]
+    },
+    "torchaudio": {
+      "variants": ["cpu", "cu118", "cu121", "cu124", "rocm5.7"]
+    }
+  },
+  "cuda_mappings": {
+    "11.7": "cu118",
+    "11.8": "cu118",
+    "12.0": "cu121",
+    "12.1": "cu121",
+    "12.2": "cu121",
+    "12.3": "cu124",
+    "12.4": "cu124",
+    "12.5": "cu124"
+  },
+  "rocm_variant": "rocm5.7"
+}

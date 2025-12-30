@@ -1,0 +1,1614 @@
+{
+  "classes": {
+    "Pathlib.Path": {
+      "attributes": [
+        "_drv",
+        "_flavour",
+        "_hash",
+        "_lines",
+        "_lines_cached",
+        "_parts_normcase",
+        "_parts_normcase_cached",
+        "_raw_paths",
+        "_root",
+        "_str",
+        "_str_normcase",
+        "_str_normcase_cached",
+        "_tail",
+        "_tail_cached",
+        "anchor",
+        "drive",
+        "name",
+        "parent",
+        "parents",
+        "parts",
+        "root",
+        "stem",
+        "suffix",
+        "suffixes"
+      ],
+      "class": "Path",
+      "docstring": "PurePath subclass that can make system calls.\n\nPath represents a filesystem path but unlike PurePath, also offers\nmethods to do system calls on path objects. Depending on your system,\ninstantiating a Path will return either a PosixPath or a WindowsPath\nobject. You can also instantiate a PosixPath or WindowsPath directly,\nbut cannot instantiate a WindowsPath on a POSIX system or vice versa.",
+      "methods": [
+        {
+          "docstring": "Initialize self.  See help(type(self)) for accurate signature.",
+          "elixir_name": "new",
+          "has_var_keyword": true,
+          "has_var_positional": true,
+          "maximum_arity": "unbounded",
+          "minimum_arity": 0,
+          "name": "__init__",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "args",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "kind": "VAR_KEYWORD",
+              "name": "kwargs",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "__init__",
+          "required_arity": 0,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "",
+          "elixir_name": "_format_parsed_parts",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 5,
+          "minimum_arity": 4,
+          "name": "_format_parsed_parts",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "drv",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "root",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "tail",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "_format_parsed_parts",
+          "required_arity": 4,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "",
+          "elixir_name": "_from_parsed_parts",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 5,
+          "minimum_arity": 4,
+          "name": "_from_parsed_parts",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "drv",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "root",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "tail",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "_from_parsed_parts",
+          "required_arity": 4,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "",
+          "elixir_name": "_load_parts",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "_load_parts",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "_load_parts",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "",
+          "elixir_name": "_make_child_relpath",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "_make_child_relpath",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "name",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "_make_child_relpath",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "",
+          "elixir_name": "_parse_path",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "_parse_path",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "path",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "_parse_path",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "",
+          "elixir_name": "_scandir",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "_scandir",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "_scandir",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return an absolute version of this path by prepending the current\nworking directory. No normalization or symlink resolution is performed.\n\nUse resolve() to get the canonical path to a file.",
+          "elixir_name": "absolute",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "absolute",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "absolute",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return the string representation of the path with forward (/)\nslashes.",
+          "elixir_name": "as_posix",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "as_posix",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "as_posix",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return the path as a 'file' URI.",
+          "elixir_name": "as_uri",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "as_uri",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "as_uri",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Change the permissions of the path, like os.chmod().",
+          "elixir_name": "chmod",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "chmod",
+          "optional_keyword_only": [
+            "follow_symlinks"
+          ],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "mode",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "True",
+              "kind": "KEYWORD_ONLY",
+              "name": "follow_symlinks",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "chmod",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return a new path pointing to the current working directory.",
+          "elixir_name": "cwd",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "cwd",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "cwd",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Whether this path exists.\n\nThis method normally follows symlinks; to check whether a symlink exists,\nadd the argument follow_symlinks=False.",
+          "elixir_name": "exists",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "exists",
+          "optional_keyword_only": [
+            "follow_symlinks"
+          ],
+          "parameters": [
+            {
+              "default": "True",
+              "kind": "KEYWORD_ONLY",
+              "name": "follow_symlinks",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "exists",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return a new path with expanded ~ and ~user constructs\n(as returned by os.path.expanduser)",
+          "elixir_name": "expanduser",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "expanduser",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "expanduser",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Iterate over this subtree and yield all existing files (of any\nkind, including directories) matching the given relative pattern.",
+          "elixir_name": "glob",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "glob",
+          "optional_keyword_only": [
+            "case_sensitive"
+          ],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "pattern",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "case_sensitive",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "glob",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return the group name of the file gid.",
+          "elixir_name": "group",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "group",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "group",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Make this path a hard link pointing to the same file as *target*.\n\nNote the order of arguments (self, target) is the reverse of os.link's.",
+          "elixir_name": "hardlink_to",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "hardlink_to",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "target",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "hardlink_to",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return a new path pointing to the user's home directory (as\nreturned by os.path.expanduser('~')).",
+          "elixir_name": "home",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "home",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "home",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "True if the path is absolute (has both a root and, if applicable,\na drive).",
+          "elixir_name": "is_absolute",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "is_absolute",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "is_absolute",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Whether this path is a block device.",
+          "elixir_name": "is_block_device",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "is_block_device",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "is_block_device",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Whether this path is a character device.",
+          "elixir_name": "is_char_device",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "is_char_device",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "is_char_device",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Whether this path is a directory.",
+          "elixir_name": "is_dir",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "is_dir",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "is_dir",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Whether this path is a FIFO.",
+          "elixir_name": "is_fifo",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "is_fifo",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "is_fifo",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Whether this path is a regular file (also True for symlinks pointing\nto regular files).",
+          "elixir_name": "is_file",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "is_file",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "is_file",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Whether this path is a junction.",
+          "elixir_name": "is_junction",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "is_junction",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "is_junction",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Check if this path is a mount point",
+          "elixir_name": "is_mount",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "is_mount",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "is_mount",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return True if the path is relative to another path or False.\n        ",
+          "elixir_name": "is_relative_to",
+          "has_var_keyword": false,
+          "has_var_positional": true,
+          "maximum_arity": "unbounded",
+          "minimum_arity": 2,
+          "name": "is_relative_to",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_ONLY",
+              "name": "other",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "_deprecated",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "is_relative_to",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return True if the path contains one of the special names reserved\nby the system, if any.",
+          "elixir_name": "is_reserved",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "is_reserved",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "is_reserved",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Whether this path is a socket.",
+          "elixir_name": "is_socket",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "is_socket",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "is_socket",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Whether this path is a symbolic link.",
+          "elixir_name": "is_symlink",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "is_symlink",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "is_symlink",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Yield path objects of the directory contents.\n\nThe children are yielded in arbitrary order, and the\nspecial entries '.' and '..' are not included.",
+          "elixir_name": "iterdir",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "iterdir",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "iterdir",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Combine this path with one or several arguments, and return a\nnew path representing either a subpath (if all arguments are relative\npaths) or a totally different path (if one of the arguments is\nanchored).",
+          "elixir_name": "joinpath",
+          "has_var_keyword": false,
+          "has_var_positional": true,
+          "maximum_arity": "unbounded",
+          "minimum_arity": 1,
+          "name": "joinpath",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "pathsegments",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "joinpath",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Like chmod(), except if the path points to a symlink, the symlink's\npermissions are changed, rather than its target's.",
+          "elixir_name": "lchmod",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "lchmod",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "mode",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "lchmod",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Like stat(), except if the path points to a symlink, the symlink's\nstatus information is returned, rather than its target's.",
+          "elixir_name": "lstat",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "lstat",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "lstat",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return True if this path matches the given pattern.",
+          "elixir_name": "match",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "match",
+          "optional_keyword_only": [
+            "case_sensitive"
+          ],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "path_pattern",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "case_sensitive",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "match",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Create a new directory at this given path.",
+          "elixir_name": "mkdir",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 1,
+          "name": "mkdir",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "default": "511",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "mode",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "False",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "parents",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "False",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "exist_ok",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "mkdir",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Open the file pointed by this path and return a file object, as\nthe built-in open() function does.",
+          "elixir_name": "open",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 1,
+          "name": "open",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "default": "'r'",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "mode",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "-1",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "buffering",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "encoding",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "errors",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "newline",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "open",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return the login name of the file owner.",
+          "elixir_name": "owner",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "owner",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "owner",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Open the file in bytes mode, read it, and close the file.",
+          "elixir_name": "read_bytes",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "read_bytes",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "read_bytes",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Open the file in text mode, read it, and close the file.",
+          "elixir_name": "read_text",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 1,
+          "name": "read_text",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "default": "None",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "encoding",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "errors",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "read_text",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return the path to which the symbolic link points.",
+          "elixir_name": "readlink",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "readlink",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "readlink",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return the relative path to another path identified by the passed\narguments.  If the operation is not possible (because this is not\nrelated to the other path), raise ValueError.\n\nThe *walk_up* parameter controls whether `..` may be used to resolve\nthe path.",
+          "elixir_name": "relative_to",
+          "has_var_keyword": false,
+          "has_var_positional": true,
+          "maximum_arity": "unbounded",
+          "minimum_arity": 2,
+          "name": "relative_to",
+          "optional_keyword_only": [
+            "walk_up"
+          ],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_ONLY",
+              "name": "other",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "_deprecated",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "False",
+              "kind": "KEYWORD_ONLY",
+              "name": "walk_up",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "relative_to",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Rename this path to the target path.\n\nThe target path may be absolute or relative. Relative paths are\ninterpreted relative to the current working directory, *not* the\ndirectory of the Path object.\n\nReturns the new Path instance pointing to the target path.",
+          "elixir_name": "rename",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "rename",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "target",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "rename",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Rename this path to the target path, overwriting if that path exists.\n\nThe target path may be absolute or relative. Relative paths are\ninterpreted relative to the current working directory, *not* the\ndirectory of the Path object.\n\nReturns the new Path instance pointing to the target path.",
+          "elixir_name": "replace",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "replace",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "target",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "replace",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Make the path absolute, resolving all symlinks on the way and also\nnormalizing it.",
+          "elixir_name": "resolve",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 1,
+          "name": "resolve",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "default": "False",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "strict",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "resolve",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Recursively yield all existing files (of any kind, including\ndirectories) matching the given relative pattern, anywhere in\nthis subtree.",
+          "elixir_name": "rglob",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "rglob",
+          "optional_keyword_only": [
+            "case_sensitive"
+          ],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "pattern",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "case_sensitive",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "rglob",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Remove this directory.  The directory must be empty.",
+          "elixir_name": "rmdir",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "rmdir",
+          "optional_keyword_only": [],
+          "parameters": [],
+          "python_name": "rmdir",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return whether other_path is the same or not as this file\n(as returned by os.path.samefile()).",
+          "elixir_name": "samefile",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "samefile",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "other_path",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "samefile",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return the result of the stat() system call on this path, like\nos.stat() does.",
+          "elixir_name": "stat",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 2,
+          "minimum_arity": 1,
+          "name": "stat",
+          "optional_keyword_only": [
+            "follow_symlinks"
+          ],
+          "parameters": [
+            {
+              "default": "True",
+              "kind": "KEYWORD_ONLY",
+              "name": "follow_symlinks",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "stat",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Make this path a symlink pointing to the target path.\nNote the order of arguments (link, target) is the reverse of os.symlink.",
+          "elixir_name": "symlink_to",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 4,
+          "minimum_arity": 2,
+          "name": "symlink_to",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "target",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "False",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "target_is_directory",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "symlink_to",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Create this file with the given access mode, if it doesn't exist.",
+          "elixir_name": "touch",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 1,
+          "name": "touch",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "default": "438",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "mode",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "True",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "exist_ok",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "touch",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Remove this file or link.\nIf the path is a directory, use rmdir() instead.",
+          "elixir_name": "unlink",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 1,
+          "name": "unlink",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "default": "False",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "missing_ok",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "unlink",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Walk the directory tree from this directory, similar to os.walk().",
+          "elixir_name": "walk",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 1,
+          "name": "walk",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "default": "True",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "top_down",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "on_error",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "False",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "follow_symlinks",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "walk",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return a new path with the file name changed.",
+          "elixir_name": "with_name",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "with_name",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "name",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "with_name",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Construct a new path object from any number of path-like objects.\nSubclasses may override this method to customize how new path objects\nare created from methods like `iterdir()`.",
+          "elixir_name": "with_segments",
+          "has_var_keyword": false,
+          "has_var_positional": true,
+          "maximum_arity": "unbounded",
+          "minimum_arity": 1,
+          "name": "with_segments",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "pathsegments",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "with_segments",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return a new path with the stem changed.",
+          "elixir_name": "with_stem",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "with_stem",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "stem",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "with_stem",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Return a new path with the file suffix changed.  If the path\nhas no suffix, add given suffix.  If the given suffix is an empty\nstring, remove the suffix from the path.",
+          "elixir_name": "with_suffix",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "with_suffix",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "suffix",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "with_suffix",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Open the file in bytes mode, write to it, and close the file.",
+          "elixir_name": "write_bytes",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "write_bytes",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "data",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "write_bytes",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        },
+        {
+          "docstring": "Open the file in text mode, write to it, and close the file.",
+          "elixir_name": "write_text",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 4,
+          "minimum_arity": 2,
+          "name": "write_text",
+          "optional_keyword_only": [],
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "data",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "encoding",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "errors",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "newline",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "write_text",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true
+        }
+      ],
+      "module": "Pathlib.Path",
+      "python_module": "pathlib"
+    }
+  },
+  "symbols": {
+    "Math.pi/0": {
+      "call_type": "module_attr",
+      "docstring": "Convert a string or number to a floating point number, if possible.",
+      "elixir_name": "pi",
+      "function": "pi",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 0,
+      "minimum_arity": 0,
+      "module": "Math",
+      "name": "pi",
+      "optional_keyword_only": [],
+      "parameters": [],
+      "python_module": "math",
+      "python_name": "pi",
+      "required_arity": 0,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "float"
+      },
+      "signature_available": true
+    }
+  },
+  "version": "0.7.2"
+}

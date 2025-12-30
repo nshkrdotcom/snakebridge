@@ -7,6 +7,8 @@ Outputs JSON to stdout containing module metadata, functions, classes, and type 
 
 Usage:
     python3 introspect.py <module_name> [--submodules MODULE1,MODULE2,...] [--flat]
+    python3 introspect.py <module_name> --symbols '["sqrt","sin"]'
+    python3 introspect.py <module_name> --attribute <attr_name>
 
 Examples:
     python3 introspect.py math
@@ -19,6 +21,7 @@ import json
 import inspect
 import importlib
 import types
+import traceback
 from typing import Any, Dict, List, Optional, get_type_hints, Union
 import typing
 import argparse
@@ -29,6 +32,26 @@ try:
     HAS_DOCSTRING_PARSER = True
 except ImportError:
     HAS_DOCSTRING_PARSER = False
+
+PROTOCOL_DUNDERS = [
+    "__str__", "__repr__", "__len__", "__getitem__", "__setitem__",
+    "__contains__", "__iter__", "__next__", "__enter__", "__exit__",
+    "__call__", "__hash__", "__eq__", "__ne__", "__lt__", "__le__",
+    "__gt__", "__ge__", "__add__", "__sub__", "__mul__", "__truediv__"
+]
+
+
+def _docstring_text(obj: Any) -> str:
+    doc = inspect.getdoc(obj) or ""
+    return doc[:8000] if doc else ""
+
+
+def _format_annotation(annotation: Any) -> Optional[str]:
+    if annotation is inspect.Signature.empty:
+        return None
+    if hasattr(annotation, "__name__"):
+        return annotation.__name__
+    return str(annotation)
 
 
 def type_to_dict(t: Any) -> Dict[str, Any]:
@@ -45,6 +68,8 @@ def type_to_dict(t: Any) -> Dict[str, Any]:
         return {"type": "none"}
 
     if t is inspect.Parameter.empty or t is inspect.Signature.empty:
+        return {"type": "any"}
+    if t is typing.Any:
         return {"type": "any"}
 
     # Handle basic types
@@ -128,10 +153,197 @@ def type_to_dict(t: Any) -> Dict[str, Any]:
 
     # Handle class types
     if inspect.isclass(t):
-        return {"type": "class", "name": t.__name__, "module": t.__module__}
+        name = t.__name__
+        module = t.__module__
+        type_name = name.lower()
+
+        if "numpy" in module and "ndarray" in type_name:
+            return {"type": "numpy.ndarray"}
+        if "numpy" in module and "dtype" in type_name:
+            return {"type": "numpy.dtype"}
+        if "torch" in module and "tensor" in name:
+            return {"type": "torch.Tensor"}
+        if "torch" in module and "dtype" in type_name:
+            return {"type": "torch.dtype"}
+        if "pandas" in module and "dataframe" in type_name:
+            return {"type": "pandas.DataFrame"}
+        if "pandas" in module and "series" in type_name:
+            return {"type": "pandas.Series"}
+
+        return {"type": "class", "name": name, "module": module}
 
     # Fallback to string representation
     return {"type": "any", "raw": str(t)}
+
+
+def _param_info(param: inspect.Parameter, type_hint: Any = None) -> Dict[str, Any]:
+    info = {"name": param.name, "kind": param.kind.name}
+    if param.default is not inspect.Parameter.empty:
+        info["default"] = repr(param.default)
+    if param.annotation is not inspect.Parameter.empty:
+        info["annotation"] = _format_annotation(param.annotation)
+
+    type_annotation = type_hint if type_hint is not None else param.annotation
+    info["type"] = type_to_dict(type_annotation)
+    return info
+
+
+def _introspect_callable_symbol(name: str, obj: Any, module_name: str) -> Dict[str, Any]:
+    info = {
+        "name": name,
+        "type": "function",
+        "callable": callable(obj),
+        "module": module_name,
+        "python_module": module_name,
+    }
+
+    try:
+        sig = inspect.signature(obj)
+        info["signature_available"] = True
+        try:
+            type_hints = typing.get_type_hints(obj)
+        except Exception:
+            type_hints = {}
+
+        info["parameters"] = [
+            _param_info(p, type_hints.get(p.name))
+            for p in sig.parameters.values()
+        ]
+
+        if sig.return_annotation is not inspect.Signature.empty:
+            info["return_annotation"] = _format_annotation(sig.return_annotation)
+        info["return_type"] = type_to_dict(type_hints.get("return", sig.return_annotation))
+    except (ValueError, TypeError):
+        info["signature_available"] = False
+        info["parameters"] = []
+        info["return_type"] = {"type": "any"}
+
+    doc = _docstring_text(obj)
+    if doc:
+        info["docstring"] = doc
+    return info
+
+
+def _introspect_attribute_symbol(name: str, obj: Any, module_name: str) -> Dict[str, Any]:
+    info = {
+        "name": name,
+        "type": "attribute",
+        "module": module_name,
+        "python_module": module_name,
+        "signature_available": True,
+        "parameters": [],
+        "return_type": type_to_dict(type(obj)),
+    }
+
+    doc = _docstring_text(obj)
+    if doc:
+        info["docstring"] = doc
+    return info
+
+
+def _introspect_class_symbol(name: str, cls: type) -> Dict[str, Any]:
+    methods: List[Dict[str, Any]] = []
+    dunder_methods: List[str] = []
+
+    for method_name, method in inspect.getmembers(cls, predicate=callable):
+        if method_name.startswith("__") and method_name not in ["__init__"]:
+            if method_name in PROTOCOL_DUNDERS:
+                dunder_methods.append(method_name)
+            continue
+        try:
+            sig = inspect.signature(method)
+            signature_available = True
+            try:
+                type_hints = typing.get_type_hints(method)
+            except Exception:
+                type_hints = {}
+
+            params = [
+                _param_info(p, type_hints.get(p.name))
+                for p in sig.parameters.values()
+                if p.name != "self"
+            ]
+            return_type = type_to_dict(type_hints.get("return", sig.return_annotation))
+        except (ValueError, TypeError):
+            signature_available = False
+            params = []
+            return_type = {"type": "any"}
+
+        methods.append({
+            "name": method_name,
+            "parameters": params,
+            "docstring": _docstring_text(method),
+            "return_type": return_type,
+            "signature_available": signature_available,
+        })
+
+    attributes: List[str] = []
+    for attr_name, value in inspect.getmembers(cls):
+        if attr_name.startswith("__"):
+            continue
+        if callable(value):
+            continue
+        attributes.append(attr_name)
+
+    return {
+        "name": name,
+        "type": "class",
+        "python_module": cls.__module__,
+        "docstring": _docstring_text(cls),
+        "methods": methods,
+        "attributes": attributes,
+        "dunder_methods": dunder_methods,
+    }
+
+
+def introspect_symbols(module_name: str, symbols: List[str]) -> List[Dict[str, Any]]:
+    module = importlib.import_module(module_name)
+    results = []
+    for name in symbols:
+        obj = getattr(module, name, None)
+        if obj is None:
+            results.append({"name": name, "error": "not_found"})
+            continue
+
+        if inspect.isclass(obj):
+            results.append(_introspect_class_symbol(name, obj))
+        elif callable(obj):
+            results.append(_introspect_callable_symbol(name, obj, module_name))
+        else:
+            results.append(_introspect_attribute_symbol(name, obj, module_name))
+    return results
+
+
+def introspect_attribute_info(module_path: str, attr_name: str) -> Dict[str, Any]:
+    try:
+        module = importlib.import_module(module_path)
+        attr = getattr(module, attr_name, None)
+
+        if attr is None:
+            return {"exists": False}
+
+        return {
+            "exists": True,
+            "is_class": inspect.isclass(attr),
+            "is_module": inspect.ismodule(attr),
+            "is_function": inspect.isfunction(attr) or inspect.isbuiltin(attr),
+            "type_name": type(attr).__name__,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _parse_symbols_arg(value: Optional[str]) -> List[str]:
+    if not value:
+        return []
+    value = value.strip()
+    if value.startswith("["):
+        try:
+            parsed = json.loads(value)
+            return [str(item) for item in parsed]
+        except Exception:
+            pass
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def parse_docstring(docstring: Optional[str]) -> Dict[str, Any]:
@@ -259,6 +471,7 @@ def introspect_function(name: str, func: Any) -> Dict[str, Any]:
     try:
         # Get signature
         sig = inspect.signature(func)
+        func_info["signature_available"] = True
 
         # Get type hints
         try:
@@ -278,6 +491,7 @@ def introspect_function(name: str, func: Any) -> Dict[str, Any]:
 
     except (ValueError, TypeError) as e:
         # Some built-in functions don't have accessible signatures
+        func_info["signature_available"] = False
         func_info["parameters"] = []
         func_info["return_type"] = {"type": "any"}
         func_info["error"] = f"Could not introspect signature: {str(e)}"
@@ -351,6 +565,30 @@ def introspect_class(name: str, cls: type) -> Dict[str, Any]:
     return class_info
 
 
+def introspect_attribute(name: str, value: Any) -> Dict[str, Any]:
+    """
+    Introspect a non-callable module attribute.
+
+    Args:
+        name: Attribute name
+        value: Attribute value
+
+    Returns:
+        Dictionary with attribute information
+    """
+    attr_info = {
+        "name": name,
+        "type": "attribute",
+        "return_type": type_to_dict(type(value))
+    }
+
+    docstring = inspect.getdoc(value)
+    if docstring:
+        attr_info["docstring"] = parse_docstring(docstring)
+
+    return attr_info
+
+
 def get_object_namespace(obj: Any, base_module: str) -> str:
     """
     Determine the namespace of an object relative to the base module.
@@ -400,7 +638,8 @@ def introspect_module_namespace(module_name: str, namespace: str = "") -> Dict[s
 
     namespace_info = {
         "functions": [],
-        "classes": []
+        "classes": [],
+        "attributes": []
     }
 
     # Get the module's __all__ if available (explicit public API)
@@ -447,6 +686,9 @@ def introspect_module_namespace(module_name: str, namespace: str = "") -> Dict[s
                 # Include functions, builtins, and other callable objects (like numpy's _ArrayFunctionDispatcher)
                 func_info = introspect_function(name, obj)
                 namespace_info["functions"].append(func_info)
+            elif not inspect.ismodule(obj):
+                attr_info = introspect_attribute(name, obj)
+                namespace_info["attributes"].append(attr_info)
         except Exception as e:
             # Log the error but continue processing
             sys.stderr.write(f"Warning: Failed to introspect {name} in {module_name}: {str(e)}\n")
@@ -490,7 +732,8 @@ def introspect_module(module_name: str, submodules: Optional[List[str]] = None, 
             "module": module_name,
             "version": "2.0",
             "functions": [],
-            "classes": []
+            "classes": [],
+            "attributes": []
         }
 
         if module_doc:
@@ -541,6 +784,9 @@ def introspect_module(module_name: str, submodules: Optional[List[str]] = None, 
                     # Include functions, builtins, and other callable objects (like numpy's _ArrayFunctionDispatcher)
                     func_info = introspect_function(name, obj)
                     module_info["functions"].append(func_info)
+                elif not inspect.ismodule(obj):
+                    attr_info = introspect_attribute(name, obj)
+                    module_info["attributes"].append(attr_info)
             except Exception as e:
                 # Log the error but continue processing
                 sys.stderr.write(f"Warning: Failed to introspect {name}: {str(e)}\n")
@@ -594,10 +840,25 @@ Examples:
         """
     )
 
-    parser.add_argument('module', help='Name of the Python module to introspect')
+    parser.add_argument('module', nargs='?', help='Name of the Python module to introspect')
+    parser.add_argument(
+        '--module',
+        dest='module_flag',
+        help='Name of the Python module to introspect'
+    )
     parser.add_argument(
         '--submodules',
         help='Comma-separated list of submodules to introspect (e.g., linalg,fft,random)',
+        default=None
+    )
+    parser.add_argument(
+        '--symbols',
+        help='JSON array or comma-separated list of symbols to introspect',
+        default=None
+    )
+    parser.add_argument(
+        '--attribute',
+        help='Single attribute name to introspect',
         default=None
     )
     parser.add_argument(
@@ -608,14 +869,25 @@ Examples:
 
     args = parser.parse_args()
 
-    module_name = args.module
+    module_name = args.module_flag or args.module
+    if not module_name:
+        parser.error("module name is required")
     submodules = args.submodules.split(',') if args.submodules else None
     flat_mode = args.flat
 
     try:
-        result = introspect_module(module_name, submodules=submodules, flat_mode=flat_mode)
-        print(json.dumps(result, indent=2))
+        if args.attribute:
+            result = introspect_attribute_info(module_name, args.attribute)
+            print(json.dumps(result))
+        elif args.symbols:
+            symbols = _parse_symbols_arg(args.symbols)
+            result = introspect_symbols(module_name, symbols)
+            print(json.dumps(result))
+        else:
+            result = introspect_module(module_name, submodules=submodules, flat_mode=flat_mode)
+            print(json.dumps(result, indent=2))
     except Exception as e:
+        traceback.print_exc(file=sys.stderr)
         error_result = {
             "error": f"Introspection failed: {str(e)}",
             "module": module_name

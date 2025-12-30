@@ -1,0 +1,21 @@
+{
+  "generated_at": "2025-12-30T20:06:24.709536Z",
+  "libraries": {
+    "wrapper_args_example": {
+      "elixir_module": "WrapperArgs",
+      "files": [
+        "wrapper_args_example.ex"
+      ],
+      "generated_at": "2025-12-30T20:06:24.645549Z",
+      "path": "lib/snakebridge_generated",
+      "python_module": "wrapper_args_example",
+      "python_version": "stdlib",
+      "stats": {
+        "classes": 0,
+        "functions": 2,
+        "submodules": 0
+      }
+    }
+  },
+  "version": "2.1"
+}

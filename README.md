@@ -16,7 +16,7 @@ Add to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:snakebridge, "~> 0.7.2",
+    {:snakebridge, "~> 0.7.3",
       libraries: [
         {:numpy, "1.26.0"},
         {:pandas, version: "2.0.0", include: ["DataFrame", "read_csv"]}
@@ -58,6 +58,24 @@ All wrappers accept:
 - **Extra positional args**: `args` list appended after required parameters
 - **Keyword options**: `opts` for Python kwargs and runtime flags (`idempotent`, `__runtime__`)
 
+### Signature & Arity Model
+
+SnakeBridge matches call-site arity against a manifest range so optional args and keyword
+opts do not produce perpetual "missing" symbols. Required keyword-only parameters are
+documented and validated at runtime.
+
+When a Python signature is unavailable (common for C-extensions), SnakeBridge generates
+variadic wrappers with convenience arities up to a configurable max (default 8):
+
+```elixir
+config :snakebridge, variadic_max_arity: 8
+```
+
+Python function and method names that are invalid in Elixir are sanitized (for example,
+`class` → `py_class`). The manifest stores the Python↔Elixir mapping and runtime calls
+use the original Python name. Common dunder methods map to idiomatic names (for example,
+`__init__` → `new`, `__len__` → `length`).
+
 ### Class Constructors
 
 Classes generate `new/N` matching their Python `__init__`:
@@ -72,6 +90,12 @@ Classes generate `new/N` matching their Python `__init__`:
 :ok = SnakeBridge.Runtime.release_ref(point)
 ```
 
+### Class vs Submodule Resolution
+
+Nested calls like `Lib.Foo.bar/…` are resolved automatically via introspection. SnakeBridge
+checks whether `Foo` is a class attribute on the parent module first, and falls back to a
+submodule when it is not. This means classes are detected without manual `include`.
+
 ### Instance Attributes
 
 Read and write Python object attributes:
@@ -83,6 +107,76 @@ Read and write Python object attributes:
 # Set attribute
 :ok = SnakeBridge.Runtime.set_attr(instance, "attribute_name", new_value)
 ```
+
+### Module Attributes
+
+Module-level constants and objects are exposed via generated zero-arity accessors or the
+runtime API:
+
+```elixir
+{:ok, pi} = Math.pi()
+{:ok, nan} = Numpy.nan()
+
+# Or via the runtime helper
+{:ok, pi} = SnakeBridge.Runtime.get_module_attr(Math, :pi)
+```
+
+### Dynamic Dispatch (No-Codegen)
+
+Call Python functions and methods without generated wrappers:
+
+```elixir
+# Call a function by module path
+{:ok, value} = SnakeBridge.Runtime.call_dynamic("math", "sqrt", [144])
+
+# Create a ref and call methods dynamically
+{:ok, ref} = SnakeBridge.Runtime.call_dynamic("pathlib", "Path", ["."])
+{:ok, exists?} = SnakeBridge.Dynamic.call(ref, :exists, [])
+{:ok, name} = SnakeBridge.Dynamic.get_attr(ref, :name)
+{:ok, _} = SnakeBridge.Dynamic.set_attr(ref, :name, "snakebridge")
+```
+
+Use generated wrappers when you want compile-time arity checks, docs, and faster hot-path
+calls. Use dynamic dispatch when symbols are discovered at runtime or when introspection
+cannot see the module/class ahead of time.
+
+Performance considerations: dynamic calls are string-based and skip codegen optimizations,
+so prefer generated wrappers for frequently called functions.
+
+### Session Lifecycle Management
+
+SnakeBridge scopes Python object refs to sessions and releases them when the owning
+process exits. Use `SessionContext.with_session/1` to bind a session to the current
+process:
+
+```elixir
+SnakeBridge.SessionContext.with_session(fn ->
+  {:ok, ref} = SnakeBridge.Runtime.call_dynamic("pathlib", "Path", ["."])
+  {:ok, exists?} = SnakeBridge.Dynamic.call(ref, :exists, [])
+end)
+```
+
+Refs created inside the block share the same `session_id`, so multiple calls can
+chain on the same Python objects. The `SessionManager` monitors the owner process
+and calls Python `release_session` when it dies. You can also release explicitly:
+
+```elixir
+:ok = SnakeBridge.SessionManager.release_session(session_id)
+```
+
+Pass explicit options with `SessionContext.with_session/2` when you need a
+custom session id or metadata:
+
+```elixir
+SnakeBridge.SessionContext.with_session(session_id: "analytics", fn ->
+  {:ok, ref} = SnakeBridge.Runtime.call_dynamic("pathlib", "Path", ["."])
+  {:ok, _} = SnakeBridge.Dynamic.call(ref, :exists, [])
+end)
+```
+
+Configuration options (environment variables):
+- `SNAKEBRIDGE_REF_TTL_SECONDS` (default `0`, disabled) to enable time-based cleanup
+- `SNAKEBRIDGE_REF_MAX` to cap in-memory refs per Python process
 
 ### Streaming Functions
 
@@ -101,6 +195,60 @@ LLM.generate_stream("Hello", [], fn chunk ->
   IO.write(chunk)
 end)
 ```
+
+### Generators and Iterators
+
+Python generators and iterators are returned as `SnakeBridge.StreamRef` and implement
+the `Enumerable` protocol for lazy iteration:
+
+```elixir
+{:ok, stream} = SnakeBridge.Runtime.call_dynamic("itertools", "count", [1])
+Enum.take(stream, 5)
+```
+
+Performance considerations: each element is fetched over the runtime boundary. Prefer
+batching (e.g., Python-side list construction) for large iterations, and use bounded
+Enum operations (`Enum.take/2`, `Enum.reduce/3`) to limit round-trips.
+
+### Protocol Integration (Refs)
+
+Python refs implement Elixir protocols for smoother interop:
+
+```elixir
+{:ok, ref} = SnakeBridge.Runtime.call_dynamic("builtins", "range", [0, 3])
+
+inspect(ref)          # Uses Python __repr__ / __str__
+"Range: #{ref}"       # Uses Python __str__
+Enum.count(ref)       # Calls __len__
+Enum.map(ref, &(&1 * 2))
+```
+
+### Python Context Managers
+
+Use `SnakeBridge.with_python/2` to safely call `__enter__` and `__exit__`:
+
+```elixir
+{:ok, file} = SnakeBridge.Runtime.call_dynamic("builtins", "open", ["output.txt", "w"])
+
+SnakeBridge.with_python(file) do
+  SnakeBridge.Dynamic.call(file, :write, ["hello\\n"])
+end
+```
+
+The `context` variable inside the block is bound to the `__enter__` return value.
+
+### Callbacks (Elixir → Python)
+
+Elixir functions can be passed to Python as callbacks:
+
+```elixir
+callback = fn x -> x * 2 end
+{:ok, stream} = SnakeBridge.Runtime.call_dynamic("builtins", "map", [callback, [1, 2, 3]])
+Enum.to_list(stream)
+```
+
+Performance considerations: callbacks cross the boundary per invocation. Keep callback
+work small or batch on the Python side when possible.
 
 ### Strict Mode for CI
 
@@ -135,6 +283,18 @@ values and decoded only when allowlisted:
 config :snakebridge, atom_allowlist: ["ok", "error"]
 ```
 
+Python decodes tagged atoms to plain strings by default for compatibility with
+most libraries. Opt in to Atom wrapper objects by setting:
+
+```bash
+SNAKEBRIDGE_ATOM_CLASS=true
+```
+
+Python results that are not JSON-serializable are automatically returned as
+refs (e.g., `{"__type__": "ref", ...}`) so you can chain method calls on the
+returned object. Each ref includes a `session_id` to keep ownership scoped
+to the calling process.
+
 ### ML Error Translation
 
 Python ML exceptions are translated to structured Elixir errors:
@@ -157,6 +317,20 @@ Use `SnakeBridge.ErrorTranslator.translate/1` for manual translation, or set
 config :snakebridge, error_mode: :translated
 ```
 
+Unknown Python exceptions are mapped dynamically into
+`SnakeBridge.DynamicException.*` modules so you can rescue by type:
+
+```elixir
+config :snakebridge, error_mode: :raise_translated
+
+try do
+  SnakeBridge.Runtime.call_dynamic("builtins", "int", ["not-a-number"])
+rescue
+  e in SnakeBridge.DynamicException.ValueError ->
+    IO.puts("Caught: #{Exception.message(e)}")
+end
+```
+
 ### Telemetry
 
 The compile pipeline emits telemetry events:
@@ -170,20 +344,54 @@ end, nil)
 
 Compile events:
 - `[:snakebridge, :compile, :start|:stop|:exception]`
-- `[:snakebridge, :scan, :stop]`
-- `[:snakebridge, :introspect, :start|:stop]`
-- `[:snakebridge, :generate, :stop]`
+- `[:snakebridge, :compile, :scan, :stop]`
+- `[:snakebridge, :compile, :introspect, :start|:stop]`
+- `[:snakebridge, :compile, :generate, :stop]`
 - `[:snakebridge, :docs, :fetch]`
 - `[:snakebridge, :lock, :verify]`
 
 Runtime events (forwarded from Snakepit):
 - `[:snakebridge, :runtime, :call, :start|:stop|:exception]`
 
+Telemetry metadata schema:
+- Compile events include `library`, `phase`, and `details`.
+- Runtime events include `library`, `function`, and `call_type`.
+
+Breaking change: compile phase events now live under `[:snakebridge, :compile, ...]`
+and share the unified metadata schema above.
+
+### Wheel Variants
+
+Hardware-specific wheels are configured via `config/wheel_variants.json`:
+
+```json
+{
+  "packages": {
+    "torch": {
+      "variants": ["cpu", "cu118", "cu121", "cu124", "rocm5.7"]
+    }
+  },
+  "cuda_mappings": {
+    "12.1": "cu121",
+    "12.4": "cu124"
+  },
+  "rocm_variant": "rocm5.7"
+}
+```
+
+Override the file path or selection strategy if needed:
+
+```elixir
+config :snakebridge,
+  wheel_config_path: "config/wheel_variants.json",
+  wheel_strategy: SnakeBridge.WheelSelector.ConfigStrategy
+```
+
 ## Configuration
 
 ```elixir
 # mix.exs
-{:snakebridge, "~> 0.7.2",
+{:snakebridge, "~> 0.7.3",
   libraries: [
     # Simple: name and version
     {:numpy, "1.26.0"},
@@ -223,6 +431,7 @@ Python adapter ref lifecycle (environment variables):
 ```bash
 SNAKEBRIDGE_REF_TTL_SECONDS=3600
 SNAKEBRIDGE_REF_MAX=10000
+SNAKEBRIDGE_ATOM_CLASS=true
 ```
 
 Python adapter protocol compatibility (environment variables):
@@ -266,6 +475,9 @@ For dynamic calls when module/function names aren't known at compile time:
 ```elixir
 # Direct call
 {:ok, result} = SnakeBridge.call("math", "sqrt", [16])
+
+# Dynamic call without codegen
+{:ok, result} = SnakeBridge.Runtime.call_dynamic("math", "sqrt", [16])
 
 # Streaming call
 SnakeBridge.stream("llm", "generate", ["prompt"], [], fn chunk -> IO.write(chunk) end)

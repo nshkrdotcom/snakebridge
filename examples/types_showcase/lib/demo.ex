@@ -39,6 +39,7 @@ defmodule Demo do
       demo_boolean()
       demo_bytes()
       demo_nested_structures()
+      demo_atoms_and_refs()
 
       IO.puts("""
 
@@ -52,11 +53,13 @@ defmodule Demo do
         Python str      <-> Elixir String (binary)
         Python list     <-> Elixir list
         Python dict     <-> Elixir map
-        Python list     <-- Elixir tuple (convert with Tuple.to_list/1)
+        Python tuple    <-> Elixir tuple
         Python None     <-> Elixir nil
         Python bool     <-> Elixir boolean
         Python bytes    <-> Elixir binary
         Nested structs  <-> Nested Elixir terms
+        Python str      <-  Elixir atom (default)
+        Python object   <-> Elixir ref handle
 
       Try `iex -S mix` to experiment with more types!
       ======================================================================
@@ -353,6 +356,52 @@ defmodule Demo do
     IO.puts("")
   end
 
+  defp demo_atoms_and_refs do
+    IO.puts("--- SECTION 11: Atoms and Auto-Refs ------------------------------")
+    IO.puts("")
+
+    type_call(
+      description: "Atom passed as Python string",
+      elixir_call: "SnakeBridge.call(%{python_module: \"builtins\"}, \"type\", [:cuda])",
+      python_module: "builtins",
+      python_function: "type",
+      elixir_value: :cuda,
+      elixir_type: "atom (encoded as Python str)"
+    )
+
+    IO.puts("    +-- Auto-ref for complex objects and method chaining")
+    IO.puts("    |")
+
+    IO.puts(
+      "    |  Elixir call:     SnakeBridge.call(%{python_module: \"pathlib\"}, \"Path\", [\"/tmp\"])"
+    )
+
+    IO.puts("    |")
+
+    case snakepit_call("pathlib", "Path", ["/tmp"]) do
+      {:ok, %SnakeBridge.Ref{} = ref} ->
+        IO.puts("    |  Ref type:       SnakeBridge.Ref")
+        handle_pathlib_chain(ref)
+
+      {:ok, %{"__type__" => "ref"} = ref} ->
+        IO.puts("    |  Ref type:       #{inspect(ref["__type__"])}")
+        handle_pathlib_chain(ref)
+
+      {:ok, other} ->
+        Examples.record_failure()
+        IO.puts("    |  Error:          Unexpected value: #{inspect(other)}")
+        IO.puts("    |")
+        IO.puts("    +-- Result: {:error, unexpected_result}")
+
+      {:error, reason} ->
+        IO.puts("    |  Error:          #{inspect(reason)}")
+        IO.puts("    |")
+        IO.puts("    +-- Result: {:error, #{inspect(reason)}}")
+    end
+
+    IO.puts("")
+  end
+
   # ==========================================================================
   # Helper Functions
   # ==========================================================================
@@ -380,6 +429,36 @@ defmodule Demo do
     elapsed = System.monotonic_time(:microsecond) - start_time
 
     case result do
+      {:ok, %SnakeBridge.Ref{} = ref} ->
+        case python_repr(ref) do
+          {:ok, repr} ->
+            IO.puts("    |  Python type:     #{format_python_type(repr)}")
+            IO.puts("    |  Elixir type:     #{opts[:elixir_type]}")
+            IO.puts("    |")
+            IO.puts("    +-- Result: {:ok, #{inspect(repr)}} (#{elapsed} us)")
+
+          {:error, reason} ->
+            Examples.record_failure()
+            IO.puts("    |  Error:           #{inspect(reason)}")
+            IO.puts("    |")
+            IO.puts("    +-- Result: {:error, #{inspect(reason)}} (#{elapsed} us)")
+        end
+
+      {:ok, %{"__type__" => "ref"} = ref} ->
+        case python_repr(ref) do
+          {:ok, repr} ->
+            IO.puts("    |  Python type:     #{format_python_type(repr)}")
+            IO.puts("    |  Elixir type:     #{opts[:elixir_type]}")
+            IO.puts("    |")
+            IO.puts("    +-- Result: {:ok, #{inspect(repr)}} (#{elapsed} us)")
+
+          {:error, reason} ->
+            Examples.record_failure()
+            IO.puts("    |  Error:           #{inspect(reason)}")
+            IO.puts("    |")
+            IO.puts("    +-- Result: {:error, #{inspect(reason)}} (#{elapsed} us)")
+        end
+
       {:ok, python_type} ->
         IO.puts("    |  Python type:     #{format_python_type(python_type)}")
         IO.puts("    |  Elixir type:     #{opts[:elixir_type]}")
@@ -459,29 +538,58 @@ defmodule Demo do
     inspect(other)
   end
 
-  # Helper to call Python via Snakepit with proper payload format
-  defp snakepit_call(python_module, python_function, args) do
-    payload =
-      SnakeBridge.Runtime.protocol_payload()
-      |> Map.merge(%{
-        "library" => python_module |> String.split(".") |> List.first(),
-        "python_module" => python_module,
-        "function" => python_function,
-        "args" => args,
-        "kwargs" => %{},
-        "idempotent" => false
-      })
+  defp python_repr(ref) do
+    SnakeBridge.Runtime.call_dynamic("builtins", "repr", [ref])
+  end
 
-    case Snakepit.execute("snakebridge.call", payload) do
+  defp handle_pathlib_chain(ref) do
+    case SnakeBridge.Runtime.call_method(ref, :joinpath, ["snakebridge.txt"]) do
+      {:ok, %SnakeBridge.Ref{} = next_ref} ->
+        handle_pathlib_result(next_ref)
+
+      {:ok, %{"__type__" => "ref"} = next_ref} ->
+        handle_pathlib_result(next_ref)
+
+      {:error, reason} ->
+        Examples.record_failure()
+        IO.puts("    |  Error:          #{inspect(reason)}")
+        IO.puts("    |")
+        IO.puts("    +-- Result: {:error, #{inspect(reason)}}")
+
+      other ->
+        Examples.record_failure()
+        IO.puts("    |  Error:          #{inspect(other)}")
+        IO.puts("    |")
+        IO.puts("    +-- Result: {:error, #{inspect(other)}}")
+    end
+  end
+
+  defp handle_pathlib_result(ref) do
+    case SnakeBridge.Runtime.call_method(ref, :as_posix, []) do
+      {:ok, path} ->
+        IO.puts("    |  Chained result: #{format_value(path)}")
+        IO.puts("    |")
+        IO.puts("    +-- Result: {:ok, #{inspect(path)}}")
+
+      {:error, reason} ->
+        Examples.record_failure()
+        IO.puts("    |  Error:          #{inspect(reason)}")
+        IO.puts("    |")
+        IO.puts("    +-- Result: {:error, #{inspect(reason)}}")
+    end
+  end
+
+  # Helper to call Python via SnakeBridge runtime
+  defp snakepit_call(python_module, python_function, args) do
+    module_ref = %{python_module: python_module}
+
+    case SnakeBridge.Runtime.call(module_ref, python_function, args) do
       {:ok, value} ->
         {:ok, value}
 
       {:error, reason} ->
         Examples.record_failure()
         {:error, reason}
-
-      other ->
-        {:ok, other}
     end
   end
 end

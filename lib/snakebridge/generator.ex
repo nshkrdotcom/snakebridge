@@ -6,6 +6,17 @@ defmodule SnakeBridge.Generator do
   alias SnakeBridge.Docs.{MarkdownConverter, RstParser}
   alias SnakeBridge.Generator.TypeMapper
 
+  @reserved_words ~w(def defp defmodule class do end if unless case cond for while with fn when and or not true false nil in try catch rescue after else raise throw receive)
+  @dunder_mappings %{
+    "__init__" => "new",
+    "__str__" => "to_string",
+    "__repr__" => "inspect",
+    "__len__" => "length",
+    "__getitem__" => "get",
+    "__setitem__" => "put",
+    "__contains__" => "member?"
+  }
+
   @spec render_library(SnakeBridge.Config.Library.t(), list(), list(), keyword()) :: String.t()
   def render_library(library, functions, classes, opts \\ []) do
     version = Keyword.get(opts, :version, Application.spec(:snakebridge, :vsn) |> to_string())
@@ -81,6 +92,7 @@ defmodule SnakeBridge.Generator do
       render_library(library, functions, classes, version: Application.spec(:snakebridge, :vsn))
 
     result = write_if_changed(path, source)
+    register_generated_library(library, functions, classes, config, path)
 
     bytes_written = if result == :written, do: byte_size(source), else: 0
 
@@ -98,53 +110,165 @@ defmodule SnakeBridge.Generator do
 
   @spec write_if_changed(String.t(), String.t()) :: :written | :unchanged
   def write_if_changed(path, new_content) do
-    case File.read(path) do
-      {:ok, existing} when existing == new_content ->
-        :unchanged
+    with_lock(path, fn ->
+      case File.read(path) do
+        {:ok, existing} when existing == new_content ->
+          :unchanged
 
-      _ ->
-        temp_path = "#{path}.tmp.#{System.unique_integer([:positive])}"
+        _ ->
+          write_atomic(path, new_content)
+      end
+    end)
+  end
 
-        try do
-          File.write!(temp_path, new_content)
-          File.rename!(temp_path, path)
-          :written
-        after
-          File.rm(temp_path)
-        end
+  defp write_atomic(path, content) do
+    temp_path = "#{path}.tmp.#{System.unique_integer([:positive])}"
+
+    try do
+      File.mkdir_p!(Path.dirname(path))
+      File.write!(temp_path, content)
+      File.rename!(temp_path, path)
+      :written
+    rescue
+      exception ->
+        File.rm(temp_path)
+        reraise exception, __STACKTRACE__
     end
+  end
+
+  defp with_lock(path, fun) when is_function(fun, 0) do
+    lock_key = {:snakebridge_write, Path.expand(path)}
+    :global.trans(lock_key, fun)
+  end
+
+  defp register_generated_library(library, functions, classes, config, path) do
+    entry = build_registry_entry(library, functions, classes, config, path)
+    _ = SnakeBridge.Registry.register(library.python_name, entry)
+  end
+
+  defp build_registry_entry(library, functions, classes, config, path) do
+    python_version =
+      case library.version do
+        nil -> "unknown"
+        :stdlib -> "stdlib"
+        value -> to_string(value)
+      end
+
+    %{
+      python_module: library.python_name,
+      python_version: python_version,
+      elixir_module: module_to_string(library.module_name),
+      generated_at: DateTime.utc_now(),
+      path: config.generated_dir,
+      files: [Path.basename(path)],
+      stats: %{
+        functions: length(functions),
+        classes: length(classes),
+        submodules: count_submodules(library, functions, classes)
+      }
+    }
+  end
+
+  defp count_submodules(library, functions, classes) do
+    base = library.python_name
+
+    function_modules =
+      functions
+      |> Enum.map(&(&1["python_module"] || &1[:python_module] || base))
+
+    class_modules =
+      classes
+      |> Enum.map(&(&1["python_module"] || &1[:python_module] || base))
+
+    (function_modules ++ class_modules)
+    |> Enum.uniq()
+    |> Enum.reject(&(&1 == base))
+    |> length()
   end
 
   @spec render_function(map(), SnakeBridge.Config.Library.t()) :: String.t()
   def render_function(info, library) do
-    name = info["name"]
+    raw_name = info["name"] || ""
+    python_name = info["python_name"] || info["function"] || raw_name
+    {name, _python_name} = sanitize_function_name(raw_name)
+
+    if module_attribute?(info) do
+      render_module_attribute(name, python_name, info)
+    else
+      render_callable_function(info, library, name, python_name)
+    end
+  end
+
+  defp render_callable_function(info, library, name, python_name) do
     params = info["parameters"] || []
     doc = info["docstring"] || ""
-
-    plan = build_params(params)
+    plan = build_params(params, info)
     param_names = Enum.map(plan.required, & &1.name)
     args_name = extra_args_name(param_names)
     return_type = info["return_type"] || %{"type" => "any"}
 
-    is_streaming = name in (library.streaming || [])
+    normal = render_function_body(name, python_name, plan, args_name, return_type, doc, params)
+    maybe_add_streaming(normal, name, python_name, plan, args_name, library)
+  end
 
-    normal = render_normal_function(name, plan, args_name, return_type, doc, params)
+  defp render_function_body(name, python_name, plan, args_name, return_type, doc, params) do
+    if plan.is_variadic do
+      render_variadic_function(name, python_name, return_type, doc, params)
+    else
+      render_normal_function(name, python_name, plan, args_name, return_type, doc, params)
+    end
+  end
+
+  defp maybe_add_streaming(normal, name, python_name, plan, args_name, library) do
+    is_streaming = python_name in (library.streaming || [])
 
     if is_streaming do
-      streaming = render_streaming_variant(name, plan, args_name)
+      streaming = render_streaming_body(name, python_name, plan, args_name)
       normal <> "\n\n" <> streaming
     else
       normal
     end
   end
 
-  defp render_normal_function(name, plan, args_name, return_type, doc, params) do
+  defp render_streaming_body(name, python_name, plan, args_name) do
+    if plan.is_variadic do
+      render_variadic_streaming_variant(name, python_name)
+    else
+      render_streaming_variant(name, python_name, plan, args_name)
+    end
+  end
+
+  defp module_attribute?(info) do
+    info["call_type"] == "module_attr" or info[:call_type] == "module_attr" or
+      info["type"] == "attribute" or info[:type] == "attribute"
+  end
+
+  defp render_module_attribute(name, python_name, info) do
+    return_type = info["return_type"] || %{"type" => "any"}
+    doc = info["docstring"] || ""
+    formatted_doc = format_docstring(doc, [], return_type)
+    attr_ref = function_ref(name, python_name)
+    return_spec = type_spec_string(return_type)
+
+    """
+      @doc \"\"\"
+      #{String.trim(formatted_doc)}
+      \"\"\"
+      @spec #{name}() :: {:ok, #{return_spec}} | {:error, Snakepit.Error.t()}
+      def #{name}() do
+        SnakeBridge.Runtime.get_module_attr(__MODULE__, #{attr_ref})
+      end
+    """
+  end
+
+  defp render_normal_function(name, python_name, plan, args_name, return_type, doc, params) do
     param_names = Enum.map(plan.required, & &1.name)
     args = args_expr(param_names, plan.has_args, args_name)
-    call = runtime_call(name, args, plan.has_opts)
+    call = runtime_call(name, python_name, args)
     spec = function_spec(name, plan.required, plan.has_args, return_type)
     formatted_doc = format_docstring(doc, params, return_type)
     normalize = normalize_args_line(plan.has_args, args_name, 8)
+    kw_validation = keyword_only_validation(plan.required_keyword_only, 8)
 
     """
       @doc \"\"\"
@@ -152,12 +276,12 @@ defmodule SnakeBridge.Generator do
       \"\"\"
       #{spec}
       def #{name}(#{param_list(param_names, plan.has_args, plan.has_opts, args_name)}) do
-    #{normalize}        #{call}
+    #{normalize}#{kw_validation}        #{call}
       end
     """
   end
 
-  defp render_streaming_variant(name, plan, args_name) do
+  defp render_streaming_variant(name, python_name, plan, args_name) do
     param_names = Enum.map(plan.required, & &1.name)
     args = args_expr(param_names, plan.has_args, args_name)
 
@@ -168,7 +292,7 @@ defmodule SnakeBridge.Generator do
 
     stream_params_str = Enum.join(stream_params, ", ")
 
-    stream_call = "SnakeBridge.Runtime.stream(__MODULE__, :#{name}, #{args}, opts, callback)"
+    stream_call = runtime_stream_call(name, python_name, args)
 
     spec_args =
       plan.required
@@ -180,6 +304,7 @@ defmodule SnakeBridge.Generator do
 
     base_arity = length(param_names) + if(plan.has_args, do: 2, else: 1)
     normalize = normalize_args_line(plan.has_args, args_name, 8)
+    kw_validation = keyword_only_validation(plan.required_keyword_only, 8)
 
     """
       @doc \"\"\"
@@ -189,8 +314,63 @@ defmodule SnakeBridge.Generator do
       \"\"\"
       @spec #{name}_stream(#{spec_args_str}) :: :ok | {:error, Snakepit.Error.t()}
       def #{name}_stream(#{stream_params_str}) when is_function(callback, 1) do
-    #{normalize}        #{stream_call}
+    #{normalize}#{kw_validation}        #{stream_call}
       end
+    """
+  end
+
+  defp render_variadic_function(name, python_name, return_type, doc, params) do
+    max_arity = variadic_max_arity()
+    return_spec = type_spec_string(return_type)
+    formatted_doc = format_docstring(doc, params, return_type)
+    specs = variadic_specs(name, max_arity, return_spec)
+    clauses = variadic_function_clauses(name, python_name, max_arity)
+
+    """
+      @doc \"\"\"
+      #{String.trim(formatted_doc)}
+      \"\"\"
+      #{specs}
+    #{indent(clauses, 6)}
+    """
+  end
+
+  defp render_variadic_streaming_variant(name, python_name) do
+    max_arity = variadic_max_arity()
+    specs = variadic_streaming_specs(name, max_arity)
+    clauses = variadic_streaming_clauses(name, python_name, max_arity)
+
+    """
+      @doc \"\"\"
+      Streaming variant of `#{name}`.
+
+      The callback receives chunks as they arrive.
+      \"\"\"
+      #{specs}
+    #{indent(clauses, 6)}
+    """
+  end
+
+  defp render_variadic_constructor(_plan, _args_name) do
+    max_arity = variadic_max_arity()
+    specs = variadic_specs("new", max_arity, "SnakeBridge.Ref.t()")
+    clauses = variadic_constructor_clauses(max_arity)
+
+    """
+        #{specs}
+    #{indent(clauses, 8)}
+    """
+  end
+
+  defp render_variadic_method(name, python_name, return_type) do
+    max_arity = variadic_max_arity()
+    return_spec = type_spec_string(return_type)
+    specs = variadic_method_specs(name, max_arity, return_spec)
+    clauses = variadic_method_clauses(name, python_name, max_arity)
+
+    """
+        #{specs}
+    #{indent(clauses, 8)}
     """
   end
 
@@ -228,10 +408,16 @@ defmodule SnakeBridge.Generator do
 
     init_method = Enum.find(methods, fn method -> method["name"] == "__init__" end)
     init_params = if init_method, do: init_method["parameters"] || [], else: []
-    plan = build_params(init_params)
+    plan = build_params(init_params, init_method || %{})
     param_names = Enum.map(plan.required, & &1.name)
     args_name = extra_args_name(param_names)
-    constructor = render_constructor(plan, args_name)
+
+    constructor =
+      if plan.is_variadic do
+        render_variadic_constructor(plan, args_name)
+      else
+        render_constructor(plan, args_name)
+      end
 
     methods_source =
       methods
@@ -274,32 +460,57 @@ defmodule SnakeBridge.Generator do
 
     spec_args_str = Enum.join(spec_args, ", ")
     normalize = normalize_args_line(plan.has_args, args_name, 10)
+    kw_validation = keyword_only_validation(plan.required_keyword_only, 10)
 
     """
         @spec new(#{spec_args_str}) :: {:ok, SnakeBridge.Ref.t()} | {:error, Snakepit.Error.t()}
         def new(#{param_list}) do
-    #{normalize}          #{call}
+    #{normalize}#{kw_validation}          #{call}
         end
     """
   end
 
   defp render_method(%{"name" => "__init__"}), do: ""
+  defp render_method(%{name: "__init__"}), do: ""
 
   defp render_method(info) do
-    name = info["name"]
+    python_name = info["python_name"] || info["name"] || info[:name] || ""
+    name_info = resolve_method_name(info, python_name)
+    do_render_method(name_info, info)
+  end
+
+  defp resolve_method_name(info, python_name) do
+    case info["elixir_name"] || info[:elixir_name] do
+      elixir_name when is_binary(elixir_name) -> {elixir_name, python_name}
+      _ -> sanitize_method_name(python_name)
+    end
+  end
+
+  defp do_render_method(nil, _info), do: ""
+
+  defp do_render_method({name, python_name}, info) do
     params = info["parameters"] || []
-    plan = build_params(params)
+    plan = build_params(params, info)
+    return_type = info["return_type"] || %{"type" => "any"}
+    render_method_body(name, python_name, plan, return_type)
+  end
+
+  defp render_method_body(name, python_name, %{is_variadic: true}, return_type) do
+    render_variadic_method(name, python_name, return_type)
+  end
+
+  defp render_method_body(name, python_name, plan, return_type) do
     param_names = Enum.map(plan.required, & &1.name)
     args_name = extra_args_name(param_names)
-    return_type = info["return_type"] || %{"type" => "any"}
     spec = method_spec(name, plan.required, plan.has_args, return_type)
-    call = runtime_method_call(name, param_names, plan.has_args, args_name)
+    call = runtime_method_call(name, python_name, param_names, plan.has_args, args_name)
     normalize = normalize_args_line(plan.has_args, args_name, 10)
+    kw_validation = keyword_only_validation(plan.required_keyword_only, 10)
 
     """
         #{spec}
         def #{name}(ref#{method_param_suffix(param_names, plan.has_args, plan.has_opts, args_name)}) do
-    #{normalize}          #{call}
+    #{normalize}#{kw_validation}          #{call}
         end
     """
   end
@@ -313,13 +524,349 @@ defmodule SnakeBridge.Generator do
     """
   end
 
+  defp variadic_max_arity do
+    Application.get_env(:snakebridge, :variadic_max_arity, 8)
+  end
+
+  defp variadic_specs(name, max_arity, return_spec) do
+    Enum.map_join(0..max_arity, "\n", fn arity ->
+      args = variadic_term_args(arity)
+      variadic_spec_pair(name, args, return_spec)
+    end)
+  end
+
+  defp variadic_term_args(0), do: []
+  defp variadic_term_args(arity), do: Enum.map(1..arity, fn _ -> "term()" end)
+
+  defp variadic_spec_pair(name, args, return_spec) do
+    spec_no_opts =
+      "@spec #{name}(#{Enum.join(args, ", ")}) :: {:ok, #{return_spec}} | {:error, Snakepit.Error.t()}"
+
+    spec_with_opts =
+      "@spec #{name}(#{Enum.join(args ++ ["keyword()"], ", ")}) :: {:ok, #{return_spec}} | {:error, Snakepit.Error.t()}"
+
+    spec_no_opts <> "\n" <> spec_with_opts
+  end
+
+  defp variadic_method_specs(name, max_arity, return_spec) do
+    Enum.map_join(0..max_arity, "\n", fn arity ->
+      args = ["SnakeBridge.Ref.t()" | variadic_term_args(arity)]
+      variadic_spec_pair(name, args, return_spec)
+    end)
+  end
+
+  defp variadic_streaming_specs(name, max_arity) do
+    Enum.map_join(0..max_arity, "\n", fn arity ->
+      args = variadic_term_args(arity)
+      variadic_streaming_spec_pair(name, args)
+    end)
+  end
+
+  defp variadic_streaming_spec_pair(name, args) do
+    callback = "(term() -> any())"
+
+    spec_no_opts =
+      "@spec #{name}_stream(#{Enum.join(args ++ [callback], ", ")}) :: :ok | {:error, Snakepit.Error.t()}"
+
+    spec_with_opts =
+      "@spec #{name}_stream(#{Enum.join(args ++ ["keyword()", callback], ", ")}) :: :ok | {:error, Snakepit.Error.t()}"
+
+    spec_no_opts <> "\n" <> spec_with_opts
+  end
+
+  defp variadic_function_clauses(name, python_name, max_arity) do
+    Enum.map_join(0..max_arity, "\n\n", fn arity ->
+      args = variadic_args(arity)
+      args_list = variadic_args_list(args)
+      build_variadic_function_clause(name, python_name, arity, args, args_list)
+    end)
+  end
+
+  defp build_variadic_function_clause(name, python_name, 0, args, args_list) do
+    no_args_clause =
+      variadic_no_opts_clause(name, python_name, variadic_param_list(args), args_list)
+
+    opts_clause =
+      variadic_opts_clause(
+        name,
+        python_name,
+        variadic_param_list_with_opts(args),
+        args_list
+      )
+
+    no_args_clause <> "\n\n" <> opts_clause
+  end
+
+  defp build_variadic_function_clause(name, python_name, _arity, args, args_list) do
+    positional_clause =
+      variadic_no_opts_clause(name, python_name, variadic_param_list(args), args_list)
+
+    opts_clause =
+      variadic_opts_clause(
+        name,
+        python_name,
+        variadic_param_list_with_opts(args),
+        args_list
+      )
+
+    positional_clause <> "\n\n" <> opts_clause
+  end
+
+  defp variadic_constructor_clauses(max_arity) do
+    Enum.map_join(0..max_arity, "\n\n", fn arity ->
+      args = variadic_args(arity)
+      args_list = variadic_args_list(args)
+      build_variadic_constructor_clause(arity, args, args_list)
+    end)
+  end
+
+  defp build_variadic_constructor_clause(0, args, args_list) do
+    no_args_clause =
+      variadic_constructor_no_opts_clause(variadic_param_list(args), args_list)
+
+    opts_clause =
+      variadic_constructor_opts_clause(
+        variadic_param_list_with_opts(args),
+        args_list
+      )
+
+    no_args_clause <> "\n\n" <> opts_clause
+  end
+
+  defp build_variadic_constructor_clause(_arity, args, args_list) do
+    positional_clause =
+      variadic_constructor_no_opts_clause(variadic_param_list(args), args_list)
+
+    opts_clause =
+      variadic_constructor_opts_clause(
+        variadic_param_list_with_opts(args),
+        args_list
+      )
+
+    positional_clause <> "\n\n" <> opts_clause
+  end
+
+  defp variadic_method_clauses(name, python_name, max_arity) do
+    Enum.map_join(0..max_arity, "\n\n", fn arity ->
+      args = variadic_args(arity)
+      args_list = variadic_args_list(args)
+      build_variadic_method_clause(name, python_name, arity, args, args_list)
+    end)
+  end
+
+  defp build_variadic_method_clause(name, python_name, 0, args, args_list) do
+    no_args_clause =
+      variadic_method_no_opts_clause(
+        name,
+        python_name,
+        variadic_method_param_list(args),
+        args_list
+      )
+
+    opts_clause =
+      variadic_method_opts_clause(
+        name,
+        python_name,
+        variadic_method_param_list_with_opts(args),
+        args_list
+      )
+
+    no_args_clause <> "\n\n" <> opts_clause
+  end
+
+  defp build_variadic_method_clause(name, python_name, _arity, args, args_list) do
+    positional_clause =
+      variadic_method_no_opts_clause(
+        name,
+        python_name,
+        variadic_method_param_list(args),
+        args_list
+      )
+
+    opts_clause =
+      variadic_method_opts_clause(
+        name,
+        python_name,
+        variadic_method_param_list_with_opts(args),
+        args_list
+      )
+
+    positional_clause <> "\n\n" <> opts_clause
+  end
+
+  defp variadic_streaming_clauses(name, python_name, max_arity) do
+    Enum.map_join(0..max_arity, "\n\n", fn arity ->
+      args = variadic_args(arity)
+      args_list = variadic_args_list(args)
+      build_variadic_streaming_clause(name, python_name, arity, args, args_list)
+    end)
+  end
+
+  defp build_variadic_streaming_clause(name, python_name, 0, args, args_list) do
+    no_args_clause =
+      variadic_streaming_no_opts_clause(
+        name,
+        python_name,
+        variadic_streaming_param_list(args),
+        args_list
+      )
+
+    opts_clause =
+      variadic_streaming_opts_clause(
+        name,
+        python_name,
+        variadic_streaming_param_list_with_opts(args),
+        args_list
+      )
+
+    no_args_clause <> "\n\n" <> opts_clause
+  end
+
+  defp build_variadic_streaming_clause(name, python_name, _arity, args, args_list) do
+    positional_clause =
+      variadic_streaming_no_opts_clause(
+        name,
+        python_name,
+        variadic_streaming_param_list(args),
+        args_list
+      )
+
+    opts_clause =
+      variadic_streaming_opts_clause(
+        name,
+        python_name,
+        variadic_streaming_param_list_with_opts(args),
+        args_list
+      )
+
+    positional_clause <> "\n\n" <> opts_clause
+  end
+
+  defp variadic_no_opts_clause(name, python_name, params, args_list) do
+    call = runtime_call(name, python_name, args_list, "[]")
+
+    """
+    def #{name}(#{params}) do
+      #{call}
+    end
+    """
+  end
+
+  defp variadic_opts_clause(name, python_name, params, args_list) do
+    call = runtime_call(name, python_name, args_list, "opts")
+
+    """
+    def #{name}(#{params}) when #{opts_guard()} do
+      #{call}
+    end
+    """
+  end
+
+  defp variadic_constructor_no_opts_clause(params, args_list) do
+    call = "SnakeBridge.Runtime.call_class(__MODULE__, :__init__, #{args_list}, [])"
+
+    """
+    def new(#{params}) do
+      #{call}
+    end
+    """
+  end
+
+  defp variadic_constructor_opts_clause(params, args_list) do
+    call = "SnakeBridge.Runtime.call_class(__MODULE__, :__init__, #{args_list}, opts)"
+
+    """
+    def new(#{params}) when #{opts_guard()} do
+      #{call}
+    end
+    """
+  end
+
+  defp variadic_method_no_opts_clause(name, python_name, params, args_list) do
+    call =
+      "SnakeBridge.Runtime.call_method(ref, #{function_ref(name, python_name)}, #{args_list}, [])"
+
+    """
+    def #{name}(#{params}) do
+      #{call}
+    end
+    """
+  end
+
+  defp variadic_method_opts_clause(name, python_name, params, args_list) do
+    call =
+      "SnakeBridge.Runtime.call_method(ref, #{function_ref(name, python_name)}, #{args_list}, opts)"
+
+    """
+    def #{name}(#{params}) when #{opts_guard()} do
+      #{call}
+    end
+    """
+  end
+
+  defp variadic_streaming_no_opts_clause(name, python_name, params, args_list) do
+    call = runtime_stream_call(name, python_name, args_list, "[]")
+
+    """
+    def #{name}_stream(#{params}) when is_function(callback, 1) do
+      #{call}
+    end
+    """
+  end
+
+  defp variadic_streaming_opts_clause(name, python_name, params, args_list) do
+    call = runtime_stream_call(name, python_name, args_list, "opts")
+
+    """
+    def #{name}_stream(#{params}) when #{opts_guard()} and is_function(callback, 1) do
+      #{call}
+    end
+    """
+  end
+
+  defp variadic_args(arity) when is_integer(arity) and arity > 0 do
+    Enum.map(1..arity, &"arg#{&1}")
+  end
+
+  defp variadic_args(_arity), do: []
+
+  defp variadic_args_list([]), do: "[]"
+  defp variadic_args_list(args), do: "[" <> Enum.join(args, ", ") <> "]"
+
+  defp variadic_param_list([]), do: ""
+  defp variadic_param_list(args), do: Enum.join(args, ", ")
+
+  defp variadic_param_list_with_opts([]), do: "opts"
+  defp variadic_param_list_with_opts(args), do: Enum.join(args ++ ["opts"], ", ")
+
+  defp variadic_method_param_list(args), do: Enum.join(["ref" | args], ", ")
+  defp variadic_method_param_list_with_opts(args), do: Enum.join(["ref" | args] ++ ["opts"], ", ")
+
+  defp variadic_streaming_param_list(args), do: Enum.join(args ++ ["callback"], ", ")
+
+  defp variadic_streaming_param_list_with_opts(args),
+    do: Enum.join(args ++ ["opts", "callback"], ", ")
+
+  defp opts_guard do
+    "is_list(opts) and (opts == [] or (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0))))"
+  end
+
   defp render_discovery(functions, classes) do
     function_list =
       functions
       |> Enum.map_join(",\n      ", fn info ->
+        name =
+          case info["elixir_name"] do
+            elixir when is_binary(elixir) ->
+              elixir
+
+            _ ->
+              info["name"] |> to_string() |> sanitize_function_name() |> elem(0)
+          end
+
         arity = required_arity(info["parameters"] || [])
         summary = info["docstring"] |> to_string() |> String.split("\n") |> List.first() || ""
-        "{:#{info["name"]}, #{arity}, __MODULE__, #{inspect(summary)}}"
+        "{:#{name}, #{arity}, __MODULE__, #{inspect(summary)}}"
       end)
 
     class_list =
@@ -387,29 +934,60 @@ defmodule SnakeBridge.Generator do
       end
   end
 
-  @spec build_params(list()) :: %{
+  @spec build_params(list(), map()) :: %{
           required: list(map()),
           has_args: boolean(),
-          has_opts: boolean()
+          has_opts: boolean(),
+          is_variadic: boolean(),
+          required_keyword_only: list(map()),
+          optional_keyword_only: list(map()),
+          has_var_keyword: boolean()
         }
-  def build_params(params) do
-    required =
-      params
-      |> Enum.filter(&required_positional?/1)
-      |> Enum.map(&param_entry/1)
+  def build_params(params, info \\ %{}) when is_list(params) do
+    signature_available = Map.get(info, "signature_available", true)
 
-    has_args =
-      Enum.any?(params, fn param ->
-        optional_positional?(param) or varargs?(param)
-      end)
+    if params == [] and not signature_available do
+      %{
+        required: [],
+        has_args: true,
+        has_opts: true,
+        is_variadic: true,
+        required_keyword_only: [],
+        optional_keyword_only: [],
+        has_var_keyword: false
+      }
+    else
+      required =
+        params
+        |> Enum.filter(&required_positional?/1)
+        |> Enum.map(&param_entry/1)
 
-    %{required: required, has_args: has_args, has_opts: true}
+      required_kw_only = Enum.filter(params, &keyword_only_required?/1)
+      optional_kw_only = Enum.filter(params, &keyword_only_optional?/1)
+
+      has_args =
+        Enum.any?(params, fn param ->
+          optional_positional?(param) or varargs?(param)
+        end)
+
+      %{
+        required: required,
+        has_args: has_args,
+        has_opts: true,
+        is_variadic: false,
+        required_keyword_only: required_kw_only,
+        optional_keyword_only: optional_kw_only,
+        has_var_keyword: Enum.any?(params, &kwargs?/1)
+      }
+    end
   end
 
   defp required_arity(params) do
     params
-    |> Enum.filter(&(&1["kind"] in ["POSITIONAL_ONLY", "POSITIONAL_OR_KEYWORD"]))
-    |> Enum.reject(&Map.has_key?(&1, "default"))
+    |> Enum.filter(fn param ->
+      param_kind(param) in ["POSITIONAL_ONLY", "POSITIONAL_OR_KEYWORD"]
+    end)
+    |> Enum.reject(&param_default?/1)
     |> length()
   end
 
@@ -420,8 +998,20 @@ defmodule SnakeBridge.Generator do
     |> Enum.join(", ")
   end
 
-  defp runtime_call(name, args, _has_opts) do
-    "SnakeBridge.Runtime.call(__MODULE__, :#{name}, #{args}, opts)"
+  defp runtime_call(name, python_name, args, opts_expr \\ "opts") do
+    "SnakeBridge.Runtime.call(__MODULE__, #{function_ref(name, python_name)}, #{args}, #{opts_expr})"
+  end
+
+  defp runtime_stream_call(name, python_name, args, opts_expr \\ "opts") do
+    "SnakeBridge.Runtime.stream(__MODULE__, #{function_ref(name, python_name)}, #{args}, #{opts_expr}, callback)"
+  end
+
+  defp function_ref(name, python_name) do
+    if python_name == name do
+      ":#{name}"
+    else
+      inspect(python_name)
+    end
   end
 
   defp function_spec(name, param_entries, has_args, return_type) do
@@ -448,9 +1038,9 @@ defmodule SnakeBridge.Generator do
     "@spec #{name}(#{Enum.join(args, ", ")}) :: {:ok, #{return_spec}} | {:error, Snakepit.Error.t()}"
   end
 
-  defp runtime_method_call(name, param_names, has_args, args_name) do
+  defp runtime_method_call(name, python_name, param_names, has_args, args_name) do
     args = args_expr(param_names, has_args, args_name)
-    "SnakeBridge.Runtime.call_method(ref, :#{name}, #{args}, opts)"
+    "SnakeBridge.Runtime.call_method(ref, #{function_ref(name, python_name)}, #{args}, opts)"
   end
 
   defp method_param_suffix(param_names, has_args, has_opts, args_name) do
@@ -485,6 +1075,28 @@ defmodule SnakeBridge.Generator do
   end
 
   defp normalize_args_line(false, _args_name, _indent), do: ""
+
+  defp keyword_only_validation(required_keyword_only, indent) do
+    names =
+      required_keyword_only
+      |> Enum.map(&param_name/1)
+      |> Enum.reject(&is_nil/1)
+
+    if names == [] do
+      ""
+    else
+      padding = String.duplicate(" ", indent)
+
+      """
+      #{padding}kw_keys = opts |> Keyword.keys() |> Enum.map(&to_string/1)
+      #{padding}missing_kw = #{inspect(names)} |> Enum.reject(&(&1 in kw_keys))
+      #{padding}if missing_kw != [] do
+      #{padding}  raise ArgumentError,
+      #{padding}        "Missing required keyword-only arguments: " <> Enum.join(missing_kw, ", ")
+      #{padding}end
+      """
+    end
+  end
 
   defp extra_args_name(param_names) do
     if "args" in param_names do
@@ -529,8 +1141,18 @@ defmodule SnakeBridge.Generator do
   end
 
   defp varargs?(param), do: param_kind(param) == "VAR_POSITIONAL"
+  defp kwargs?(param), do: param_kind(param) == "VAR_KEYWORD"
 
-  defp param_kind(%{"kind" => kind}), do: kind
+  defp keyword_only_required?(param) do
+    param_kind(param) == "KEYWORD_ONLY" and not param_default?(param)
+  end
+
+  defp keyword_only_optional?(param) do
+    param_kind(param) == "KEYWORD_ONLY" and param_default?(param)
+  end
+
+  defp param_kind(%{"kind" => kind}) when is_binary(kind), do: String.upcase(kind)
+  defp param_kind(%{kind: kind}) when is_binary(kind), do: String.upcase(kind)
   defp param_kind(%{kind: kind}), do: kind
   defp param_kind(_), do: nil
 
@@ -545,6 +1167,57 @@ defmodule SnakeBridge.Generator do
     |> Macro.underscore()
     |> String.replace(~r/[^a-z0-9_]/, "_")
     |> ensure_identifier()
+  end
+
+  defp sanitize_function_name(python_name) when is_binary(python_name) do
+    elixir_name =
+      python_name
+      |> Macro.underscore()
+      |> String.replace(~r/[^a-z0-9_?!]/, "_")
+      |> ensure_valid_function_identifier()
+
+    elixir_name =
+      if elixir_name in @reserved_words do
+        "py_#{elixir_name}"
+      else
+        elixir_name
+      end
+
+    {elixir_name, python_name}
+  end
+
+  @doc false
+  @spec sanitize_method_name(String.t()) :: {String.t(), String.t()} | nil
+  def sanitize_method_name(python_name) when is_binary(python_name) do
+    cond do
+      Map.has_key?(@dunder_mappings, python_name) ->
+        {Map.get(@dunder_mappings, python_name), python_name}
+
+      String.starts_with?(python_name, "__") and String.ends_with?(python_name, "__") ->
+        nil
+
+      python_name in @reserved_words ->
+        {"py_#{python_name}", python_name}
+
+      true ->
+        elixir_name =
+          python_name
+          |> Macro.underscore()
+          |> String.replace(~r/[^a-z0-9_?!]/, "_")
+          |> ensure_valid_function_identifier()
+
+        {elixir_name, python_name}
+    end
+  end
+
+  defp ensure_valid_function_identifier(""), do: "_"
+
+  defp ensure_valid_function_identifier(name) do
+    if String.match?(name, ~r/^[a-z_][a-z0-9_?!]*$/) do
+      name
+    else
+      "_" <> name
+    end
   end
 
   defp ensure_identifier(<<first::utf8, _rest::binary>> = name)
@@ -658,22 +1331,34 @@ defmodule SnakeBridge.Generator do
   end
 
   defp param_doc_line(param) do
-    name = param_name(param)
+    case param_name(param) do
+      nil -> nil
+      name -> format_param_doc_line(name, param)
+    end
+  end
 
-    if name do
-      type = param_type(param) |> type_spec_string()
-      default = param_default_value(param)
+  defp format_param_doc_line(name, param) do
+    type = param_type(param) |> type_spec_string()
+    kind_fragment = param_kind_fragment(param)
+    default_fragment = param_default_fragment(param)
+    "- `#{name}` (#{type}#{kind_fragment}#{default_fragment})"
+  end
 
-      default_fragment =
-        if default do
-          " default: #{default}"
-        else
-          ""
-        end
+  defp param_kind_fragment(param) do
+    case param_kind(param) do
+      "KEYWORD_ONLY" -> keyword_only_fragment(param)
+      _ -> ""
+    end
+  end
 
-      "- `#{name}` (#{type}#{default_fragment})"
-    else
-      nil
+  defp keyword_only_fragment(param) do
+    if param_default?(param), do: " keyword-only", else: " keyword-only, required"
+  end
+
+  defp param_default_fragment(param) do
+    case param_default_value(param) do
+      nil -> ""
+      default -> " default: #{default}"
     end
   end
 

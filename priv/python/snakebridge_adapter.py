@@ -26,17 +26,18 @@ import os
 import glob
 import hashlib
 import time
+import threading
 from contextlib import nullcontext
 from typing import Any, Dict, List, Tuple, Optional
 
 # Import the SnakeBridge type encoding system
 try:
-    from snakebridge_types import decode, encode, encode_result, encode_error
+    from snakebridge_types import decode, encode, encode_error
 except ImportError:
     # If running as a script, try relative import
     import os
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from snakebridge_types import decode, encode, encode_result, encode_error
+    from snakebridge_types import decode, encode, encode_error
 
 try:
     from snakepit_bridge import telemetry as snakepit_telemetry
@@ -51,10 +52,15 @@ _helper_registry: Dict[str, Any] = {}
 _helper_registry_key: Optional[Tuple[Any, ...]] = None
 _helper_registry_index: List[Dict[str, Any]] = []
 
+# Thread locks for global state
+_module_cache_lock = threading.RLock()
+_registry_lock = threading.RLock()
+_helper_lock = threading.RLock()
+
 PROTOCOL_VERSION = 1
 MIN_SUPPORTED_VERSION = 1
 REF_SCHEMA_VERSION = 1
-DEFAULT_REF_TTL_SECONDS = 3600.0
+DEFAULT_REF_TTL_SECONDS = 0.0
 DEFAULT_REF_MAX_SIZE = 10000
 ALLOW_LEGACY_PROTOCOL = os.getenv("SNAKEBRIDGE_ALLOW_LEGACY_PROTOCOL", "false").lower() in (
     "1",
@@ -144,24 +150,26 @@ def _touch_entry(entry: Any) -> None:
 
 
 def _prune_registry() -> None:
-    ttl_seconds, max_size = _registry_limits()
-    now = time.time()
+    with _registry_lock:
+        ttl_seconds, max_size = _registry_limits()
+        now = time.time()
 
-    if ttl_seconds and ttl_seconds > 0:
-        for key, entry in list(_instance_registry.items()):
-            if now - _entry_last_access(entry) > ttl_seconds:
+        if ttl_seconds and ttl_seconds > 0:
+            for key, entry in list(_instance_registry.items()):
+                if now - _entry_last_access(entry) > ttl_seconds:
+                    del _instance_registry[key]
+
+        if max_size and max_size > 0 and len(_instance_registry) > max_size:
+            overflow = len(_instance_registry) - max_size
+            oldest = sorted(_instance_registry.items(), key=lambda item: _entry_last_access(item[1]))
+            for key, _entry in oldest[:overflow]:
                 del _instance_registry[key]
-
-    if max_size and max_size > 0 and len(_instance_registry) > max_size:
-        overflow = len(_instance_registry) - max_size
-        oldest = sorted(_instance_registry.items(), key=lambda item: _entry_last_access(item[1]))
-        for key, _entry in oldest[:overflow]:
-            del _instance_registry[key]
 
 
 def _store_ref(key: str, obj: Any) -> None:
     now = time.time()
-    _instance_registry[key] = {"obj": obj, "created_at": now, "last_access": now}
+    with _registry_lock:
+        _instance_registry[key] = {"obj": obj, "created_at": now, "last_access": now}
 
 
 def _extract_ref_identity(ref: dict, session_id: str) -> Tuple[str, str]:
@@ -176,6 +184,9 @@ def _extract_ref_identity(ref: dict, session_id: str) -> Tuple[str, str]:
 
     if not ref_id:
         raise ValueError("SnakeBridge reference missing id")
+
+    if ref_session and session_id and ref_session != session_id:
+        raise ValueError("SnakeBridge reference session mismatch")
 
     return ref_id, ref_session
 
@@ -193,7 +204,7 @@ def _call_function_name(call_type: str, function: Optional[str], arguments: Dict
         return str(function)
     if call_type == "class":
         return str(arguments.get("class") or arguments.get("class_name") or "unknown")
-    if call_type in ("get_attr", "set_attr"):
+    if call_type in ("get_attr", "set_attr", "module_attr"):
         return str(arguments.get("attr") or "unknown")
     if call_type == "helper":
         return str(arguments.get("helper") or "unknown")
@@ -245,14 +256,10 @@ def snakebridge_call(module: str, function: str, args: dict) -> dict:
     """
     try:
         # Import the module (use cache if available)
-        if module in _module_cache:
-            mod = _module_cache[module]
-        else:
-            try:
-                mod = importlib.import_module(module)
-                _module_cache[module] = mod
-            except ImportError as e:
-                return encode_error(ImportError(f"Failed to import module '{module}': {str(e)}"))
+        try:
+            mod = _import_module(module)
+        except ImportError as e:
+            return encode_error(ImportError(f"Failed to import module '{module}': {str(e)}"))
 
         # Get the function from the module
         if not hasattr(mod, function):
@@ -312,7 +319,11 @@ def snakebridge_call(module: str, function: str, args: dict) -> dict:
             return encode_error(e)
 
         # Encode and return the result
-        return encode_result(result)
+        library = module.split(".")[0] if module else "unknown"
+        return {
+            "success": True,
+            "result": encode_result(result, "default", module, library),
+        }
 
     except Exception as e:
         # Catch any unexpected errors
@@ -374,14 +385,10 @@ def snakebridge_get_attribute(module: str, attribute: str) -> dict:
     """
     try:
         # Import the module
-        if module in _module_cache:
-            mod = _module_cache[module]
-        else:
-            try:
-                mod = importlib.import_module(module)
-                _module_cache[module] = mod
-            except ImportError as e:
-                return encode_error(ImportError(f"Failed to import module '{module}': {str(e)}"))
+        try:
+            mod = _import_module(module)
+        except ImportError as e:
+            return encode_error(ImportError(f"Failed to import module '{module}': {str(e)}"))
 
         # Get the attribute
         if not hasattr(mod, attribute):
@@ -390,7 +397,11 @@ def snakebridge_get_attribute(module: str, attribute: str) -> dict:
         value = getattr(mod, attribute)
 
         # Encode and return the value
-        return encode_result(value)
+        library = module.split(".")[0] if module else "unknown"
+        return {
+            "success": True,
+            "result": encode_result(value, "default", module, library),
+        }
 
     except Exception as e:
         return encode_error(e)
@@ -414,14 +425,10 @@ def snakebridge_create_instance(module: str, class_name: str, args: dict) -> dic
     """
     try:
         # Import the module
-        if module in _module_cache:
-            mod = _module_cache[module]
-        else:
-            try:
-                mod = importlib.import_module(module)
-                _module_cache[module] = mod
-            except ImportError as e:
-                return encode_error(ImportError(f"Failed to import module '{module}': {str(e)}"))
+        try:
+            mod = _import_module(module)
+        except ImportError as e:
+            return encode_error(ImportError(f"Failed to import module '{module}': {str(e)}"))
 
         # Get the class
         if not hasattr(mod, class_name):
@@ -440,19 +447,24 @@ def snakebridge_create_instance(module: str, class_name: str, args: dict) -> dic
         instance = cls(**decoded_args)
 
         # Encode and return (note: complex objects may not serialize well)
-        return encode_result(instance)
+        library = module.split(".")[0] if module else "unknown"
+        return {
+            "success": True,
+            "result": encode_result(instance, "default", module, library),
+        }
 
     except Exception as e:
         return encode_error(e)
 
 
 def _import_module(module_name: str) -> Any:
-    if module_name in _module_cache:
-        return _module_cache[module_name]
+    with _module_cache_lock:
+        if module_name in _module_cache:
+            return _module_cache[module_name]
 
-    mod = importlib.import_module(module_name)
-    _module_cache[module_name] = mod
-    return mod
+        mod = importlib.import_module(module_name)
+        _module_cache[module_name] = mod
+        return mod
 
 
 def _make_ref(session_id: str, obj: Any, python_module: str, library: str) -> dict:
@@ -470,51 +482,106 @@ def _make_ref(session_id: str, obj: Any, python_module: str, library: str) -> di
         "library": library,
     }
 
+def _make_stream_ref(
+    session_id: str,
+    obj: Any,
+    python_module: str,
+    library: str,
+    stream_type: str,
+) -> dict:
+    ref_id = uuid.uuid4().hex
+    key = f"{session_id}:{ref_id}"
+    _prune_registry()
+    _store_ref(key, obj)
+
+    return {
+        "__type__": "stream_ref",
+        "id": ref_id,
+        "session_id": session_id,
+        "python_module": python_module,
+        "library": library,
+        "stream_type": stream_type,
+    }
+
+
+def encode_result(result: Any, session_id: str, python_module: str, library: str) -> Any:
+    encoded = encode(result)
+    if isinstance(encoded, dict) and encoded.get("__needs_stream_ref__"):
+        stream_type = encoded.get("__stream_type__") or "iterator"
+        return _make_stream_ref(session_id, result, python_module, library, stream_type)
+    if isinstance(encoded, dict) and encoded.get("__needs_ref__"):
+        return _make_ref(session_id, result, python_module, library)
+    return encoded
+
+
+def _is_ref_payload(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    type_tag = value.get("__type__")
+    if type_tag is not None:
+        return type_tag == "ref"
+    return "id" in value and ("session_id" in value or "ref_id" in value)
+
+
+def _resolve_refs(value: Any, session_id: str) -> Any:
+    if isinstance(value, dict):
+        if _is_ref_payload(value):
+            return _resolve_ref(value, session_id)
+        return {k: _resolve_refs(v, session_id) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_resolve_refs(item, session_id) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_resolve_refs(item, session_id) for item in value)
+    return value
+
 
 def _resolve_ref(ref: dict, session_id: str) -> Any:
     if not isinstance(ref, dict):
         raise ValueError("Invalid SnakeBridge reference payload")
 
-    _prune_registry()
-    ref_id, ref_session = _extract_ref_identity(ref, session_id)
-    key = f"{ref_session}:{ref_id}"
+    with _registry_lock:
+        _prune_registry()
+        ref_id, ref_session = _extract_ref_identity(ref, session_id)
+        key = f"{ref_session}:{ref_id}"
 
-    if key not in _instance_registry:
-        raise KeyError(f"Unknown SnakeBridge reference: {ref_id}")
+        if key not in _instance_registry:
+            raise KeyError(f"Unknown SnakeBridge reference: {ref_id}")
 
-    entry = _instance_registry[key]
-    if isinstance(entry, dict):
-        _touch_entry(entry)
-        return entry.get("obj")
-    return entry
+        entry = _instance_registry[key]
+        if isinstance(entry, dict):
+            _touch_entry(entry)
+            return entry.get("obj")
+        return entry
 
 
 def _release_ref(ref: dict, session_id: str) -> bool:
     if not isinstance(ref, dict):
         raise ValueError("Invalid SnakeBridge reference payload")
 
-    _prune_registry()
-    ref_id, ref_session = _extract_ref_identity(ref, session_id)
-    key = f"{ref_session}:{ref_id}"
+    with _registry_lock:
+        _prune_registry()
+        ref_id, ref_session = _extract_ref_identity(ref, session_id)
+        key = f"{ref_session}:{ref_id}"
 
-    if key in _instance_registry:
-        del _instance_registry[key]
-        return True
-    return False
+        if key in _instance_registry:
+            del _instance_registry[key]
+            return True
+        return False
 
 
 def _release_session(session_id: str) -> int:
     if not session_id:
         return 0
 
-    removed = 0
-    prefix = f"{session_id}:"
-    for key in list(_instance_registry.keys()):
-        if key.startswith(prefix):
-            del _instance_registry[key]
-            removed += 1
+    with _registry_lock:
+        removed = 0
+        prefix = f"{session_id}:"
+        for key in list(_instance_registry.keys()):
+            if key.startswith(prefix):
+                del _instance_registry[key]
+                removed += 1
 
-    return removed
+        return removed
 
 
 def _default_helper_config() -> Dict[str, Any]:
@@ -634,28 +701,29 @@ def _apply_allowlist(helpers: Dict[str, Any], allowlist: Any) -> Dict[str, Any]:
 def _load_helper_registry(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     global _helper_registry, _helper_registry_key, _helper_registry_index
 
-    normalized = _normalize_helper_config(config)
-    key = _helper_config_key(normalized)
+    with _helper_lock:
+        normalized = _normalize_helper_config(config)
+        key = _helper_config_key(normalized)
 
-    if key == _helper_registry_key:
-        return _helper_registry
+        if key == _helper_registry_key:
+            return _helper_registry
 
-    registry: Dict[str, Any] = {}
-    for path in _resolve_helper_paths(normalized):
-        if not path or not os.path.exists(path):
-            continue
+        registry: Dict[str, Any] = {}
+        for path in _resolve_helper_paths(normalized):
+            if not path or not os.path.exists(path):
+                continue
 
-        for file_path in _list_helper_files([path]):
-            module = _import_helper_module(file_path)
-            helpers = _extract_helpers_from_module(module)
-            registry.update(helpers)
+            for file_path in _list_helper_files([path]):
+                module = _import_helper_module(file_path)
+                helpers = _extract_helpers_from_module(module)
+                registry.update(helpers)
 
-    registry = _apply_allowlist(registry, normalized.get("helper_allowlist", "all"))
-    _helper_registry = registry
-    _helper_registry_key = key
-    _helper_registry_index = _build_helper_index(registry)
+        registry = _apply_allowlist(registry, normalized.get("helper_allowlist", "all"))
+        _helper_registry = registry
+        _helper_registry_key = key
+        _helper_registry_index = _build_helper_index(registry)
 
-    return registry
+        return registry
 
 
 def _format_annotation(annotation: Any) -> Optional[str]:
@@ -727,7 +795,9 @@ class SnakeBridgeAdapter:
             _protocol_compatibility(arguments)
 
         session_id = None
-        if context is not None and hasattr(context, "session_id"):
+        if isinstance(arguments, dict) and arguments.get("session_id"):
+            session_id = arguments.get("session_id")
+        elif context is not None and hasattr(context, "session_id"):
             session_id = context.session_id
         elif self.session_context is not None:
             session_id = self.session_context.session_id
@@ -741,42 +811,95 @@ class SnakeBridgeAdapter:
             return _release_ref(ref, session_id)
 
         if tool_name == "snakebridge.release_session":
-            if isinstance(arguments, dict) and arguments.get("session_id"):
-                session_id = arguments.get("session_id")
             return _release_session(session_id)
 
         call_type = arguments.get("call_type") or "function"
+        module_path = arguments.get("module_path")
         python_module = arguments.get("python_module") or arguments.get("module")
         function = arguments.get("function")
         args = arguments.get("args") or []
         kwargs = arguments.get("kwargs") or {}
+        if call_type == "dynamic" and not python_module:
+            python_module = module_path
         library = arguments.get("library") or (python_module.split(".")[0] if python_module else None)
+        if call_type not in ("helper", "stream_next") and not python_module:
+            raise ValueError("snakebridge.call requires python_module")
+        if not python_module:
+            python_module = library or "unknown"
+        if not library:
+            library = python_module.split(".")[0] if python_module else "unknown"
         metadata = _call_metadata(call_type, library, python_module, function, arguments)
+        decoded_args = [decode(item, session_id=session_id, context=context) for item in args]
+        decoded_kwargs = {
+            key: decode(value, session_id=session_id, context=context) for key, value in kwargs.items()
+        }
+        decoded_args = [_resolve_refs(item, session_id) for item in decoded_args]
+        decoded_kwargs = {key: _resolve_refs(value, session_id) for key, value in decoded_kwargs.items()}
 
         with _call_telemetry_span(metadata):
+            if call_type == "stream_next":
+                stream_ref_payload = arguments.get("stream_ref")
+                if stream_ref_payload is None:
+                    raise ValueError("snakebridge.call requires stream_ref for stream_next")
+
+                stream_ref = decode(stream_ref_payload, session_id=session_id, context=context)
+                iterator = _resolve_ref(stream_ref, session_id)
+                python_module = ""
+                library = ""
+
+                if isinstance(stream_ref_payload, dict):
+                    python_module = stream_ref_payload.get("python_module", "") or ""
+                    library = stream_ref_payload.get("library", "") or ""
+
+                try:
+                    item = next(iterator)
+                    return encode_result(item, session_id, python_module, library)
+                except StopIteration:
+                    return {"__type__": "stop_iteration"}
+
+            if call_type == "dynamic":
+                module_path = arguments.get("module_path") or python_module
+                if not module_path:
+                    raise ValueError("snakebridge.call requires module_path for dynamic calls")
+                mod = _import_module(module_path)
+                func = getattr(mod, function)
+                result = func(*decoded_args, **decoded_kwargs)
+                return encode_result(result, session_id, module_path, library)
+
             if call_type == "class":
                 class_name = arguments.get("class") or arguments.get("class_name")
                 mod = _import_module(python_module)
                 cls = getattr(mod, class_name)
-                instance = cls(*args, **kwargs)
-                return _make_ref(session_id, instance, python_module, library)
+                instance = cls(*decoded_args, **decoded_kwargs)
+                return encode_result(instance, session_id, python_module, library)
 
             if call_type == "method":
-                instance = _resolve_ref(arguments.get("instance"), session_id)
+                instance_payload = arguments.get("instance")
+                instance = _resolve_ref(decode(instance_payload), session_id)
                 method = getattr(instance, function)
-                return method(*args, **kwargs)
+                result = method(*decoded_args, **decoded_kwargs)
+                return encode_result(result, session_id, python_module, library)
 
             if call_type == "get_attr":
-                instance = _resolve_ref(arguments.get("instance"), session_id)
+                instance_payload = arguments.get("instance")
+                instance = _resolve_ref(decode(instance_payload), session_id)
                 attr = arguments.get("attr") or function
-                return getattr(instance, attr)
+                result = getattr(instance, attr)
+                return encode_result(result, session_id, python_module, library)
+
+            if call_type == "module_attr":
+                attr = arguments.get("attr") or function
+                mod = _import_module(python_module)
+                result = getattr(mod, attr)
+                return encode_result(result, session_id, python_module, library)
 
             if call_type == "set_attr":
-                instance = _resolve_ref(arguments.get("instance"), session_id)
+                instance_payload = arguments.get("instance")
+                instance = _resolve_ref(decode(instance_payload), session_id)
                 attr = arguments.get("attr") or function
-                value = args[0] if args else None
+                value = decoded_args[0] if decoded_args else None
                 setattr(instance, attr, value)
-                return True
+                return encode_result(True, session_id, python_module, library)
 
             if call_type == "helper":
                 helper_name = arguments.get("helper") or function
@@ -789,14 +912,13 @@ class SnakeBridgeAdapter:
                 if helper_name not in registry:
                     raise SnakeBridgeHelperNotFoundError(f"Helper '{helper_name}' not found")
 
-                return registry[helper_name](*args, **kwargs)
-
-            if not python_module:
-                raise ValueError("snakebridge.call requires python_module")
+                result = registry[helper_name](*decoded_args, **decoded_kwargs)
+                return encode_result(result, session_id, python_module, library)
 
             mod = _import_module(python_module)
             func = getattr(mod, function)
-            return func(*args, **kwargs)
+            result = func(*decoded_args, **decoded_kwargs)
+            return encode_result(result, session_id, python_module, library)
 
 
 # Make the module callable for testing

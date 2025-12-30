@@ -29,8 +29,6 @@ defmodule SnakeBridge.WheelSelector do
 
   """
 
-  @pytorch_packages ~w(torch torchvision torchaudio)
-
   @type wheel_info :: %{
           package: String.t(),
           version: String.t(),
@@ -51,18 +49,7 @@ defmodule SnakeBridge.WheelSelector do
   @spec pytorch_variant() :: String.t()
   def pytorch_variant do
     caps = hardware_module().capabilities()
-
-    cond do
-      caps.cuda and caps.cuda_version != nil ->
-        "cu" <> normalize_cuda_version(caps.cuda_version)
-
-      caps.rocm ->
-        "rocm5.7"
-
-      # MPS uses the same wheel as CPU
-      true ->
-        "cpu"
-    end
+    strategy_module().variant_for("torch", caps) || "cpu"
   end
 
   @doc """
@@ -76,7 +63,7 @@ defmodule SnakeBridge.WheelSelector do
   """
   @spec pytorch_index_url() :: String.t()
   def pytorch_index_url do
-    "https://download.pytorch.org/whl/#{pytorch_variant()}"
+    strategy_module().index_url_for_variant(pytorch_variant())
   end
 
   @doc """
@@ -97,9 +84,10 @@ defmodule SnakeBridge.WheelSelector do
   @spec pip_install_command(String.t(), String.t()) :: String.t()
   def pip_install_command(package, version) do
     base = "pip install #{package}==#{version}"
+    wheel_info = select_wheel(package, version)
 
-    if pytorch_package?(package) do
-      "#{base} --index-url #{pytorch_index_url()}"
+    if wheel_info.index_url do
+      "#{base} --index-url #{wheel_info.index_url}"
     else
       base
     end
@@ -143,21 +131,7 @@ defmodule SnakeBridge.WheelSelector do
   """
   @spec select_wheel(String.t(), String.t()) :: wheel_info()
   def select_wheel(package, version) do
-    if pytorch_package?(package) do
-      %{
-        package: package,
-        version: version,
-        variant: pytorch_variant(),
-        index_url: pytorch_index_url()
-      }
-    else
-      %{
-        package: package,
-        version: version,
-        variant: nil,
-        index_url: nil
-      }
-    end
+    strategy_module().select_wheel(package, version, hardware_module().capabilities())
   end
 
   @doc """
@@ -165,7 +139,7 @@ defmodule SnakeBridge.WheelSelector do
   """
   @spec pytorch_package?(String.t()) :: boolean()
   def pytorch_package?(package) do
-    package in @pytorch_packages
+    package in SnakeBridge.WheelConfig.packages()
   end
 
   @doc """
@@ -175,7 +149,12 @@ defmodule SnakeBridge.WheelSelector do
   """
   @spec available_variants() :: [String.t()]
   def available_variants do
-    ["cpu", "cu118", "cu121", "cu124", "rocm5.7"]
+    available_variants("torch")
+  end
+
+  @spec available_variants(String.t()) :: [String.t()]
+  def available_variants(package) do
+    strategy_module().available_variants(package)
   end
 
   @doc """
@@ -186,41 +165,25 @@ defmodule SnakeBridge.WheelSelector do
   ## Examples
 
       SnakeBridge.WheelSelector.best_cuda_variant("12.3")
-      #=> "cu121"  # Falls back to 12.1
+      #=> "cu124"
 
       SnakeBridge.WheelSelector.best_cuda_variant("12.1")
       #=> "cu121"
 
   """
-  # Map of known CUDA versions to their best matching wheel variant
-  @cuda_version_map %{
-    "117" => "cu118",
-    "118" => "cu118",
-    "119" => "cu118",
-    "120" => "cu121",
-    "121" => "cu121",
-    "122" => "cu121",
-    "123" => "cu124",
-    "124" => "cu124",
-    "125" => "cu124"
-  }
 
   @spec best_cuda_variant(String.t() | nil) :: String.t()
-  def best_cuda_variant(nil), do: "cpu"
-
   def best_cuda_variant(cuda_version) do
-    normalized = normalize_cuda_version(cuda_version)
-    Map.get_lazy(@cuda_version_map, normalized, fn -> cuda_variant_fallback(normalized) end)
+    strategy_module().best_cuda_variant(cuda_version)
   end
-
-  defp cuda_variant_fallback(version) when version >= "124", do: "cu124"
-  defp cuda_variant_fallback(version) when version >= "120", do: "cu121"
-  defp cuda_variant_fallback(version) when version >= "117", do: "cu118"
-  defp cuda_variant_fallback(_version), do: "cpu"
 
   # Private functions
 
   defp hardware_module do
     Application.get_env(:snakebridge, :hardware_module, Snakepit.Hardware)
+  end
+
+  defp strategy_module do
+    Application.get_env(:snakebridge, :wheel_strategy, SnakeBridge.WheelSelector.ConfigStrategy)
   end
 end

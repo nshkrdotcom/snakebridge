@@ -68,7 +68,7 @@ defmodule SnakeBridge.RuntimeErrorModeTest do
     end
   end
 
-  test "raise_translated error_mode leaves non-translated errors as {:error, reason}" do
+  test "raise_translated error_mode raises for dynamic Python errors" do
     Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
     Application.put_env(:snakebridge, :error_mode, :raise_translated)
 
@@ -78,6 +78,8 @@ defmodule SnakeBridge.RuntimeErrorModeTest do
       {:error, reason}
     end)
 
-    assert {:error, ^reason} = SnakeBridge.Runtime.call(NumpyLinalg, :solve, [1, 2])
+    assert_raise SnakeBridge.DynamicException.ValueError, fn ->
+      SnakeBridge.Runtime.call(NumpyLinalg, :solve, [1, 2])
+    end
   end
 end

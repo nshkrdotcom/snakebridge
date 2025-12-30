@@ -25,9 +25,11 @@ Or run individual examples:
 cd basic && mix run -e Demo.run
 cd math_demo && mix run -e Demo.run
 cd wrapper_args_example && mix run -e Demo.run
+cd signature_showcase && mix run -e Demo.run
 cd class_constructor_example && mix run -e Demo.run
 cd streaming_example && mix run -e Demo.run
 cd strict_mode_example && mix run -e Demo.run
+cd python_idioms_example && mix run -e Demo.run
 # etc.
 ```
 
@@ -44,9 +46,13 @@ cd strict_mode_example && mix run -e Demo.run
 | **telemetry_showcase** | Telemetry integration | Event logging, timing, metrics |
 | **twenty_libraries** | 20 Python stdlib libraries | Performance demo with 40 sequential gRPC calls |
 | **wrapper_args_example** | Wrapper opts and varargs | Optional kwargs, runtime flags, `__args__` |
+| **signature_showcase** | Signature + arity model | Optional args, keyword-only validation, variadic fallback |
 | **class_constructor_example** | Class constructors | `new/N` generation from `__init__`, method calls |
 | **streaming_example** | Streaming wrappers | `*_stream` variants with callbacks |
 | **strict_mode_example** | Strict mode verification | Manifest and generated file checks |
+| **session_lifecycle_example** | Session lifecycle management | Auto-ref, SessionContext, cleanup |
+| **python_idioms_example** | Python idioms bridge | Generators, context managers, callbacks |
+| **protocol_integration_example** | Protocol integration | Inspect/String.Chars, Enumerable, dynamic exceptions |
 
 ## Verbose Output Format
 
@@ -133,6 +139,15 @@ Shows wrapper args handling:
 - Runtime flags like `idempotent`
 - `__args__` varargs support
 
+### signature_showcase
+
+Demonstrates the signature + arity model:
+- Optional args via keyword opts
+- Required keyword-only validation
+- Variadic fallback wrappers for missing signatures
+- Sanitized function names (`class` → `py_class`)
+- Optional `numpy` call when `SNAKEBRIDGE_EXAMPLE_NUMPY=1`
+
 ### class_constructor_example
 
 Demonstrates class constructors generated from `__init__`:
@@ -151,6 +166,28 @@ Demonstrates streaming wrapper generation:
 Demonstrates strict mode verification:
 - Strict compile checks enabled in config
 - Generated files and manifest stay in sync
+
+### session_lifecycle_example
+
+Demonstrates session lifecycle management:
+- Auto-ref for complex objects
+- SessionContext scoping for per-process sessions
+- Automatic cleanup on owner exit
+- Manual session release
+
+### python_idioms_example
+
+Demonstrates Python idioms support:
+- Lazy iteration over Python generators/iterators
+- `with_python` macro for context managers
+- Passing Elixir callbacks into Python functions
+
+### protocol_integration_example
+
+Demonstrates protocol integration for Python refs:
+- `Inspect` and `String.Chars` for natural display/interpolation
+- `Enumerable` support for `Enum.map/2` and `Enum.count/1`
+- Dynamic exception creation and pattern matching
 
 ### twenty_libraries
 

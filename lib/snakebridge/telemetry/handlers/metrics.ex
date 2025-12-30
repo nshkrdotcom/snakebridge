@@ -66,46 +66,46 @@ defmodule SnakeBridge.Telemetry.Handlers.Metrics do
 
       # Scan metrics
       distribution("snakebridge.scan.duration",
-        event_name: [:snakebridge, :scan, :stop],
+        event_name: [:snakebridge, :compile, :scan, :stop],
         measurement: :duration,
         unit: {:native, :millisecond}
       ),
       sum("snakebridge.scan.files_scanned",
-        event_name: [:snakebridge, :scan, :stop],
+        event_name: [:snakebridge, :compile, :scan, :stop],
         measurement: :files_scanned
       ),
       sum("snakebridge.scan.symbols_found",
-        event_name: [:snakebridge, :scan, :stop],
+        event_name: [:snakebridge, :compile, :scan, :stop],
         measurement: :symbols_found
       ),
 
       # Introspection metrics
       distribution("snakebridge.introspect.duration",
-        event_name: [:snakebridge, :introspect, :stop],
+        event_name: [:snakebridge, :compile, :introspect, :stop],
         measurement: :duration,
         tags: [:library],
         unit: {:native, :millisecond}
       ),
       sum("snakebridge.introspect.symbols_introspected",
-        event_name: [:snakebridge, :introspect, :stop],
+        event_name: [:snakebridge, :compile, :introspect, :stop],
         measurement: :symbols_introspected,
         tags: [:library]
       ),
       sum("snakebridge.introspect.cache_hits",
-        event_name: [:snakebridge, :introspect, :stop],
+        event_name: [:snakebridge, :compile, :introspect, :stop],
         measurement: :cache_hits,
         tags: [:library]
       ),
 
       # Generation metrics
       distribution("snakebridge.generate.duration",
-        event_name: [:snakebridge, :generate, :stop],
+        event_name: [:snakebridge, :compile, :generate, :stop],
         measurement: :duration,
         tags: [:library],
         unit: {:native, :millisecond}
       ),
       sum("snakebridge.generate.bytes_written",
-        event_name: [:snakebridge, :generate, :stop],
+        event_name: [:snakebridge, :compile, :generate, :stop],
         measurement: :bytes_written,
         tags: [:library]
       ),

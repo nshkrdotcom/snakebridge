@@ -15,10 +15,10 @@ defmodule SnakeBridge.Telemetry do
   | `[:snakebridge, :compile, :start]` | `system_time` | `libraries`, `strict` |
   | `[:snakebridge, :compile, :stop]` | `duration`, `symbols_generated`, `files_written` | `libraries`, `mode` |
   | `[:snakebridge, :compile, :exception]` | `duration` | `reason`, `stacktrace` |
-  | `[:snakebridge, :scan, :stop]` | `duration`, `files_scanned`, `symbols_found` | `paths` |
-  | `[:snakebridge, :introspect, :start]` | `system_time` | `library`, `batch_size` |
-  | `[:snakebridge, :introspect, :stop]` | `duration`, `symbols_introspected`, `cache_hits` | `library`, `python_time` |
-  | `[:snakebridge, :generate, :stop]` | `duration`, `bytes_written`, `functions_generated`, `classes_generated` | `library`, `file` |
+  | `[:snakebridge, :compile, :scan, :stop]` | `duration`, `files_scanned`, `symbols_found` | `library`, `phase`, `details` |
+  | `[:snakebridge, :compile, :introspect, :start]` | `system_time` | `library`, `phase`, `details` |
+  | `[:snakebridge, :compile, :introspect, :stop]` | `duration`, `symbols_introspected`, `cache_hits` | `library`, `phase`, `details` |
+  | `[:snakebridge, :compile, :generate, :stop]` | `duration`, `bytes_written`, `functions_generated`, `classes_generated` | `library`, `phase`, `details` |
   | `[:snakebridge, :docs, :fetch]` | `duration` | `module`, `function`, `source` |
   | `[:snakebridge, :lock, :verify]` | `duration` | `result`, `warnings` |
 
@@ -44,15 +44,16 @@ defmodule SnakeBridge.Telemetry do
 
   ## Metadata
 
-  - `libraries` - List of library atoms being compiled
-  - `strict` - Whether strict mode is enabled
+  - `library` - `:all`
+  - `phase` - `:compile`
+  - `details` - `%{libraries: [...], strict: boolean()}`
   """
   @spec compile_start([atom()], boolean()) :: :ok
   def compile_start(libraries, strict) do
     emit(
       [:snakebridge, :compile, :start],
       %{system_time: System.system_time()},
-      %{libraries: libraries, strict: strict}
+      %{library: :all, phase: :compile, details: %{libraries: libraries, strict: strict}}
     )
   end
 
@@ -67,8 +68,9 @@ defmodule SnakeBridge.Telemetry do
 
   ## Metadata
 
-  - `libraries` - List of library atoms compiled
-  - `mode` - `:normal` or `:strict`
+  - `library` - `:all`
+  - `phase` - `:compile`
+  - `details` - `%{libraries: [...], mode: :normal | :strict}`
   """
   @spec compile_stop(integer(), non_neg_integer(), non_neg_integer(), [atom()], :normal | :strict) ::
           :ok
@@ -80,7 +82,7 @@ defmodule SnakeBridge.Telemetry do
         symbols_generated: symbols,
         files_written: files
       },
-      %{libraries: libraries, mode: mode}
+      %{library: :all, phase: :compile, details: %{libraries: libraries, mode: mode}}
     )
   end
 
@@ -93,15 +95,16 @@ defmodule SnakeBridge.Telemetry do
 
   ## Metadata
 
-  - `reason` - The exception
-  - `stacktrace` - The stacktrace
+  - `library` - `:all`
+  - `phase` - `:compile`
+  - `details` - `%{reason: term(), stacktrace: list()}`
   """
   @spec compile_exception(integer(), term(), list()) :: :ok
   def compile_exception(start_time, reason, stacktrace) do
     emit(
       [:snakebridge, :compile, :exception],
       %{duration: System.monotonic_time() - start_time},
-      %{reason: reason, stacktrace: stacktrace}
+      %{library: :all, phase: :compile, details: %{reason: reason, stacktrace: stacktrace}}
     )
   end
 
@@ -120,18 +123,20 @@ defmodule SnakeBridge.Telemetry do
 
   ## Metadata
 
-  - `paths` - List of paths scanned
+  - `library` - `:all`
+  - `phase` - `:scan`
+  - `details` - `%{paths: [String.t()]}`
   """
   @spec scan_stop(integer(), non_neg_integer(), non_neg_integer(), [String.t()]) :: :ok
   def scan_stop(start_time, files, symbols, paths) do
     emit(
-      [:snakebridge, :scan, :stop],
+      [:snakebridge, :compile, :scan, :stop],
       %{
         duration: System.monotonic_time() - start_time,
         files_scanned: files,
         symbols_found: symbols
       },
-      %{paths: paths}
+      %{library: :all, phase: :scan, details: %{paths: paths}}
     )
   end
 
@@ -149,14 +154,15 @@ defmodule SnakeBridge.Telemetry do
   ## Metadata
 
   - `library` - Library atom being introspected
-  - `batch_size` - Number of symbols in this batch
+  - `phase` - `:introspect`
+  - `details` - `%{batch_size: non_neg_integer()}`
   """
   @spec introspect_start(atom(), non_neg_integer()) :: :ok
   def introspect_start(library, batch_size) do
     emit(
-      [:snakebridge, :introspect, :start],
+      [:snakebridge, :compile, :introspect, :start],
       %{system_time: System.system_time()},
-      %{library: library, batch_size: batch_size}
+      %{library: library, phase: :introspect, details: %{batch_size: batch_size}}
     )
   end
 
@@ -172,18 +178,19 @@ defmodule SnakeBridge.Telemetry do
   ## Metadata
 
   - `library` - Library atom introspected
-  - `python_time` - Time spent in Python (native units)
+  - `phase` - `:introspect`
+  - `details` - `%{python_time: integer()}`
   """
   @spec introspect_stop(integer(), atom(), non_neg_integer(), non_neg_integer(), integer()) :: :ok
   def introspect_stop(start_time, library, symbols, cache_hits, python_time) do
     emit(
-      [:snakebridge, :introspect, :stop],
+      [:snakebridge, :compile, :introspect, :stop],
       %{
         duration: System.monotonic_time() - start_time,
         symbols_introspected: symbols,
         cache_hits: cache_hits
       },
-      %{library: library, python_time: python_time}
+      %{library: library, phase: :introspect, details: %{python_time: python_time}}
     )
   end
 
@@ -204,7 +211,8 @@ defmodule SnakeBridge.Telemetry do
   ## Metadata
 
   - `library` - Library atom generated
-  - `file` - File path written
+  - `phase` - `:generate`
+  - `details` - `%{file: String.t()}`
   """
   @spec generate_stop(
           integer(),
@@ -216,14 +224,14 @@ defmodule SnakeBridge.Telemetry do
         ) :: :ok
   def generate_stop(start_time, library, file, bytes, functions, classes) do
     emit(
-      [:snakebridge, :generate, :stop],
+      [:snakebridge, :compile, :generate, :stop],
       %{
         duration: System.monotonic_time() - start_time,
         bytes_written: bytes,
         functions_generated: functions,
         classes_generated: classes
       },
-      %{library: library, file: file}
+      %{library: library, phase: :generate, details: %{file: file}}
     )
   end
 
@@ -277,6 +285,20 @@ defmodule SnakeBridge.Telemetry do
       %{result: result, warnings: warnings}
     )
   end
+
+  @doc """
+  Returns the expected metadata fields for an event.
+  """
+  @spec event_metadata_schema([atom()]) :: [atom()]
+  def event_metadata_schema([:snakebridge, :compile | _]) do
+    [:library, :phase, :details]
+  end
+
+  def event_metadata_schema([:snakebridge, :runtime | _]) do
+    [:library, :function, :call_type]
+  end
+
+  def event_metadata_schema(_event), do: []
 
   defp emit(event, measurements, metadata) do
     case Application.ensure_all_started(:telemetry) do

@@ -5,7 +5,7 @@
   },
   "environment": {
     "elixir_version": "1.18.4",
-    "generator_hash": "fa68a1c9139e7f4cd197843f633f3488babc580c59f9ec627ea1c945881de159",
+    "generator_hash": "9f834cc0e6190f62e73a90a809a1b0b56e1c72415f7de9f6bd39dc3c83d8f69a",
     "hardware": {
       "accelerator": "cpu",
       "cpu_features": [

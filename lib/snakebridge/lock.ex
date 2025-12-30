@@ -198,8 +198,48 @@ defmodule SnakeBridge.Lock do
     Application.spec(:snakebridge, :vsn) |> to_string()
   end
 
-  defp generator_hash do
-    :crypto.hash(:sha256, version()) |> Base.encode16(case: :lower)
+  @generator_files [
+    "lib/snakebridge/generator.ex",
+    "lib/snakebridge/docs.ex",
+    "priv/python/snakebridge_types.py",
+    "priv/python/snakebridge_adapter.py"
+  ]
+
+  @doc """
+  Computes the generator hash from generator and adapter source contents.
+  """
+  @spec generator_hash() :: String.t()
+  def generator_hash do
+    content = Enum.map_join(@generator_files, "\n", &read_generator_file/1)
+
+    :crypto.hash(:sha256, content)
+    |> Base.encode16(case: :lower)
+  end
+
+  defp read_generator_file(relative_path) do
+    candidates =
+      [
+        Application.app_dir(:snakebridge, relative_path),
+        Path.join(File.cwd!(), relative_path)
+      ]
+      |> Enum.uniq()
+
+    Enum.find_value(candidates, "", fn path ->
+      case File.read(path) do
+        {:ok, content} -> content
+        {:error, _} -> nil
+      end
+    end) || ""
+  end
+
+  @doc """
+  Checks if the lock was generated with the current generator version.
+  """
+  @spec verify_generator_unchanged?(map()) :: boolean()
+  def verify_generator_unchanged?(lock) do
+    lock_hash = get_in(lock, ["environment", "generator_hash"])
+    current_hash = generator_hash()
+    lock_hash == current_hash
   end
 
   defp python_packages_module do

@@ -11,7 +11,11 @@ defmodule SnakeBridge.Application do
     # Users can override by setting their own log levels in config
     suppress_otel_transitive_logs()
 
-    children = []
+    children = [
+      SnakeBridge.SessionManager,
+      SnakeBridge.CallbackRegistry
+    ]
+
     Supervisor.start_link(children, strategy: :one_for_one, name: SnakeBridge.Supervisor)
   end
 

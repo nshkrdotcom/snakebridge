@@ -13,10 +13,13 @@ defmodule Mix.Tasks.Compile.Snakebridge do
     Introspector,
     Lock,
     Manifest,
+    ModuleResolver,
     PythonEnv,
     Scanner,
     Telemetry
   }
+
+  @reserved_words ~w(def defp defmodule class do end if unless case cond for while with fn when and or not true false nil in try catch rescue after else raise throw receive)
 
   @impl Mix.Task.Compiler
   def run(_args) do
@@ -107,8 +110,28 @@ defmodule Mix.Tasks.Compile.Snakebridge do
         acc
 
       library ->
-        python_module = python_module_for_elixir(library, module)
-        add_target(acc, library, python_module, function)
+        case ModuleResolver.resolve_class_or_submodule(library, module) do
+          {:class, class_name, parent_module} ->
+            add_target(acc, library, parent_module, class_name)
+
+          {:submodule, python_module} ->
+            python_function =
+              function
+              |> to_string()
+              |> python_name_for_elixir_name()
+
+            add_target(acc, library, python_module, python_function)
+
+          {:error, _reason} ->
+            python_module = python_module_for_elixir(library, module)
+
+            python_function =
+              function
+              |> to_string()
+              |> python_name_for_elixir_name()
+
+            add_target(acc, library, python_module, python_function)
+        end
     end
   end
 
@@ -152,23 +175,52 @@ defmodule Mix.Tasks.Compile.Snakebridge do
 
   defp symbol_entry_for(library, python_module, info) do
     module = module_for_python(library, python_module)
-    function = info["name"]
-    arity = required_arity(info["parameters"] || [])
+    python_name = info["python_name"] || info["name"]
+    {elixir_name, _python_name} = sanitize_function_name(python_name)
+    attribute? = info["type"] == "attribute"
+    params = info["parameters"] || []
 
-    key = Manifest.symbol_key({module, String.to_atom(function), arity})
+    {arity, arity_info} =
+      if attribute? do
+        {0, module_attr_arity_info()}
+      else
+        {required_arity(params), compute_arity_info(params, info)}
+      end
+
+    key = Manifest.symbol_key({module, String.to_atom(elixir_name), arity})
 
     {
       key,
       %{
         "module" => Module.split(module) |> Enum.join("."),
-        "function" => function,
-        "name" => function,
+        "function" => python_name,
+        "name" => elixir_name,
+        "python_name" => python_name,
+        "elixir_name" => elixir_name,
         "python_module" => python_module,
-        "parameters" => info["parameters"] || [],
+        "signature_available" => Map.get(info, "signature_available", true),
+        "parameters" => params,
         "docstring" => info["docstring"] || "",
         "return_annotation" => info["return_annotation"],
         "return_type" => info["return_type"]
       }
+      |> Map.merge(arity_info)
+      |> maybe_put_call_type(attribute?)
+    }
+  end
+
+  defp maybe_put_call_type(entry, true), do: Map.put(entry, "call_type", "module_attr")
+  defp maybe_put_call_type(entry, false), do: entry
+
+  defp module_attr_arity_info do
+    %{
+      "required_arity" => 0,
+      "minimum_arity" => 0,
+      "maximum_arity" => 0,
+      "has_var_positional" => false,
+      "has_var_keyword" => false,
+      "required_keyword_only" => [],
+      "optional_keyword_only" => []
     }
   end
 
@@ -178,6 +230,12 @@ defmodule Mix.Tasks.Compile.Snakebridge do
     class_module = class_module_for(library, class_python_module, class_name)
     key = Manifest.class_key(class_module)
 
+    methods =
+      info["methods"]
+      |> List.wrap()
+      |> Enum.map(&class_method_entry/1)
+      |> Enum.reject(&is_nil/1)
+
     [
       {
         key,
@@ -186,11 +244,54 @@ defmodule Mix.Tasks.Compile.Snakebridge do
           "class" => class_name,
           "python_module" => class_python_module,
           "docstring" => info["docstring"] || "",
-          "methods" => info["methods"] || [],
+          "methods" => methods,
           "attributes" => info["attributes"] || []
         }
       }
     ]
+  end
+
+  defp class_method_entry(method) do
+    name = method["name"] || method[:name] || ""
+
+    case Generator.sanitize_method_name(name) do
+      {elixir_name, python_name} ->
+        params = method["parameters"] || method[:parameters] || []
+        arity_info = compute_arity_info(params, method)
+
+        arity_info =
+          if python_name == "__init__" do
+            arity_info
+          else
+            add_ref_arity_info(arity_info)
+          end
+
+        method
+        |> Map.put("name", python_name)
+        |> Map.put("python_name", python_name)
+        |> Map.put("elixir_name", elixir_name)
+        |> Map.merge(arity_info)
+
+      nil ->
+        nil
+    end
+  end
+
+  defp add_ref_arity_info(arity_info) do
+    min_arity = Map.get(arity_info, "minimum_arity", 0) + 1
+    required_arity = Map.get(arity_info, "required_arity", 0) + 1
+    max_arity = Map.get(arity_info, "maximum_arity")
+
+    max_arity =
+      case max_arity do
+        value when is_integer(value) -> value + 1
+        _ -> max_arity
+      end
+
+    arity_info
+    |> Map.put("minimum_arity", min_arity)
+    |> Map.put("required_arity", required_arity)
+    |> Map.put("maximum_arity", max_arity)
   end
 
   defp class_module_for(library, python_module, class_name) do
@@ -241,23 +342,34 @@ defmodule Mix.Tasks.Compile.Snakebridge do
 
   defp function_or_class_present?(manifest, library, name) do
     module_prefix = Module.split(library.module_name) |> Enum.join(".")
-    function_prefix = "#{module_prefix}.#{name}/"
 
-    function_exists? =
-      manifest
-      |> Map.get("symbols", %{})
-      |> Map.keys()
-      |> Enum.any?(&String.starts_with?(&1, function_prefix))
+    function_present_in_manifest?(manifest, module_prefix, name) or
+      class_present_in_manifest?(manifest, name)
+  end
 
-    class_exists? =
-      manifest
-      |> Map.get("classes", %{})
-      |> Map.values()
-      |> Enum.any?(fn info ->
-        info["class"] == name or String.ends_with?(info["module"] || "", ".#{name}")
-      end)
+  defp function_present_in_manifest?(manifest, module_prefix, name) do
+    manifest
+    |> Map.get("symbols", %{})
+    |> Map.values()
+    |> Enum.any?(&symbol_matches?(&1, module_prefix, name))
+  end
 
-    function_exists? or class_exists?
+  defp symbol_matches?(info, module_prefix, name) do
+    module = info["module"] || ""
+    python_name = info["python_name"] || info["function"] || info["name"]
+    elixir_name = info["elixir_name"] || info["name"] || python_name
+    module == module_prefix and (python_name == name or elixir_name == name)
+  end
+
+  defp class_present_in_manifest?(manifest, name) do
+    manifest
+    |> Map.get("classes", %{})
+    |> Map.values()
+    |> Enum.any?(&class_matches?(&1, name))
+  end
+
+  defp class_matches?(info, name) do
+    info["class"] == name or String.ends_with?(info["module"] || "", ".#{name}")
   end
 
   defp generate_from_manifest(config, manifest) do
@@ -341,6 +453,7 @@ defmodule Mix.Tasks.Compile.Snakebridge do
       Manifest.save(config, updated_manifest)
       generate_from_manifest(config, updated_manifest)
       generate_helper_wrappers(config)
+      SnakeBridge.Registry.save()
       Lock.update(config)
 
       symbol_count = count_symbols(updated_manifest)
@@ -451,9 +564,111 @@ defmodule Mix.Tasks.Compile.Snakebridge do
 
   defp required_arity(params) do
     params
-    |> Enum.filter(&(&1["kind"] in ["POSITIONAL_ONLY", "POSITIONAL_OR_KEYWORD"]))
-    |> Enum.reject(&Map.has_key?(&1, "default"))
+    |> Enum.filter(fn param ->
+      param_kind(param) in ["POSITIONAL_ONLY", "POSITIONAL_OR_KEYWORD"]
+    end)
+    |> Enum.reject(&param_default?/1)
     |> length()
+  end
+
+  defp compute_arity_info(params, info) do
+    required_positional = required_arity(params)
+    optional_positional = params |> Enum.filter(&optional_positional?/1) |> length()
+    has_var_positional = Enum.any?(params, &varargs?/1)
+    has_var_keyword = Enum.any?(params, &kwargs?/1)
+
+    required_kw_only =
+      params
+      |> Enum.filter(&keyword_only_required?/1)
+      |> Enum.map(& &1["name"])
+
+    optional_kw_only =
+      params
+      |> Enum.filter(&keyword_only_optional?/1)
+      |> Enum.map(& &1["name"])
+
+    signature_available = Map.get(info, "signature_available", true)
+    variadic_fallback = params == [] and signature_available == false
+
+    max_arity =
+      cond do
+        variadic_fallback -> variadic_max_arity() + 1
+        has_var_positional -> :unbounded
+        optional_positional > 0 -> required_positional + 2
+        true -> required_positional + 1
+      end
+
+    %{
+      "required_arity" => required_positional,
+      "minimum_arity" => required_positional,
+      "maximum_arity" => max_arity,
+      "has_var_positional" => has_var_positional,
+      "has_var_keyword" => has_var_keyword,
+      "required_keyword_only" => required_kw_only,
+      "optional_keyword_only" => optional_kw_only
+    }
+  end
+
+  defp optional_positional?(param) do
+    param_kind(param) in ["POSITIONAL_ONLY", "POSITIONAL_OR_KEYWORD"] and param_default?(param)
+  end
+
+  defp varargs?(param), do: param_kind(param) == "VAR_POSITIONAL"
+  defp kwargs?(param), do: param_kind(param) == "VAR_KEYWORD"
+
+  defp keyword_only_required?(param) do
+    param_kind(param) == "KEYWORD_ONLY" and not param_default?(param)
+  end
+
+  defp keyword_only_optional?(param) do
+    param_kind(param) == "KEYWORD_ONLY" and param_default?(param)
+  end
+
+  defp param_kind(%{"kind" => kind}) when is_binary(kind), do: String.upcase(kind)
+  defp param_kind(%{kind: kind}) when is_binary(kind), do: String.upcase(kind)
+  defp param_kind(%{kind: kind}), do: kind
+  defp param_kind(_), do: nil
+
+  defp param_default?(%{"default" => _}), do: true
+  defp param_default?(%{default: _}), do: true
+  defp param_default?(_), do: false
+
+  defp variadic_max_arity do
+    Application.get_env(:snakebridge, :variadic_max_arity, 8)
+  end
+
+  defp sanitize_function_name(python_name) when is_binary(python_name) do
+    elixir_name =
+      python_name
+      |> Macro.underscore()
+      |> String.replace(~r/[^a-z0-9_?!]/, "_")
+      |> ensure_valid_identifier()
+
+    elixir_name =
+      if elixir_name in @reserved_words do
+        "py_#{elixir_name}"
+      else
+        elixir_name
+      end
+
+    {elixir_name, python_name}
+  end
+
+  defp ensure_valid_identifier(""), do: "_"
+
+  defp ensure_valid_identifier(name) do
+    if String.match?(name, ~r/^[a-z_][a-z0-9_?!]*$/) do
+      name
+    else
+      "_" <> name
+    end
+  end
+
+  defp python_name_for_elixir_name(elixir_name) when is_binary(elixir_name) do
+    case String.split(elixir_name, "py_", parts: 2) do
+      ["", rest] when rest in @reserved_words -> rest
+      _ -> elixir_name
+    end
   end
 
   defp format_missing(missing) do
@@ -563,10 +778,23 @@ defmodule Mix.Tasks.Compile.Snakebridge do
     end
   end
 
-  defp method_expected_name(%{"name" => "__init__"}), do: "new"
-  defp method_expected_name(%{"name" => name}) when is_binary(name), do: name
-  defp method_expected_name(%{name: "__init__"}), do: "new"
-  defp method_expected_name(%{name: name}) when is_binary(name), do: name
+  defp method_expected_name(%{"elixir_name" => name}) when is_binary(name), do: name
+  defp method_expected_name(%{elixir_name: name}) when is_binary(name), do: name
+
+  defp method_expected_name(%{"name" => name}) when is_binary(name) do
+    case Generator.sanitize_method_name(name) do
+      {elixir_name, _} -> elixir_name
+      _ -> ""
+    end
+  end
+
+  defp method_expected_name(%{name: name}) when is_binary(name) do
+    case Generator.sanitize_method_name(name) do
+      {elixir_name, _} -> elixir_name
+      _ -> ""
+    end
+  end
+
   defp method_expected_name(_), do: ""
 
   defp missing_functions_message([]), do: ""

@@ -1,0 +1,36 @@
+{
+  "generated_at": "2025-12-30T20:06:28.651766Z",
+  "libraries": {
+    "math": {
+      "elixir_module": "Math",
+      "files": [
+        "math.ex"
+      ],
+      "generated_at": "2025-12-30T20:06:28.577725Z",
+      "path": "lib/snakebridge_generated",
+      "python_module": "math",
+      "python_version": "stdlib",
+      "stats": {
+        "classes": 0,
+        "functions": 1,
+        "submodules": 0
+      }
+    },
+    "signature_showcase": {
+      "elixir_module": "SignatureShowcase",
+      "files": [
+        "signature_showcase.ex"
+      ],
+      "generated_at": "2025-12-30T20:06:28.566614Z",
+      "path": "lib/snakebridge_generated",
+      "python_module": "signature_showcase",
+      "python_version": "stdlib",
+      "stats": {
+        "classes": 0,
+        "functions": 4,
+        "submodules": 0
+      }
+    }
+  },
+  "version": "2.1"
+}

@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.3] - 2025-12-30
+
+### Added
+- **Universal FFI Core**:
+    - `SnakeBridge.Dynamic` module for method dispatch (`call`, `get_attr`, `set_attr`) on un-generated refs.
+    - `SnakeBridge.Runtime.call_dynamic/4` to invoke arbitrary Python functions without compile-time scanning.
+    - `SnakeBridge.ModuleResolver` to automatically disambiguate classes from submodules during compilation.
+    - `SnakeBridge.SessionManager` and `SessionContext` for process-bound Python object lifecycle management.
+    - `SnakeBridge.StreamRef` implementing `Enumerable` for lazy iteration over Python generators/iterators.
+    - `SnakeBridge.WithContext.with_python/2` macro for Python context manager (`with` statement) support.
+    - `SnakeBridge.CallbackRegistry` to pass Elixir functions into Python as callable callbacks.
+- **Protocol Integration**:
+    - `Inspect`, `String.Chars`, and `Enumerable` protocol implementations for `SnakeBridge.Ref`.
+    - `SnakeBridge.DynamicException` to automatically map unknown Python exceptions to Elixir structs.
+    - `SnakeBridge.Runtime.get_module_attr/3` for accessing module-level constants and objects.
+- **Configuration**:
+    - `config/wheel_variants.json` support via `SnakeBridge.WheelConfig` for externalized PyTorch wheel selection.
+    - `SNAKEBRIDGE_ATOM_CLASS` environment variable to opt-in to legacy `Atom` object wrapping.
+
+### Changed
+- **Type System**:
+    - Python atom decoding now defaults to plain strings for compatibility with standard libraries.
+    - Unknown Python return types now automatically return a Ref handle instead of a string representation.
+    - Runtime boundary now enforces strict encoding/decoding of all arguments and results.
+- **Signature Model**:
+    - Manifest now supports arity ranges (min/max) to correctly match calls with optional arguments.
+    - C-extension functions (without inspectable signatures) now generate variadic wrappers (up to 8 args).
+    - Required keyword-only arguments are now validated at runtime with clear error messages.
+    - Function and method names are sanitised (e.g., `class` -> `py_class`) while preserving Python mapping.
+- **Introspection**:
+    - Unified introspection logic into a standalone `priv/python/introspect.py` script (removed embedded string script).
+    - Introspection now captures module attributes and detects protocol-supporting dunder methods.
+- **Telemetry**:
+    - Standardized compile events under `[:snakebridge, :compile, phase, :start|:stop]`.
+    - Unified metadata schema for compile events (`library`, `phase`, `details`).
+- **Python Adapter**:
+    - Added thread locks to global registries for concurrency safety.
+    - Implemented session-scoped cleanup to prevent memory leaks on Elixir process exit.
+
+### Fixed
+- **Manifest correctness**: Fixed mismatch where scanner reported call-site arity while manifest stored required arity, causing perpetual "missing" symbols.
+- **File Generation**: Fixed potential race conditions in `write_if_changed` using global locking.
+- **Registry**: `SnakeBridge.Registry` is now properly populated and saved during the compilation phase.
+- **Lockfile**: Generator hash now reflects actual source content rather than just the version string.
+
 ## [0.7.2] - 2025-12-29
 
 ### Added

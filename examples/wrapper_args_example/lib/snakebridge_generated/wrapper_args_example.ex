@@ -15,7 +15,7 @@ defmodule WrapperArgs do
 
   Parameters:
   - `values` (term())
-  - `sep` (term() default: ' ')
+  - `sep` (term() keyword-only default: ' ')
 
   Returns:
   - `term()`

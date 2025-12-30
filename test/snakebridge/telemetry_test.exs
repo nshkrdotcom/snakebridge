@@ -34,8 +34,10 @@ defmodule SnakeBridge.TelemetryTest do
                       metadata}
 
       assert is_integer(measurements.system_time)
-      assert metadata.libraries == [:numpy, :torch]
-      assert metadata.strict == false
+      assert metadata.library == :all
+      assert metadata.phase == :compile
+      assert metadata.details.libraries == [:numpy, :torch]
+      assert metadata.details.strict == false
     end
   end
 
@@ -63,8 +65,10 @@ defmodule SnakeBridge.TelemetryTest do
       assert measurements.duration >= 0
       assert measurements.symbols_generated == 42
       assert measurements.files_written == 5
-      assert metadata.libraries == [:numpy]
-      assert metadata.mode == :normal
+      assert metadata.library == :all
+      assert metadata.phase == :compile
+      assert metadata.details.libraries == [:numpy]
+      assert metadata.details.mode == :normal
     end
   end
 
@@ -75,7 +79,7 @@ defmodule SnakeBridge.TelemetryTest do
 
       :telemetry.attach(
         "test-telemetry-handler",
-        [:snakebridge, :scan, :stop],
+        [:snakebridge, :compile, :scan, :stop],
         fn event, measurements, metadata, _config ->
           send(test_pid, {:telemetry_event, ref, event, measurements, metadata})
         end,
@@ -85,13 +89,15 @@ defmodule SnakeBridge.TelemetryTest do
       start_time = System.monotonic_time()
       Telemetry.scan_stop(start_time, 10, 25, ["lib", "test"])
 
-      assert_receive {:telemetry_event, ^ref, [:snakebridge, :scan, :stop], measurements,
-                      metadata}
+      assert_receive {:telemetry_event, ^ref, [:snakebridge, :compile, :scan, :stop],
+                      measurements, metadata}
 
       assert is_integer(measurements.duration)
       assert measurements.files_scanned == 10
       assert measurements.symbols_found == 25
-      assert metadata.paths == ["lib", "test"]
+      assert metadata.library == :all
+      assert metadata.phase == :scan
+      assert metadata.details.paths == ["lib", "test"]
     end
   end
 
@@ -102,7 +108,7 @@ defmodule SnakeBridge.TelemetryTest do
 
       :telemetry.attach(
         "test-telemetry-handler",
-        [:snakebridge, :introspect, :start],
+        [:snakebridge, :compile, :introspect, :start],
         fn event, measurements, metadata, _config ->
           send(test_pid, {:telemetry_event, ref, event, measurements, metadata})
         end,
@@ -111,12 +117,13 @@ defmodule SnakeBridge.TelemetryTest do
 
       Telemetry.introspect_start(:numpy, 15)
 
-      assert_receive {:telemetry_event, ^ref, [:snakebridge, :introspect, :start], measurements,
-                      metadata}
+      assert_receive {:telemetry_event, ^ref, [:snakebridge, :compile, :introspect, :start],
+                      measurements, metadata}
 
       assert is_integer(measurements.system_time)
       assert metadata.library == :numpy
-      assert metadata.batch_size == 15
+      assert metadata.phase == :introspect
+      assert metadata.details.batch_size == 15
     end
   end
 
@@ -127,7 +134,7 @@ defmodule SnakeBridge.TelemetryTest do
 
       :telemetry.attach(
         "test-telemetry-handler",
-        [:snakebridge, :introspect, :stop],
+        [:snakebridge, :compile, :introspect, :stop],
         fn event, measurements, metadata, _config ->
           send(test_pid, {:telemetry_event, ref, event, measurements, metadata})
         end,
@@ -137,14 +144,15 @@ defmodule SnakeBridge.TelemetryTest do
       start_time = System.monotonic_time()
       Telemetry.introspect_stop(start_time, :numpy, 15, 5, 100_000)
 
-      assert_receive {:telemetry_event, ^ref, [:snakebridge, :introspect, :stop], measurements,
-                      metadata}
+      assert_receive {:telemetry_event, ^ref, [:snakebridge, :compile, :introspect, :stop],
+                      measurements, metadata}
 
       assert is_integer(measurements.duration)
       assert measurements.symbols_introspected == 15
       assert measurements.cache_hits == 5
       assert metadata.library == :numpy
-      assert metadata.python_time == 100_000
+      assert metadata.phase == :introspect
+      assert metadata.details.python_time == 100_000
     end
   end
 
@@ -155,7 +163,7 @@ defmodule SnakeBridge.TelemetryTest do
 
       :telemetry.attach(
         "test-telemetry-handler",
-        [:snakebridge, :generate, :stop],
+        [:snakebridge, :compile, :generate, :stop],
         fn event, measurements, metadata, _config ->
           send(test_pid, {:telemetry_event, ref, event, measurements, metadata})
         end,
@@ -165,15 +173,16 @@ defmodule SnakeBridge.TelemetryTest do
       start_time = System.monotonic_time()
       Telemetry.generate_stop(start_time, :numpy, "lib/numpy.ex", 5000, 20, 5)
 
-      assert_receive {:telemetry_event, ^ref, [:snakebridge, :generate, :stop], measurements,
-                      metadata}
+      assert_receive {:telemetry_event, ^ref, [:snakebridge, :compile, :generate, :stop],
+                      measurements, metadata}
 
       assert is_integer(measurements.duration)
       assert measurements.bytes_written == 5000
       assert measurements.functions_generated == 20
       assert measurements.classes_generated == 5
       assert metadata.library == :numpy
-      assert metadata.file == "lib/numpy.ex"
+      assert metadata.phase == :generate
+      assert metadata.details.file == "lib/numpy.ex"
     end
   end
 

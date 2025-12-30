@@ -21,8 +21,8 @@ defmodule SnakeBridge.Telemetry.Handlers.Logger do
   @events [
     [:snakebridge, :compile, :stop],
     [:snakebridge, :compile, :exception],
-    [:snakebridge, :introspect, :stop],
-    [:snakebridge, :generate, :stop]
+    [:snakebridge, :compile, :introspect, :stop],
+    [:snakebridge, :compile, :generate, :stop]
   ]
 
   @doc """
@@ -51,20 +51,23 @@ defmodule SnakeBridge.Telemetry.Handlers.Logger do
   @doc false
   def handle_event([:snakebridge, :compile, :stop], measurements, metadata, _config) do
     duration_ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
+    libraries = metadata.details[:libraries] || []
 
     Logger.info(
       "SnakeBridge compiled #{measurements.symbols_generated} symbols " <>
-        "in #{duration_ms}ms (#{length(metadata.libraries)} libraries)"
+        "in #{duration_ms}ms (#{length(libraries)} libraries)"
     )
   end
 
   def handle_event([:snakebridge, :compile, :exception], _measurements, metadata, _config) do
-    Logger.error("SnakeBridge compilation failed: #{inspect(metadata.reason)}")
+    reason = metadata.details[:reason]
+    Logger.error("SnakeBridge compilation failed: #{inspect(reason)}")
   end
 
-  def handle_event([:snakebridge, :introspect, :stop], measurements, metadata, _config) do
+  def handle_event([:snakebridge, :compile, :introspect, :stop], measurements, metadata, _config) do
     duration_ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
-    python_ms = System.convert_time_unit(metadata.python_time || 0, :native, :millisecond)
+    python_time = metadata.details[:python_time] || 0
+    python_ms = System.convert_time_unit(python_time, :native, :millisecond)
 
     Logger.debug(
       "Introspected #{measurements.symbols_introspected} symbols from #{metadata.library} " <>
@@ -72,7 +75,7 @@ defmodule SnakeBridge.Telemetry.Handlers.Logger do
     )
   end
 
-  def handle_event([:snakebridge, :generate, :stop], measurements, metadata, _config) do
+  def handle_event([:snakebridge, :compile, :generate, :stop], measurements, metadata, _config) do
     duration_ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
 
     Logger.debug(

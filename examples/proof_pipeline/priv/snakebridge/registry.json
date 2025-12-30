@@ -1,0 +1,51 @@
+{
+  "generated_at": "2025-12-30T20:06:18.195231Z",
+  "libraries": {
+    "math_verify": {
+      "elixir_module": "MathVerify",
+      "files": [
+        "math_verify.ex"
+      ],
+      "generated_at": "2025-12-30T20:06:18.127621Z",
+      "path": "lib/snakebridge_generated",
+      "python_module": "math_verify",
+      "python_version": "~> 0.1",
+      "stats": {
+        "classes": 0,
+        "functions": 3,
+        "submodules": 0
+      }
+    },
+    "pylatexenc": {
+      "elixir_module": "PyLatexEnc",
+      "files": [
+        "pylatexenc.ex"
+      ],
+      "generated_at": "2025-12-30T20:06:18.126721Z",
+      "path": "lib/snakebridge_generated",
+      "python_module": "pylatexenc",
+      "python_version": "~> 2.10",
+      "stats": {
+        "classes": 1,
+        "functions": 1,
+        "submodules": 2
+      }
+    },
+    "sympy": {
+      "elixir_module": "Sympy",
+      "files": [
+        "sympy.ex"
+      ],
+      "generated_at": "2025-12-30T20:06:18.119484Z",
+      "path": "lib/snakebridge_generated",
+      "python_module": "sympy",
+      "python_version": "~> 1.12",
+      "stats": {
+        "classes": 0,
+        "functions": 3,
+        "submodules": 0
+      }
+    }
+  },
+  "version": "2.1"
+}

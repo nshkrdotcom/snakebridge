@@ -92,12 +92,19 @@ defmodule SnakeBridge.Telemetry.RuntimeForwarder do
   end
 
   defp enrich_metadata(metadata) do
-    library = Map.get(metadata, :library)
+    library =
+      Map.get(metadata, :library) || Map.get(metadata, :snakebridge_library) ||
+        Map.get(metadata, :python_module)
 
-    Map.merge(metadata, %{
-      snakebridge_library: library,
-      snakebridge_version: version()
-    })
+    function = Map.get(metadata, :function) || Map.get(metadata, :name)
+    call_type = Map.get(metadata, :call_type) || Map.get(metadata, :type)
+
+    metadata
+    |> Map.put(:library, library || "unknown")
+    |> Map.put(:function, function || "unknown")
+    |> Map.put(:call_type, call_type || "unknown")
+    |> Map.put(:snakebridge_library, library || "unknown")
+    |> Map.put(:snakebridge_version, version())
   end
 
   defp version do

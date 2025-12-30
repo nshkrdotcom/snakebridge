@@ -18,7 +18,10 @@ Supported special types:
 """
 
 import base64
+import inspect
+import json
 import math
+import os
 from datetime import datetime, date, time
 from typing import Any, Dict, List, Union
 
@@ -150,8 +153,33 @@ def encode(value: Any) -> Any:
     if isinstance(value, dict):
         return {encode_dict_key(k): encode(v) for k, v in value.items()}
 
-    # For any other type, try to convert to string
+    # Detect generators and iterators
+    if inspect.isgenerator(value):
+        return {"__needs_stream_ref__": True, "__stream_type__": "generator"}
+
+    if hasattr(value, "__iter__") and hasattr(value, "__next__") and not isinstance(
+        value, (str, bytes, bytearray, list, tuple, dict, set)
+    ):
+        # Prefer regular refs for context managers (e.g. file objects).
+        if hasattr(value, "__enter__") and hasattr(value, "__exit__"):
+            pass
+        else:
+            return {"__needs_stream_ref__": True, "__stream_type__": "iterator"}
+
+    # For any other type, create auto-ref if in adapter context
+    # This is handled by encode_result() in snakebridge_adapter.py
+    # which wraps with context. Here we provide fallback.
     try:
+        # Check if this is a complex object that should be a ref
+        if hasattr(value, "__class__") and not isinstance(
+            value, (str, bytes, int, float, bool, type(None), list, dict, tuple, set)
+        ):
+            # Signal that this needs ref wrapping
+            return {
+                "__needs_ref__": True,
+                "__type_name__": type(value).__name__,
+                "__module__": type(value).__module__,
+            }
         return str(value)
     except Exception:
         return f"<non-serializable: {type(value).__name__}>"
@@ -177,7 +205,7 @@ def encode_dict_key(key: Any) -> str:
         return repr(key)
 
 
-def decode(value: Any) -> Any:
+def decode(value: Any, session_id: str = None, context: Any = None) -> Any:
     """
     Decode a JSON value with __type__ tags back to Python values.
 
@@ -210,7 +238,7 @@ def decode(value: Any) -> Any:
 
     # Handle list
     if isinstance(value, list):
-        return [decode(item) for item in value]
+        return [decode(item, session_id=session_id, context=context) for item in value]
 
     # Handle dict (check for __type__ tag)
     if isinstance(value, dict):
@@ -218,22 +246,28 @@ def decode(value: Any) -> Any:
             type_tag = value["__type__"]
 
             if type_tag == "atom":
-                atom_value = value.get("value")
-                if atom_value is None:
-                    return value
-                return Atom(atom_value)
+                # Default: return plain string for library compatibility
+                # Opt-in to Atom class via SNAKEBRIDGE_ATOM_CLASS=true
+                atom_value = value.get("value", "")
+                if os.environ.get("SNAKEBRIDGE_ATOM_CLASS", "").lower() in (
+                    "true",
+                    "1",
+                    "yes",
+                ):
+                    return Atom(atom_value)
+                return atom_value
 
             if type_tag == "tuple":
                 elements = value.get("elements") or value.get("value") or []
-                return tuple(decode(item) for item in elements)
+                return tuple(decode(item, session_id=session_id, context=context) for item in elements)
 
             elif type_tag == "set":
                 elements = value.get("elements") or value.get("value") or []
-                return set(decode(item) for item in elements)
+                return set(decode(item, session_id=session_id, context=context) for item in elements)
 
             elif type_tag == "frozenset":
                 elements = value.get("elements") or value.get("value") or []
-                return frozenset(decode(item) for item in elements)
+                return frozenset(decode(item, session_id=session_id, context=context) for item in elements)
 
             elif type_tag == "bytes":
                 data = value.get("data") or value.get("value")
@@ -272,15 +306,72 @@ def decode(value: Any) -> Any:
             elif type_tag == "nan":
                 return float("nan")
 
+            elif type_tag == "callback":
+                return _decode_callback(value, session_id, context)
+
             else:
                 # Unknown type tag, return as-is
-                return {k: decode(v) for k, v in value.items()}
+                return {k: decode(v, session_id=session_id, context=context) for k, v in value.items()}
         else:
             # Regular dict, decode recursively
-            return {k: decode(v) for k, v in value.items()}
+            return {k: decode(v, session_id=session_id, context=context) for k, v in value.items()}
 
     # Return as-is for any other type
     return value
+
+
+def _decode_callback(value: Dict[str, Any], session_id: str, context: Any):
+    callback_id = value.get("ref_id") or value.get("callback_id")
+    arity = value.get("arity")
+
+    def _encode_any_json(payload):
+        from google.protobuf import any_pb2
+
+        any_value = any_pb2.Any()
+        any_value.type_url = "type.googleapis.com/google.protobuf.StringValue"
+        any_value.value = json.dumps(payload).encode("utf-8")
+        return any_value
+
+    def _callback(*args):
+        if arity is not None and len(args) != arity:
+            raise TypeError(f"Callback expected arity {arity}, got {len(args)}")
+
+        if context is None or not hasattr(context, "stub"):
+            raise RuntimeError("Elixir callback invoked without session context")
+
+        callback_session_id = session_id or getattr(context, "session_id", None) or "default"
+        encoded_args = [encode(arg) for arg in args]
+
+        try:
+            from snakepit_bridge_pb2 import ExecuteElixirToolRequest
+            from snakepit_bridge.serialization import TypeSerializer
+        except Exception as exc:
+            raise RuntimeError(f"Callback bridge unavailable: {exc}") from exc
+
+        request = ExecuteElixirToolRequest(
+            session_id=callback_session_id,
+            tool_name="snakebridge.callback",
+            parameters={
+                "callback_id": _encode_any_json(callback_id),
+                "args": _encode_any_json(encoded_args),
+            },
+        )
+
+        response = context.stub.ExecuteElixirTool(request)
+
+        if not getattr(response, "success", False):
+            error_message = getattr(response, "error_message", "callback failed")
+            raise RuntimeError(f"Callback failed: {error_message}")
+
+        binary_result = getattr(response, "binary_result", None) or None
+        result = TypeSerializer.decode_any(response.result, binary_result)
+
+        if isinstance(result, dict) and result.get("__type__") == "callback_error":
+            raise RuntimeError(result.get("reason", "callback_error"))
+
+        return decode(result, session_id=callback_session_id, context=context)
+
+    return _callback
 
 
 # Convenience functions for common operations

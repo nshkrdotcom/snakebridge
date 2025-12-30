@@ -107,14 +107,17 @@ defmodule SnakeBridge.RuntimeContractTest do
     test "sends protocol payload and returns :ok" do
       Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
 
-      ref = %{
-        "__type__" => "ref",
-        "__schema__" => 1,
-        "id" => "ref-1",
-        "session_id" => "session-1",
-        "python_module" => "sympy",
-        "library" => "sympy"
-      }
+      ref =
+        SnakeBridge.Ref.from_wire_format(%{
+          "__type__" => "ref",
+          "__schema__" => 1,
+          "id" => "ref-1",
+          "session_id" => "session-1",
+          "python_module" => "sympy",
+          "library" => "sympy"
+        })
+
+      wire_ref = SnakeBridge.Ref.to_wire_format(ref)
 
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.release_ref",
                                                          payload,
@@ -122,7 +125,7 @@ defmodule SnakeBridge.RuntimeContractTest do
         assert payload == %{
                  "protocol_version" => 1,
                  "min_supported_version" => 1,
-                 "ref" => ref
+                 "ref" => wire_ref
                }
 
         {:ok, :released}

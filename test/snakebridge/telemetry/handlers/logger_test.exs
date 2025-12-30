@@ -38,7 +38,7 @@ defmodule SnakeBridge.Telemetry.Handlers.LoggerTest do
           symbols_generated: 100,
           files_written: 10
         },
-        %{libraries: [:numpy, :torch], mode: :normal}
+        %{library: :all, phase: :compile, details: %{libraries: [:numpy, :torch], mode: :normal}}
       )
     end
 
@@ -49,7 +49,11 @@ defmodule SnakeBridge.Telemetry.Handlers.LoggerTest do
       :telemetry.execute(
         [:snakebridge, :compile, :exception],
         %{duration: System.convert_time_unit(500, :millisecond, :native)},
-        %{reason: %RuntimeError{message: "test error"}, stacktrace: []}
+        %{
+          library: :all,
+          phase: :compile,
+          details: %{reason: %RuntimeError{message: "test error"}, stacktrace: []}
+        }
       )
     end
 
@@ -58,13 +62,17 @@ defmodule SnakeBridge.Telemetry.Handlers.LoggerTest do
 
       # This should not raise
       :telemetry.execute(
-        [:snakebridge, :introspect, :stop],
+        [:snakebridge, :compile, :introspect, :stop],
         %{
           duration: System.convert_time_unit(250, :millisecond, :native),
           symbols_introspected: 25,
           cache_hits: 5
         },
-        %{library: :numpy, python_time: System.convert_time_unit(200, :millisecond, :native)}
+        %{
+          library: :numpy,
+          phase: :introspect,
+          details: %{python_time: System.convert_time_unit(200, :millisecond, :native)}
+        }
       )
     end
 
@@ -73,14 +81,14 @@ defmodule SnakeBridge.Telemetry.Handlers.LoggerTest do
 
       # This should not raise
       :telemetry.execute(
-        [:snakebridge, :generate, :stop],
+        [:snakebridge, :compile, :generate, :stop],
         %{
           duration: System.convert_time_unit(100, :millisecond, :native),
           bytes_written: 5000,
           functions_generated: 20,
           classes_generated: 3
         },
-        %{library: :numpy, file: "lib/numpy.ex"}
+        %{library: :numpy, phase: :generate, details: %{file: "lib/numpy.ex"}}
       )
     end
   end

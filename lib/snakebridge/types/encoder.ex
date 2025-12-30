@@ -120,6 +120,30 @@ defmodule SnakeBridge.Types.Encoder do
     tagged("time", %{"value" => Time.to_iso8601(time)})
   end
 
+  # Snakepit PyRef - normalize to ref wire shape
+  def encode(%{__struct__: Snakepit.PyRef} = ref) do
+    ref
+    |> Map.from_struct()
+    |> normalize_pyref_map()
+  end
+
+  # SnakeBridge Ref - normalize to ref wire shape
+  def encode(%SnakeBridge.Ref{} = ref) do
+    SnakeBridge.Ref.to_wire_format(ref)
+  end
+
+  # Functions - encode as callback references
+  def encode(fun) when is_function(fun) do
+    {:ok, callback_id} = SnakeBridge.CallbackRegistry.register(fun)
+    arity = Function.info(fun)[:arity]
+
+    tagged("callback", %{
+      "ref_id" => callback_id,
+      "pid" => self() |> :erlang.pid_to_list() |> IO.iodata_to_binary(),
+      "arity" => arity
+    })
+  end
+
   # Maps - convert atom keys to strings, recursively encode values
   def encode(%{} = map) do
     Map.new(map, fn {key, value} ->
@@ -144,4 +168,19 @@ defmodule SnakeBridge.Types.Encoder do
     |> Map.put("__type__", type)
     |> Map.put("__schema__", SnakeBridge.Types.schema_version())
   end
+
+  defp normalize_pyref_map(ref) do
+    ref_id = Map.get(ref, :id) || Map.get(ref, :ref_id)
+
+    %{}
+    |> Map.put("__type__", "ref")
+    |> Map.put("__schema__", SnakeBridge.Ref.schema_version())
+    |> maybe_put("id", ref_id)
+    |> maybe_put("session_id", Map.get(ref, :session_id))
+    |> maybe_put("python_module", Map.get(ref, :python_module))
+    |> maybe_put("library", Map.get(ref, :library))
+  end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end

@@ -1,0 +1,175 @@
+{
+  "classes": {},
+  "symbols": {
+    "Math.sqrt/1": {
+      "docstring": "Return the square root of x.",
+      "elixir_name": "sqrt",
+      "function": "sqrt",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 2,
+      "minimum_arity": 1,
+      "module": "Math",
+      "name": "sqrt",
+      "optional_keyword_only": [],
+      "parameters": [
+        {
+          "kind": "POSITIONAL_ONLY",
+          "name": "x",
+          "type": {
+            "type": "any"
+          }
+        }
+      ],
+      "python_module": "math",
+      "python_name": "sqrt",
+      "required_arity": 1,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true
+    },
+    "SignatureShowcase.keyword_only/1": {
+      "docstring": "",
+      "elixir_name": "keyword_only",
+      "function": "keyword_only",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 2,
+      "minimum_arity": 1,
+      "module": "SignatureShowcase",
+      "name": "keyword_only",
+      "optional_keyword_only": [
+        "optional_kw"
+      ],
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "a",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "kind": "KEYWORD_ONLY",
+          "name": "required_kw",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "optional_kw",
+          "type": {
+            "type": "any"
+          }
+        }
+      ],
+      "python_module": "signature_showcase",
+      "python_name": "keyword_only",
+      "required_arity": 1,
+      "required_keyword_only": [
+        "required_kw"
+      ],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true
+    },
+    "SignatureShowcase.optional_args/1": {
+      "docstring": "",
+      "elixir_name": "optional_args",
+      "function": "optional_args",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 3,
+      "minimum_arity": 1,
+      "module": "SignatureShowcase",
+      "name": "optional_args",
+      "optional_keyword_only": [],
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "a",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "1",
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "b",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "2",
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "c",
+          "type": {
+            "type": "any"
+          }
+        }
+      ],
+      "python_module": "signature_showcase",
+      "python_name": "optional_args",
+      "required_arity": 1,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true
+    },
+    "SignatureShowcase.py_class/0": {
+      "docstring": "",
+      "elixir_name": "py_class",
+      "function": "class",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 1,
+      "minimum_arity": 0,
+      "module": "SignatureShowcase",
+      "name": "py_class",
+      "optional_keyword_only": [],
+      "parameters": [],
+      "python_module": "signature_showcase",
+      "python_name": "class",
+      "required_arity": 0,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true
+    },
+    "SignatureShowcase.variadic/0": {
+      "docstring": "",
+      "elixir_name": "variadic",
+      "function": "variadic",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 9,
+      "minimum_arity": 0,
+      "module": "SignatureShowcase",
+      "name": "variadic",
+      "optional_keyword_only": [],
+      "parameters": [],
+      "python_module": "signature_showcase",
+      "python_name": "variadic",
+      "required_arity": 0,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": false
+    }
+  },
+  "version": "0.7.2"
+}

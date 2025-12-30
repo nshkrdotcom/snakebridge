@@ -122,21 +122,21 @@ defmodule SnakeBridge.Scanner do
   defp extract_calls(ast, context) do
     {_, calls} =
       Macro.prewalk(ast, [], fn
-        {{:., _, [{:__aliases__, _, parts}, function]}, _, args}, acc
+        {{:., _, [{:__aliases__, _, parts}, function]}, _, args} = node, acc
         when is_atom(function) and is_list(args) ->
           module = resolve_module(parts, context)
 
           if module do
-            {nil, [{module, function, length(args)} | acc]}
+            {node, [{module, function, length(args)} | acc]}
           else
-            {nil, acc}
+            {node, acc}
           end
 
-        {function, _, args}, acc
+        {function, _, args} = node, acc
         when is_atom(function) and is_list(args) ->
           case find_import(function, length(args), context) do
-            {:ok, module} -> {nil, [{module, function, length(args)} | acc]}
-            :not_found -> {nil, acc}
+            {:ok, module} -> {node, [{module, function, length(args)} | acc]}
+            :not_found -> {node, acc}
           end
 
         node, acc ->
@@ -147,12 +147,14 @@ defmodule SnakeBridge.Scanner do
   end
 
   defp resolve_module(parts, context) do
+    module = Module.concat(parts)
+
     case parts do
       [name] when is_atom(name) ->
-        Map.get(context.aliases, name)
+        Map.get(context.aliases, name) ||
+          if library_module?(module, context.library_modules), do: module, else: nil
 
       _ ->
-        module = Module.concat(parts)
         if library_module?(module, context.library_modules), do: module, else: nil
     end
   end

@@ -20,6 +20,8 @@ defmodule SnakeBridge.Types.Decoder do
   - `{"__type__": "special_float", "value": "infinity"}` → `:infinity`
   - `{"__type__": "special_float", "value": "neg_infinity"}` → `:neg_infinity`
   - `{"__type__": "special_float", "value": "nan"}` → `:nan`
+  - `{"__type__": "ref", ...}` → `SnakeBridge.Ref`
+  - `{"__type__": "stream_ref", ...}` → `SnakeBridge.StreamRef`
 
   ## Direct JSON Types
 
@@ -73,6 +75,23 @@ defmodule SnakeBridge.Types.Decoder do
   # Lists - recursively decode elements
   def decode(list) when is_list(list) do
     Enum.map(list, &decode/1)
+  end
+
+  def decode(%{"__type__" => "stream_ref"} = map) do
+    SnakeBridge.StreamRef.from_wire_format(map)
+  end
+
+  def decode(%{"__type__" => "ref"} = ref) do
+    required = ["id", "session_id"]
+    missing = Enum.filter(required, &(not Map.has_key?(ref, &1)))
+
+    if missing != [] do
+      raise ArgumentError, "Invalid ref: missing fields #{inspect(missing)}"
+    end
+
+    ref_struct = SnakeBridge.Ref.from_wire_format(ref)
+    maybe_register_ref(ref_struct)
+    ref_struct
   end
 
   # Maps with __type__ markers - decode based on type
@@ -184,5 +203,18 @@ defmodule SnakeBridge.Types.Decoder do
       :all -> :all
       list -> Enum.map(List.wrap(list), &to_string/1)
     end
+  end
+
+  defp maybe_register_ref(ref) do
+    session_id = Map.get(ref, "session_id") || Map.get(ref, :session_id)
+
+    if is_binary(session_id) and Process.whereis(SnakeBridge.SessionManager) do
+      case SnakeBridge.SessionManager.register_ref(session_id, ref) do
+        :ok -> :ok
+        {:error, _reason} -> :ok
+      end
+    end
+
+    :ok
   end
 end

@@ -3,51 +3,97 @@
   "symbols": {
     "WrapperArgs.join_values/0": {
       "docstring": "Join values with a separator, demonstrating Python varargs.",
+      "elixir_name": "join_values",
       "function": "join_values",
+      "has_var_keyword": false,
+      "has_var_positional": true,
+      "maximum_arity": "unbounded",
+      "minimum_arity": 0,
       "module": "WrapperArgs",
       "name": "join_values",
+      "optional_keyword_only": [
+        "sep"
+      ],
       "parameters": [
         {
           "kind": "VAR_POSITIONAL",
-          "name": "values"
+          "name": "values",
+          "type": {
+            "type": "any"
+          }
         },
         {
           "default": "' '",
           "kind": "KEYWORD_ONLY",
-          "name": "sep"
+          "name": "sep",
+          "type": {
+            "type": "any"
+          }
         }
       ],
       "python_module": "wrapper_args_example",
-      "return_annotation": null
+      "python_name": "join_values",
+      "required_arity": 0,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true
     },
     "WrapperArgs.mean/1": {
       "docstring": "Compute a simple mean with optional axis and dtype placeholders.",
+      "elixir_name": "mean",
       "function": "mean",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 3,
+      "minimum_arity": 1,
       "module": "WrapperArgs",
       "name": "mean",
+      "optional_keyword_only": [],
       "parameters": [
         {
           "kind": "POSITIONAL_OR_KEYWORD",
-          "name": "values"
+          "name": "values",
+          "type": {
+            "type": "any"
+          }
         },
         {
           "default": "None",
           "kind": "POSITIONAL_OR_KEYWORD",
-          "name": "axis"
+          "name": "axis",
+          "type": {
+            "type": "any"
+          }
         },
         {
           "default": "None",
           "kind": "POSITIONAL_OR_KEYWORD",
-          "name": "dtype"
+          "name": "dtype",
+          "type": {
+            "type": "any"
+          }
         },
         {
           "default": "False",
           "kind": "POSITIONAL_OR_KEYWORD",
-          "name": "keepdims"
+          "name": "keepdims",
+          "type": {
+            "type": "any"
+          }
         }
       ],
       "python_module": "wrapper_args_example",
-      "return_annotation": null
+      "python_name": "mean",
+      "required_arity": 1,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true
     }
   },
   "version": "0.7.0"

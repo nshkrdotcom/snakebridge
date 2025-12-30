@@ -7,9 +7,18 @@ defmodule SnakeBridge do
   `lib/snakebridge_generated/`. Runtime execution belongs to Snakepit.
   """
 
+  require SnakeBridge.WithContext
+
   defdelegate call(module, function, args \\ [], opts \\ []), to: SnakeBridge.Runtime
   defdelegate call_helper(helper, args \\ [], opts \\ []), to: SnakeBridge.Runtime
   defdelegate stream(module, function, args \\ [], opts \\ [], callback), to: SnakeBridge.Runtime
+
+  defmacro with_python(ref, do: block) do
+    quote do
+      require SnakeBridge.WithContext
+      SnakeBridge.WithContext.with_python(unquote(ref), do: unquote(block))
+    end
+  end
 
   @doc """
   Returns the SnakeBridge version.

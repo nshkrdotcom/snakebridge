@@ -20,6 +20,7 @@ defmodule SnakeBridge.ErrorTranslator do
 
   """
 
+  alias SnakeBridge.DynamicException
   alias SnakeBridge.Error.{DtypeMismatchError, OutOfMemoryError, ShapeMismatchError}
 
   # Mapping from normalized dtype strings to Elixir atoms
@@ -52,7 +53,7 @@ defmodule SnakeBridge.ErrorTranslator do
 
   Returns the original error if it cannot be translated.
   """
-  @spec translate(Exception.t() | nil, String.t() | nil) :: Exception.t() | nil
+  @spec translate(Exception.t() | map() | nil, String.t() | nil) :: Exception.t() | nil
   def translate(error, traceback \\ nil)
 
   def translate(nil, _traceback), do: nil
@@ -62,6 +63,22 @@ defmodule SnakeBridge.ErrorTranslator do
       nil -> error
       translated -> maybe_add_traceback(translated, traceback)
     end
+  end
+
+  def translate(%{python_type: type} = error, traceback) when is_binary(type) do
+    translate_python_error(type, error, traceback)
+  end
+
+  def translate(%{"python_type" => type} = error, traceback) when is_binary(type) do
+    translate_python_error(type, error, traceback)
+  end
+
+  def translate(%{error_type: type} = error, traceback) when is_binary(type) do
+    translate_python_error(type, error, traceback)
+  end
+
+  def translate(%{"error_type" => type} = error, traceback) when is_binary(type) do
+    translate_python_error(type, error, traceback)
   end
 
   def translate(error, _traceback), do: error
@@ -78,6 +95,41 @@ defmodule SnakeBridge.ErrorTranslator do
       oom_error?(message) -> translate_oom_error(message)
       dtype_mismatch?(message) -> translate_dtype_error(message)
       true -> nil
+    end
+  end
+
+  defp translate_python_error(type, error, traceback) do
+    message = error_message(error)
+
+    case maybe_translate_message(message, traceback) do
+      {:ok, translated} ->
+        translated
+
+      :error ->
+        DynamicException.create(type, message, details: error, python_traceback: traceback)
+    end
+  end
+
+  defp maybe_translate_message(message, traceback) when is_binary(message) do
+    case translate_message(message) do
+      nil -> :error
+      translated -> {:ok, maybe_add_traceback(translated, traceback)}
+    end
+  end
+
+  defp maybe_translate_message(_message, _traceback), do: :error
+
+  defp error_message(error) when is_map(error) do
+    value =
+      Map.get(error, :message) ||
+        Map.get(error, "message") ||
+        Map.get(error, :error) ||
+        Map.get(error, "error")
+
+    cond do
+      is_binary(value) -> value
+      is_nil(value) -> ""
+      true -> inspect(value)
     end
   end
 

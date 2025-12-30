@@ -6,6 +6,8 @@ defmodule SnakeBridge.Runtime do
   match the Snakepit Prime runtime contract.
   """
 
+  alias SnakeBridge.Types
+
   @type module_ref :: module()
   @type function_name :: atom() | String.t()
   @type args :: list()
@@ -18,37 +20,85 @@ defmodule SnakeBridge.Runtime do
           {:ok, term()} | {:error, Snakepit.Error.t()}
   def call(module, function, args \\ [], opts \\ []) do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
-    payload = base_payload(module, function, args ++ extra_args, kwargs, idempotent)
+    encoded_args = encode_args(args ++ extra_args)
+    encoded_kwargs = encode_kwargs(kwargs)
+    payload = base_payload(module, function, encoded_args, encoded_kwargs, idempotent)
     metadata = call_metadata(payload, module, function, "function")
 
     execute_with_telemetry(metadata, fn ->
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> apply_error_mode()
+    |> decode_result()
+  end
+
+  @doc """
+  Calls any Python function dynamically without requiring generated bindings.
+
+  This is the no-codegen escape hatch for calling functions that were not
+  scanned during compilation.
+  """
+  @spec call_dynamic(String.t(), function_name(), args(), opts()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  def call_dynamic(module_path, function, args \\ [], opts \\ []) when is_binary(module_path) do
+    {args, opts} = normalize_args_opts(args, opts)
+    {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
+    encoded_args = encode_args(args ++ extra_args)
+    encoded_kwargs = encode_kwargs(kwargs)
+
+    payload =
+      protocol_payload()
+      |> Map.put("call_type", "dynamic")
+      |> Map.put("module_path", module_path)
+      |> Map.put("function", to_string(function))
+      |> Map.put("args", encoded_args)
+      |> Map.put("kwargs", encoded_kwargs)
+      |> Map.put("idempotent", idempotent)
+      |> maybe_put_session_id(current_session_id())
+
+    metadata = %{
+      module: module_path,
+      function: to_string(function),
+      library: module_path |> String.split(".") |> List.first(),
+      python_module: module_path,
+      call_type: "dynamic"
+    }
+
+    execute_with_telemetry(metadata, fn ->
+      runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    end)
+    |> apply_error_mode()
+    |> decode_result()
   end
 
   @spec call_helper(String.t(), args(), opts() | map()) :: {:ok, term()} | {:error, term()}
   def call_helper(helper, args \\ [], opts \\ [])
 
   def call_helper(helper, args, opts) when is_map(opts) do
-    payload = helper_payload(helper, args, stringify_keys(opts), false)
+    encoded_args = encode_args(args)
+    encoded_kwargs = encode_kwargs(stringify_keys(opts))
+    payload = helper_payload(helper, encoded_args, encoded_kwargs, false)
     metadata = helper_metadata(helper)
 
     execute_with_telemetry(metadata, fn ->
       runtime_client().execute("snakebridge.call", payload, [])
     end)
     |> classify_helper_result(helper)
+    |> decode_result()
   end
 
   def call_helper(helper, args, opts) when is_list(opts) do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
-    payload = helper_payload(helper, args ++ extra_args, kwargs, idempotent)
+    encoded_args = encode_args(args ++ extra_args)
+    encoded_kwargs = encode_kwargs(kwargs)
+    payload = helper_payload(helper, encoded_args, encoded_kwargs, idempotent)
     metadata = helper_metadata(helper)
 
     execute_with_telemetry(metadata, fn ->
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> classify_helper_result(helper)
+    |> decode_result()
   end
 
   @spec stream(module_ref(), function_name(), args(), opts(), (term() -> any())) ::
@@ -56,23 +106,77 @@ defmodule SnakeBridge.Runtime do
   def stream(module, function, args \\ [], opts \\ [], callback)
       when is_function(callback, 1) do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
-    payload = base_payload(module, function, args ++ extra_args, kwargs, idempotent)
+    encoded_args = encode_args(args ++ extra_args)
+    encoded_kwargs = encode_kwargs(kwargs)
+    payload = base_payload(module, function, encoded_args, encoded_kwargs, idempotent)
     metadata = call_metadata(payload, module, function, "stream")
+    decode_callback = fn chunk -> callback.(Types.decode(chunk)) end
 
     execute_with_telemetry(metadata, fn ->
-      runtime_client().execute_stream("snakebridge.stream", payload, callback, runtime_opts)
+      runtime_client().execute_stream(
+        "snakebridge.stream",
+        payload,
+        decode_callback,
+        runtime_opts
+      )
     end)
     |> apply_error_mode()
+  end
+
+  @doc """
+  Gets the next item from a Python iterator or generator.
+  """
+  @spec stream_next(SnakeBridge.StreamRef.t(), opts()) ::
+          {:ok, term()} | {:error, :stop_iteration} | {:error, Snakepit.Error.t()}
+  def stream_next(stream_ref, opts \\ []) do
+    {_args, opts} = normalize_args_opts([], opts)
+    {_, _, _, runtime_opts} = split_opts(opts)
+
+    wire_ref = SnakeBridge.StreamRef.to_wire_format(stream_ref)
+    session_id = ref_field(stream_ref, "session_id") || current_session_id()
+
+    payload =
+      protocol_payload()
+      |> Map.put("call_type", "stream_next")
+      |> Map.put("stream_ref", wire_ref)
+      |> maybe_put_session_id(session_id)
+
+    result =
+      runtime_client().execute("snakebridge.call", payload, runtime_opts)
+      |> apply_error_mode()
+
+    case result do
+      {:ok, %{"__type__" => "stop_iteration"}} ->
+        {:error, :stop_iteration}
+
+      {:ok, value} ->
+        {:ok, Types.decode(value)}
+
+      error ->
+        error
+    end
+  end
+
+  @doc """
+  Gets the length of a Python iterable (if supported).
+  """
+  @spec stream_len(SnakeBridge.StreamRef.t(), opts()) ::
+          {:ok, non_neg_integer()} | {:error, term()}
+  def stream_len(stream_ref, opts \\ []) do
+    wire_ref = SnakeBridge.StreamRef.to_wire_format(stream_ref)
+    call_method(wire_ref, :__len__, [], opts)
   end
 
   @spec call_class(module_ref(), function_name(), args(), opts()) ::
           {:ok, term()} | {:error, Snakepit.Error.t()}
   def call_class(module, function, args \\ [], opts \\ []) do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
+    encoded_args = encode_args(args ++ extra_args)
+    encoded_kwargs = encode_kwargs(kwargs)
 
     payload =
       module
-      |> base_payload(function, args ++ extra_args, kwargs, idempotent)
+      |> base_payload(function, encoded_args, encoded_kwargs, idempotent)
       |> Map.put("call_type", "class")
       |> Map.put("class", python_class_name(module))
 
@@ -82,18 +186,22 @@ defmodule SnakeBridge.Runtime do
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> apply_error_mode()
+    |> decode_result()
   end
 
-  @spec call_method(SnakeBridge.Ref.t(), function_name(), args(), opts()) ::
+  @spec call_method(SnakeBridge.Ref.t() | map(), function_name(), args(), opts()) ::
           {:ok, term()} | {:error, Snakepit.Error.t()}
   def call_method(ref, function, args \\ [], opts \\ []) do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
+    encoded_args = encode_args(args ++ extra_args)
+    encoded_kwargs = encode_kwargs(kwargs)
+    wire_ref = normalize_ref(ref)
 
     payload =
-      ref
-      |> base_payload_for_ref(function, args ++ extra_args, kwargs, idempotent)
+      wire_ref
+      |> base_payload_for_ref(function, encoded_args, encoded_kwargs, idempotent)
       |> Map.put("call_type", "method")
-      |> Map.put("instance", ref)
+      |> Map.put("instance", wire_ref)
 
     metadata = ref_metadata(payload, function, "method")
 
@@ -101,18 +209,45 @@ defmodule SnakeBridge.Runtime do
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> apply_error_mode()
+    |> decode_result()
+  end
+
+  @doc """
+  Retrieves a module-level attribute (constant, class, etc.).
+  """
+  @spec get_module_attr(module(), atom() | String.t(), opts()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  def get_module_attr(module, attr, opts \\ []) do
+    {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
+    encoded_kwargs = encode_kwargs(kwargs)
+
+    payload =
+      module
+      |> base_payload(attr, [], encoded_kwargs, idempotent)
+      |> Map.put("call_type", "module_attr")
+      |> Map.put("attr", to_string(attr))
+
+    metadata = call_metadata(payload, module, attr, "module_attr")
+
+    execute_with_telemetry(metadata, fn ->
+      runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    end)
+    |> apply_error_mode()
+    |> decode_result()
   end
 
   @spec get_attr(SnakeBridge.Ref.t(), atom() | String.t(), opts()) ::
           {:ok, term()} | {:error, Snakepit.Error.t()}
   def get_attr(ref, attr, opts \\ []) do
     {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
+    encoded_kwargs = encode_kwargs(kwargs)
+    wire_ref = normalize_ref(ref)
 
     payload =
-      ref
-      |> base_payload_for_ref(attr, [], kwargs, idempotent)
+      wire_ref
+      |> base_payload_for_ref(attr, [], encoded_kwargs, idempotent)
       |> Map.put("call_type", "get_attr")
-      |> Map.put("instance", ref)
+      |> Map.put("instance", wire_ref)
       |> Map.put("attr", to_string(attr))
 
     metadata = ref_metadata(payload, attr, "get_attr")
@@ -121,18 +256,45 @@ defmodule SnakeBridge.Runtime do
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> apply_error_mode()
+    |> decode_result()
+  end
+
+  @doc false
+  def build_module_attr_payload(module, attr) do
+    module
+    |> base_payload(attr, [], %{}, false)
+    |> Map.put("call_type", "module_attr")
+    |> Map.put("attr", to_string(attr))
+  end
+
+  @doc false
+  def build_dynamic_payload(module_path, function, args, opts) do
+    {args, opts} = normalize_args_opts(args, opts)
+    {kwargs, idempotent, extra_args, _runtime_opts} = split_opts(opts)
+
+    protocol_payload()
+    |> Map.put("call_type", "dynamic")
+    |> Map.put("module_path", module_path)
+    |> Map.put("function", to_string(function))
+    |> Map.put("args", List.wrap(args ++ extra_args))
+    |> Map.put("kwargs", Map.new(kwargs, fn {key, value} -> {to_string(key), value} end))
+    |> Map.put("idempotent", idempotent)
+    |> maybe_put_session_id(current_session_id())
   end
 
   @spec set_attr(SnakeBridge.Ref.t(), atom() | String.t(), term(), opts()) ::
           {:ok, term()} | {:error, Snakepit.Error.t()}
   def set_attr(ref, attr, value, opts \\ []) do
     {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
+    encoded_kwargs = encode_kwargs(kwargs)
+    encoded_args = encode_args([value])
+    wire_ref = normalize_ref(ref)
 
     payload =
-      ref
-      |> base_payload_for_ref(attr, [value], kwargs, idempotent)
+      wire_ref
+      |> base_payload_for_ref(attr, encoded_args, encoded_kwargs, idempotent)
       |> Map.put("call_type", "set_attr")
-      |> Map.put("instance", ref)
+      |> Map.put("instance", wire_ref)
       |> Map.put("attr", to_string(attr))
 
     metadata = ref_metadata(payload, attr, "set_attr")
@@ -141,6 +303,7 @@ defmodule SnakeBridge.Runtime do
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> apply_error_mode()
+    |> decode_result()
   end
 
   @spec release_ref(SnakeBridge.Ref.t(), opts()) :: :ok | {:error, Snakepit.Error.t()}
@@ -149,7 +312,7 @@ defmodule SnakeBridge.Runtime do
 
     payload =
       protocol_payload()
-      |> Map.put("ref", ref)
+      |> Map.put("ref", normalize_ref(ref))
 
     runtime_client().execute("snakebridge.release_ref", payload, runtime_opts)
     |> apply_error_mode()
@@ -287,6 +450,7 @@ defmodule SnakeBridge.Runtime do
       "kwargs" => kwargs,
       "idempotent" => idempotent
     }
+    |> maybe_put_session_id(current_session_id())
   end
 
   defp base_payload_for_ref(ref, function, args, kwargs, idempotent) do
@@ -294,6 +458,7 @@ defmodule SnakeBridge.Runtime do
       ref_field(ref, "python_module") || ref_field(ref, "library") || python_module_name(ref)
 
     library = ref_field(ref, "library") || library_name(ref, python_module)
+    session_id = ref_field(ref, "session_id") || current_session_id()
 
     %{
       "protocol_version" => @protocol_version,
@@ -305,6 +470,7 @@ defmodule SnakeBridge.Runtime do
       "kwargs" => kwargs,
       "idempotent" => idempotent
     }
+    |> maybe_put_session_id(session_id)
   end
 
   defp python_module_name(module) when is_atom(module) do
@@ -355,6 +521,7 @@ defmodule SnakeBridge.Runtime do
       "idempotent" => idempotent,
       "helper_config" => SnakeBridge.Helpers.payload_config(SnakeBridge.Helpers.runtime_config())
     }
+    |> maybe_put_session_id(current_session_id())
   end
 
   @doc false
@@ -373,6 +540,19 @@ defmodule SnakeBridge.Runtime do
   end
 
   defp helper_library(_), do: "unknown"
+
+  defp current_session_id do
+    case SnakeBridge.SessionContext.current() do
+      %{session_id: session_id} when is_binary(session_id) -> session_id
+      _ -> nil
+    end
+  end
+
+  defp maybe_put_session_id(payload, nil), do: payload
+
+  defp maybe_put_session_id(payload, session_id) when is_binary(session_id) do
+    Map.put(payload, "session_id", session_id)
+  end
 
   defp classify_helper_result({:error, reason}, helper) do
     {:error, classify_helper_error(reason, helper)}
@@ -410,9 +590,23 @@ defmodule SnakeBridge.Runtime do
 
   defp extract_helper_name(_), do: nil
 
+  defp encode_args(args) do
+    args
+    |> List.wrap()
+    |> Enum.map(&Types.encode/1)
+  end
+
+  defp encode_kwargs(kwargs) do
+    kwargs
+    |> Enum.into(%{}, fn {key, value} -> {to_string(key), Types.encode(value)} end)
+  end
+
   defp stringify_keys(map) when is_map(map) do
     Enum.into(map, %{}, fn {key, value} -> {to_string(key), value} end)
   end
+
+  defp decode_result({:ok, value}), do: {:ok, Types.decode(value)}
+  defp decode_result(result), do: result
 
   defp apply_error_mode({:error, reason}) do
     case error_mode() do
@@ -441,7 +635,11 @@ defmodule SnakeBridge.Runtime do
 
   defp translate_reason(reason) do
     case python_error_payload(reason) do
-      {message, traceback} when is_binary(message) ->
+      {_message, traceback, type} when is_binary(type) ->
+        translated = SnakeBridge.ErrorTranslator.translate(reason, traceback)
+        if translated == reason, do: reason, else: translated
+
+      {message, traceback, _type} when is_binary(message) ->
         translated =
           SnakeBridge.ErrorTranslator.translate(%RuntimeError{message: message}, traceback)
 
@@ -455,17 +653,27 @@ defmodule SnakeBridge.Runtime do
     end
   end
 
-  defp python_error_payload(%{message: message} = error) when is_binary(message) do
-    traceback = Map.get(error, :traceback) || Map.get(error, :python_traceback)
-    {message, traceback}
+  defp python_error_payload(error) when is_map(error) do
+    {extract_error_message(error), extract_error_traceback(error), extract_error_type(error)}
   end
 
-  defp python_error_payload(%{"message" => message} = error) when is_binary(message) do
-    traceback = Map.get(error, "traceback") || Map.get(error, "python_traceback")
-    {message, traceback}
+  defp python_error_payload(_), do: {nil, nil, nil}
+
+  defp extract_error_message(error) do
+    get_first_present(error, [:message, "message", :error, "error"])
   end
 
-  defp python_error_payload(_), do: {nil, nil}
+  defp extract_error_traceback(error) do
+    get_first_present(error, [:traceback, "traceback", :python_traceback, "python_traceback"])
+  end
+
+  defp extract_error_type(error) do
+    get_first_present(error, [:python_type, "python_type", :error_type, "error_type"])
+  end
+
+  defp get_first_present(map, keys) do
+    Enum.find_value(keys, fn key -> Map.get(map, key) end)
+  end
 
   defp error_mode do
     Application.get_env(:snakebridge, :error_mode, :raw)
@@ -484,4 +692,16 @@ defmodule SnakeBridge.Runtime do
     do: Map.get(ref, "id") || Map.get(ref, :id) || Map.get(ref, "ref_id") || Map.get(ref, :ref_id)
 
   defp ref_field(_ref, _key), do: nil
+
+  defp normalize_ref(%SnakeBridge.Ref{} = ref), do: SnakeBridge.Ref.to_wire_format(ref)
+
+  defp normalize_ref(ref) when is_map(ref) do
+    if Map.get(ref, "__type__") == "ref" or Map.get(ref, :__type__) == "ref" do
+      SnakeBridge.Ref.to_wire_format(ref)
+    else
+      ref
+    end
+  end
+
+  defp normalize_ref(ref), do: ref
 end

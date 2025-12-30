@@ -16,7 +16,7 @@ Add to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:snakebridge, "~> 0.7.3",
+    {:snakebridge, "~> 0.7.4",
       libraries: [
         {:numpy, "1.26.0"},
         {:pandas, version: "2.0.0", include: ["DataFrame", "read_csv"]}
@@ -391,7 +391,7 @@ config :snakebridge,
 
 ```elixir
 # mix.exs
-{:snakebridge, "~> 0.7.3",
+{:snakebridge, "~> 0.7.4",
   libraries: [
     # Simple: name and version
     {:numpy, "1.26.0"},
@@ -466,6 +466,7 @@ cd examples/wrapper_args_example && mix run -e Demo.run
 cd examples/class_constructor_example && mix run -e Demo.run
 cd examples/streaming_example && mix run -e Demo.run
 cd examples/strict_mode_example && mix run -e Demo.run
+cd examples/universal_ffi_example && mix run -e Demo.run  # Universal FFI showcase
 ```
 
 ## Direct Runtime API

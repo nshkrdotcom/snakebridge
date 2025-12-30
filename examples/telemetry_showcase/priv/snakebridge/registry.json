@@ -1,12 +1,12 @@
 {
-  "generated_at": "2025-12-30T20:06:14.519848Z",
+  "generated_at": "2025-12-30T22:44:26.325619Z",
   "libraries": {
     "json": {
       "elixir_module": "Json",
       "files": [
         "json.ex"
       ],
-      "generated_at": "2025-12-30T20:06:14.460398Z",
+      "generated_at": "2025-12-30T22:44:26.263346Z",
       "path": "lib/snakebridge_generated",
       "python_module": "json",
       "python_version": "stdlib",
@@ -21,7 +21,7 @@
       "files": [
         "math.ex"
       ],
-      "generated_at": "2025-12-30T20:06:14.456887Z",
+      "generated_at": "2025-12-30T22:44:26.259256Z",
       "path": "lib/snakebridge_generated",
       "python_module": "math",
       "python_version": "stdlib",

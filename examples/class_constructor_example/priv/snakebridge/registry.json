@@ -1,12 +1,12 @@
 {
-  "generated_at": "2025-12-30T20:06:35.183591Z",
+  "generated_at": "2025-12-30T22:44:47.609021Z",
   "libraries": {
     "class_constructor_example": {
       "elixir_module": "ClassConstructor",
       "files": [
         "class_constructor_example.ex"
       ],
-      "generated_at": "2025-12-30T20:06:35.121511Z",
+      "generated_at": "2025-12-30T22:44:47.446894Z",
       "path": "lib/snakebridge_generated",
       "python_module": "class_constructor_example",
       "python_version": "stdlib",

@@ -30,6 +30,7 @@ cd class_constructor_example && mix run -e Demo.run
 cd streaming_example && mix run -e Demo.run
 cd strict_mode_example && mix run -e Demo.run
 cd python_idioms_example && mix run -e Demo.run
+cd universal_ffi_example && mix run -e Demo.run
 # etc.
 ```
 
@@ -53,6 +54,7 @@ cd python_idioms_example && mix run -e Demo.run
 | **session_lifecycle_example** | Session lifecycle management | Auto-ref, SessionContext, cleanup |
 | **python_idioms_example** | Python idioms bridge | Generators, context managers, callbacks |
 | **protocol_integration_example** | Protocol integration | Inspect/String.Chars, Enumerable, dynamic exceptions |
+| **universal_ffi_example** | Universal FFI showcase (v0.8.4+) | `SnakeBridge.call/4`, `get/3`, `method/4`, `attr/3`, `bytes/1`, auto-sessions |
 
 ## Verbose Output Format
 
@@ -197,6 +199,20 @@ Performance demonstration calling 20 Python standard library modules:
 - Summary statistics (fastest, slowest, average)
 
 Libraries used: `math`, `json`, `os`, `sys`, `platform`, `datetime`, `random`, `hashlib`, `base64`, `urllib.parse`, `re`, `collections`, `itertools`, `functools`, `string`, `textwrap`, `uuid`, `time`, `calendar`, `statistics`
+
+### universal_ffi_example
+
+Comprehensive showcase of Universal FFI features (v0.8.4+):
+- `SnakeBridge.call/4` - Call any Python function dynamically
+- `SnakeBridge.get/3` - Get module attributes
+- `SnakeBridge.method/4` and `attr/3` - Call methods/get attributes on refs
+- `SnakeBridge.bytes/1` - Explicit binary encoding for hashlib, crypto, etc.
+- Non-string key maps (integer/tuple keys)
+- Auto-session management
+- Bang variants (`call!`, `get!`, `method!`, `attr!`)
+- Streaming with `SnakeBridge.stream/5`
+
+This is the canonical reference for Universal FFI usage - the "escape hatch" for calling Python without code generation.
 
 ## Requirements
 

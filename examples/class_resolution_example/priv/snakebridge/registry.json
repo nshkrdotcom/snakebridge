@@ -1,12 +1,12 @@
 {
-  "generated_at": "2025-12-30T20:06:32.016569Z",
+  "generated_at": "2025-12-30T22:44:43.791005Z",
   "libraries": {
     "math": {
       "elixir_module": "Math",
       "files": [
         "math.ex"
       ],
-      "generated_at": "2025-12-30T20:06:31.943032Z",
+      "generated_at": "2025-12-30T22:44:43.714593Z",
       "path": "lib/snakebridge_generated",
       "python_module": "math",
       "python_version": "stdlib",
@@ -21,7 +21,7 @@
       "files": [
         "pathlib.ex"
       ],
-      "generated_at": "2025-12-30T20:06:31.956403Z",
+      "generated_at": "2025-12-30T22:44:43.728779Z",
       "path": "lib/snakebridge_generated",
       "python_module": "pathlib",
       "python_version": "stdlib",

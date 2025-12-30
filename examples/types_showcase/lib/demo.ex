@@ -41,6 +41,10 @@ defmodule Demo do
       demo_nested_structures()
       demo_atoms_and_refs()
 
+      # New v0.8.4 type features
+      demo_explicit_bytes()
+      demo_non_string_key_maps()
+
       IO.puts("""
 
       ======================================================================
@@ -52,14 +56,20 @@ defmodule Demo do
         Python float    <-> Elixir float
         Python str      <-> Elixir String (binary)
         Python list     <-> Elixir list
-        Python dict     <-> Elixir map
+        Python dict     <-> Elixir map (string keys)
+        Python dict     <-> Elixir map (tagged dict for non-string keys) [v0.8.4]
         Python tuple    <-> Elixir tuple
         Python None     <-> Elixir nil
         Python bool     <-> Elixir boolean
         Python bytes    <-> Elixir binary
+        Python bytes    <-  SnakeBridge.bytes(binary) [v0.8.4 explicit]
         Nested structs  <-> Nested Elixir terms
         Python str      <-  Elixir atom (default)
         Python object   <-> Elixir ref handle
+
+      New in v0.8.4:
+        - Use SnakeBridge.bytes/1 for explicit bytes encoding
+        - Maps with integer/tuple keys now round-trip correctly
 
       Try `iex -S mix` to experiment with more types!
       ======================================================================
@@ -403,6 +413,169 @@ defmodule Demo do
   end
 
   # ==========================================================================
+  # New v0.8.4 Type Features
+  # ==========================================================================
+
+  defp demo_explicit_bytes do
+    IO.puts("--- SECTION 12: SnakeBridge.Bytes (NEW in v0.8.4) ----------------")
+    IO.puts("")
+
+    IO.puts("    Use SnakeBridge.bytes/1 when Python expects bytes, not str.")
+    IO.puts("    Essential for: hashlib, base64, struct, cryptography, etc.")
+    IO.puts("")
+
+    # Hashlib requires bytes
+    IO.puts("    +-- hashlib.md5 with bytes wrapper")
+    IO.puts("    |")
+
+    IO.puts(
+      "    |  Elixir call:     SnakeBridge.call(\"hashlib\", \"md5\", [SnakeBridge.bytes(\"abc\")])"
+    )
+
+    IO.puts("    |")
+
+    case SnakeBridge.call("hashlib", "md5", [SnakeBridge.bytes("abc")]) do
+      {:ok, hash_ref} ->
+        case SnakeBridge.method(hash_ref, "hexdigest", []) do
+          {:ok, hex} ->
+            IO.puts("    |  Python hash:    #{hex}")
+            expected = "900150983cd24fb0d6963f7d28e17f72"
+            IO.puts("    |  Expected:       #{expected}")
+            IO.puts("    |  Match:          #{hex == expected}")
+            IO.puts("    |")
+            IO.puts("    +-- Result: {:ok, #{inspect(hex)}}")
+
+          {:error, reason} ->
+            Examples.record_failure()
+            IO.puts("    |  Error:          #{inspect(reason)}")
+            IO.puts("    +-- Result: {:error, ...}")
+        end
+
+      {:error, reason} ->
+        Examples.record_failure()
+        IO.puts("    |  Error:          #{inspect(reason)}")
+        IO.puts("    +-- Result: {:error, ...}")
+    end
+
+    IO.puts("")
+
+    # Base64 round-trip
+    IO.puts("    +-- base64 binary round-trip")
+    IO.puts("    |")
+    original = <<0, 1, 2, 128, 255>>
+    IO.puts("    |  Original binary: #{inspect(original)}")
+
+    case SnakeBridge.call("base64", "b64encode", [SnakeBridge.bytes(original)]) do
+      {:ok, encoded} ->
+        IO.puts("    |  Base64 encoded: #{inspect(encoded)}")
+
+        case SnakeBridge.call("base64", "b64decode", [encoded]) do
+          {:ok, decoded} ->
+            IO.puts("    |  Decoded:        #{inspect(decoded)}")
+            IO.puts("    |  Round-trip OK:  #{original == decoded}")
+            IO.puts("    +-- Result: {:ok, round-trip successful}")
+
+          {:error, reason} ->
+            Examples.record_failure()
+            IO.puts("    |  Decode error:   #{inspect(reason)}")
+            IO.puts("    +-- Result: {:error, ...}")
+        end
+
+      {:error, reason} ->
+        Examples.record_failure()
+        IO.puts("    |  Encode error:   #{inspect(reason)}")
+        IO.puts("    +-- Result: {:error, ...}")
+    end
+
+    IO.puts("")
+  end
+
+  defp demo_non_string_key_maps do
+    IO.puts("--- SECTION 13: Non-String Key Maps (NEW in v0.8.4) --------------")
+    IO.puts("")
+
+    IO.puts("    Maps with integer, tuple, or atom keys now serialize correctly")
+    IO.puts("    using the tagged dict wire format.")
+    IO.puts("")
+
+    # Integer keys
+    IO.puts("    +-- Integer key map")
+    IO.puts("    |")
+    int_map = %{1 => "one", 2 => "two", 3 => "three"}
+    IO.puts("    |  Elixir map:     #{inspect(int_map)}")
+
+    case SnakeBridge.call("builtins", "dict", [int_map]) do
+      {:ok, returned} when is_map(returned) and not is_struct(returned) ->
+        # Dict was returned directly (JSON-serializable)
+        # Verify integer keys are preserved
+        value = Map.get(returned, 2)
+        IO.puts("    |  Returned:       #{inspect(returned)}")
+        IO.puts("    |  map[2]:         #{inspect(value)}")
+        IO.puts("    |  Key is integer: #{value == "two"}")
+        IO.puts("    +-- Result: {:ok, integer keys preserved}")
+
+      {:ok, ref} when is_struct(ref) ->
+        # Returned as ref - call method on it
+        case SnakeBridge.method(ref, "get", [2]) do
+          {:ok, value} ->
+            IO.puts("    |  dict.get(2):    #{inspect(value)}")
+            IO.puts("    |  Key is integer: #{value == "two"}")
+            IO.puts("    +-- Result: {:ok, integer keys preserved}")
+
+          {:error, reason} ->
+            Examples.record_failure()
+            IO.puts("    |  Error:          #{inspect(reason)}")
+            IO.puts("    +-- Result: {:error, ...}")
+        end
+
+      {:error, reason} ->
+        Examples.record_failure()
+        IO.puts("    |  Error:          #{inspect(reason)}")
+        IO.puts("    +-- Result: {:error, ...}")
+    end
+
+    IO.puts("")
+
+    # Tuple keys (coordinate map)
+    IO.puts("    +-- Tuple key map (coordinate example)")
+    IO.puts("    |")
+    coord_map = %{{0, 0} => "origin", {1, 0} => "x-axis", {0, 1} => "y-axis"}
+    IO.puts("    |  Elixir map:     #{inspect(coord_map)}")
+
+    case SnakeBridge.call("builtins", "dict", [coord_map]) do
+      {:ok, returned} when is_map(returned) and not is_struct(returned) ->
+        # Dict was returned directly (JSON-serializable)
+        # Verify tuple keys are preserved
+        value = Map.get(returned, {0, 0})
+        IO.puts("    |  Returned:       #{inspect(returned)}")
+        IO.puts("    |  map[(0,0)]:     #{inspect(value)}")
+        IO.puts("    |  Tuple key OK:   #{value == "origin"}")
+        IO.puts("    +-- Result: {:ok, tuple keys preserved}")
+
+      {:ok, ref} when is_struct(ref) ->
+        # Returned as ref - call method on it
+        case SnakeBridge.method(ref, "get", [{0, 0}]) do
+          {:ok, value} ->
+            IO.puts("    |  dict[(0,0)]:    #{inspect(value)}")
+            IO.puts("    |  Tuple key OK:   #{value == "origin"}")
+            IO.puts("    +-- Result: {:ok, tuple keys preserved}")
+
+          {:error, reason} ->
+            Examples.record_failure()
+            IO.puts("    |  Error:          #{inspect(reason)}")
+            IO.puts("    +-- Result: {:error, ...}")
+        end
+
+      {:error, reason} ->
+        Examples.record_failure()
+        IO.puts("    |  Error:          #{inspect(reason)}")
+        IO.puts("    +-- Result: {:error, ...}")
+    end
+
+    IO.puts("")
+  end
+
+  # ==========================================================================
   # Helper Functions
   # ==========================================================================
 
@@ -580,10 +753,9 @@ defmodule Demo do
   end
 
   # Helper to call Python via SnakeBridge runtime
+  # Uses string module path directly (v0.8.4+ Universal FFI)
   defp snakepit_call(python_module, python_function, args) do
-    module_ref = %{python_module: python_module}
-
-    case SnakeBridge.Runtime.call(module_ref, python_function, args) do
+    case SnakeBridge.Runtime.call(python_module, python_function, args) do
       {:ok, value} ->
         {:ok, value}
 

@@ -256,6 +256,7 @@ EXAMPLES=(
     "protocol_integration_example"
     "streaming_example"
     "strict_mode_example"
+    "universal_ffi_example"
 )
 
 print_deps_header() {

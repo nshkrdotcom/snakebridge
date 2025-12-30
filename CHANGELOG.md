@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.4] - 2025-12-30
+## [0.7.4] - 2025-12-30
 
 ### Added
 - `SnakeBridge.Bytes` struct for explicit binary data encoding to Python `bytes`
@@ -29,8 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SnakeBridge.ref?/1` to check if a value is a Python ref
 - `SnakeBridge.Runtime.stream_dynamic/5` for streaming with string module paths
 - Python adapter: `_is_json_safe()` validation function as safety net for encode results
+- New `universal_ffi_example` showcasing all Universal FFI features
 
 ### Changed
+- Updated `dynamic_dispatch_example` with new convenience APIs (`SnakeBridge.call/4`, etc.)
+- Updated `types_showcase` with `SnakeBridge.Bytes` and non-string key map examples
+- Updated `session_lifecycle_example` with auto-session demonstration
 - Encoder now raises `SerializationError` instead of silently calling `inspect/1` on unknown types
 - Maps with non-string keys are now encoded as tagged dicts with key-value pairs
 - Session ID is now always included in wire payloads (auto-generated if not explicit)

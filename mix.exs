@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.7.3"
+  @version "0.7.4"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -91,7 +91,12 @@ defmodule SnakeBridge.MixProject do
     [
       name: "snakebridge",
       files: ~w(lib priv .formatter.exs mix.exs README.md LICENSE CHANGELOG.md assets),
-      exclude_patterns: ["priv/python/__pycache__", "**/__pycache__"],
+      exclude_patterns: [
+        "priv/python/.pytest_cache",
+        "**/.pytest_cache",
+        "priv/python/__pycache__",
+        "**/__pycache__"
+      ],
       licenses: ["MIT"],
       links: %{
         "GitHub" => @source_url,

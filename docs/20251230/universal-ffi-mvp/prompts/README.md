@@ -15,6 +15,9 @@ prompt-03-api-surface.md      ← Depends on 01, 02
         │
         ▼
 prompt-04-python-hardening.md ← Depends on 01, 02, 03
+        │
+        ▼
+prompt-05-examples-update.md  ← Depends on 01, 02, 03, 04 (run AFTER all features complete)
 ```
 
 ## Prompt Summary
@@ -25,6 +28,7 @@ prompt-04-python-hardening.md ← Depends on 01, 02, 03
 | 02 | `prompt-02-auto-session.md` | Auto-session per BEAM process | ~150 Elixir |
 | 03 | `prompt-03-api-surface.md` | String module paths, Universal API | ~200 Elixir |
 | 04 | `prompt-04-python-hardening.md` | Python adapter ref safety | ~200 Python |
+| 05 | `prompt-05-examples-update.md` | Update/create examples for new features | ~400 Elixir |
 
 ## How to Use
 
@@ -78,6 +82,12 @@ All must pass before proceeding to the next prompt.
 - Updates `encode()` to mark unencodable values
 - Updates `encode_result()` to always ref-wrap non-serializable
 - Adds JSON safety validation
+
+### Prompt 05: Examples Update
+- Updates `dynamic_dispatch_example` with new convenience APIs
+- Updates `types_showcase` with Bytes and non-string key examples
+- Updates `session_lifecycle_example` with auto-session demonstration
+- Creates NEW `universal_ffi_example` comprehensive showcase
 
 ## Expected Outcome
 

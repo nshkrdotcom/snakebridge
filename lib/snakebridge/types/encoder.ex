@@ -23,11 +23,19 @@ defmodule SnakeBridge.Types.Encoder do
   - Tuples → `{"__type__": "tuple", "elements": [...]}`
   - MapSets → `{"__type__": "set", "elements": [...]}`
   - Binaries (non-UTF-8) → `{"__type__": "bytes", "data": "<base64>"}`
+  - `SnakeBridge.Bytes` → `{"__type__": "bytes", "data": "<base64>"}` (always bytes)
   - DateTime → `{"__type__": "datetime", "value": "<iso8601>"}`
   - Date → `{"__type__": "date", "value": "<iso8601>"}`
   - Time → `{"__type__": "time", "value": "<iso8601>"}`
   - Special floats → `{"__type__": "special_float", "value": "infinity"|"neg_infinity"|"nan"}`
-  - Maps with atom keys → converted to string keys
+  - Maps with string/atom keys → plain objects (keys converted to strings)
+  - Maps with non-string keys → `{"__type__": "dict", "pairs": [[key, val], ...]}`
+
+  ## Unsupported Types
+
+  The following types cannot be serialized and will raise `SnakeBridge.SerializationError`:
+  - PIDs, ports, references
+  - Custom structs without explicit encoder support
 
   ## Examples
 
@@ -44,6 +52,9 @@ defmodule SnakeBridge.Types.Encoder do
       iex> SnakeBridge.Types.Encoder.encode(MapSet.new([1, 2, 3]))
       %{"__type__" => "set", "__schema__" => 1, "elements" => [1, 2, 3]}
 
+      iex> SnakeBridge.Types.Encoder.encode(%{1 => "one", 2 => "two"})
+      %{"__type__" => "dict", "__schema__" => 1, "pairs" => [[1, "one"], [2, "two"]]}
+
   """
 
   @doc """
@@ -59,6 +70,10 @@ defmodule SnakeBridge.Types.Encoder do
 
       iex> encode({1, 2, 3})
       %{"__type__" => "tuple", "__schema__" => 1, "elements" => [1, 2, 3]}
+
+  ## Raises
+
+  - `SnakeBridge.SerializationError` for unsupported types (PIDs, ports, refs, unknown structs)
 
   """
   @spec encode(term()) :: term()
@@ -79,6 +94,11 @@ defmodule SnakeBridge.Types.Encoder do
   # Numbers
   def encode(num) when is_integer(num), do: num
   def encode(num) when is_float(num), do: num
+
+  # Explicit bytes wrapper - MUST come before generic binary clause
+  def encode(%SnakeBridge.Bytes{data: data}) when is_binary(data) do
+    tagged("bytes", %{"data" => Base.encode64(data)})
+  end
 
   # Strings and binaries
   def encode(binary) when is_binary(binary) do
@@ -144,29 +164,56 @@ defmodule SnakeBridge.Types.Encoder do
     })
   end
 
-  # Maps - convert atom keys to strings, recursively encode values
+  # Maps - empty map
+  def encode(%{} = map) when map_size(map) == 0, do: %{}
+
+  # Structs that aren't handled above - raise SerializationError
+  def encode(%{__struct__: _} = struct) do
+    raise SnakeBridge.SerializationError, value: struct
+  end
+
+  # Maps - check for string keys vs non-string keys
   def encode(%{} = map) do
-    Map.new(map, fn {key, value} ->
-      encoded_key =
-        cond do
-          is_atom(key) and key not in [nil, true, false] -> Atom.to_string(key)
-          is_binary(key) -> key
-          true -> encode(key)
-        end
-
-      {encoded_key, encode(value)}
-    end)
+    if all_string_keys?(map) do
+      encode_string_key_map(map)
+    else
+      encode_tagged_dict(map)
+    end
   end
 
-  # Fallback for any other type - convert to string representation
+  # Fallback for unsupported types - raise SerializationError
   def encode(other) do
-    inspect(other)
+    raise SnakeBridge.SerializationError, value: other
   end
+
+  # Private helpers
 
   defp tagged(type, fields) when is_map(fields) do
     fields
     |> Map.put("__type__", type)
     |> Map.put("__schema__", SnakeBridge.Types.schema_version())
+  end
+
+  defp all_string_keys?(map) do
+    Enum.all?(map, fn {key, _value} ->
+      is_binary(key) or (is_atom(key) and key not in [nil, true, false])
+    end)
+  end
+
+  defp encode_string_key_map(map) do
+    Map.new(map, fn {key, value} ->
+      string_key = if is_atom(key), do: Atom.to_string(key), else: key
+      {string_key, encode(value)}
+    end)
+  end
+
+  defp encode_tagged_dict(map) do
+    pairs =
+      Enum.map(map, fn {key, value} ->
+        [encode(key), encode(value)]
+      end)
+
+    tagged("dict", %{"pairs" => pairs})
   end
 
   defp normalize_pyref_map(ref) do

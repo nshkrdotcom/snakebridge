@@ -581,4 +581,123 @@ defmodule SnakeBridge.Types.DecoderTest do
       assert DateTime.compare(decoded["timestamp"], expected_dt) == :eq
     end
   end
+
+  describe "decode/1 tagged dict" do
+    test "decodes tagged dict with integer keys" do
+      encoded = %{
+        "__type__" => "dict",
+        "__schema__" => @schema,
+        "pairs" => [[1, "one"], [2, "two"]]
+      }
+
+      decoded = Decoder.decode(encoded)
+      assert decoded == %{1 => "one", 2 => "two"}
+    end
+
+    test "decodes tagged dict without schema version" do
+      encoded = %{
+        "__type__" => "dict",
+        "pairs" => [[1, "one"], [2, "two"]]
+      }
+
+      decoded = Decoder.decode(encoded)
+      assert decoded == %{1 => "one", 2 => "two"}
+    end
+
+    test "decodes tagged dict with tuple keys" do
+      encoded = %{
+        "__type__" => "dict",
+        "__schema__" => @schema,
+        "pairs" => [
+          [%{"__type__" => "tuple", "elements" => [0, 0]}, "origin"],
+          [%{"__type__" => "tuple", "elements" => [1, 1]}, "point"]
+        ]
+      }
+
+      decoded = Decoder.decode(encoded)
+      assert decoded == %{{0, 0} => "origin", {1, 1} => "point"}
+    end
+
+    test "decodes tagged dict with mixed keys" do
+      encoded = %{
+        "__type__" => "dict",
+        "pairs" => [
+          ["string_key", 1],
+          [42, 2],
+          [1.5, 3]
+        ]
+      }
+
+      decoded = Decoder.decode(encoded)
+      assert decoded["string_key"] == 1
+      assert decoded[42] == 2
+      assert decoded[1.5] == 3
+    end
+
+    test "decodes empty tagged dict" do
+      encoded = %{"__type__" => "dict", "pairs" => []}
+      assert Decoder.decode(encoded) == %{}
+    end
+
+    test "decodes nested tagged dicts" do
+      encoded = %{
+        "__type__" => "dict",
+        "pairs" => [
+          [1, %{"__type__" => "dict", "pairs" => [[2, "nested"]]}]
+        ]
+      }
+
+      decoded = Decoder.decode(encoded)
+      assert decoded == %{1 => %{2 => "nested"}}
+    end
+
+    test "decodes tagged dict with float keys" do
+      encoded = %{
+        "__type__" => "dict",
+        "pairs" => [[1.5, "one point five"], [2.5, "two point five"]]
+      }
+
+      decoded = Decoder.decode(encoded)
+      assert decoded == %{1.5 => "one point five", 2.5 => "two point five"}
+    end
+
+    test "decodes tagged dict with complex nested values" do
+      encoded = %{
+        "__type__" => "dict",
+        "pairs" => [
+          [1, %{"__type__" => "tuple", "elements" => ["a", "b"]}],
+          [2, %{"__type__" => "set", "elements" => [1, 2, 3]}]
+        ]
+      }
+
+      decoded = Decoder.decode(encoded)
+      assert decoded[1] == {"a", "b"}
+      assert MapSet.equal?(decoded[2], MapSet.new([1, 2, 3]))
+    end
+
+    test "decodes tagged dict with atom keys when allowlisted" do
+      original = Application.get_env(:snakebridge, :atom_allowlist)
+      Application.put_env(:snakebridge, :atom_allowlist, :all)
+
+      try do
+        encoded = %{
+          "__type__" => "dict",
+          "pairs" => [
+            [%{"__type__" => "atom", "value" => "key1"}, "value1"],
+            [%{"__type__" => "atom", "value" => "key2"}, "value2"]
+          ]
+        }
+
+        decoded = Decoder.decode(encoded)
+        assert decoded[:key1] == "value1"
+        assert decoded[:key2] == "value2"
+      after
+        if is_nil(original) do
+          Application.delete_env(:snakebridge, :atom_allowlist)
+        else
+          Application.put_env(:snakebridge, :atom_allowlist, original)
+        end
+      end
+    end
+  end
 end

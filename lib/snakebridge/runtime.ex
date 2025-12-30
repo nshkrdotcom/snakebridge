@@ -6,7 +6,10 @@ defmodule SnakeBridge.Runtime do
   match the Snakepit Prime runtime contract.
   """
 
+  alias SnakeBridge.SessionManager
   alias SnakeBridge.Types
+
+  require Logger
 
   @type module_ref :: module()
   @type function_name :: atom() | String.t()
@@ -16,9 +19,41 @@ defmodule SnakeBridge.Runtime do
   @protocol_version 1
   @min_supported_version 1
 
-  @spec call(module_ref(), function_name(), args(), opts()) ::
+  # Process dictionary key for auto-session
+  @auto_session_key :snakebridge_auto_session
+
+  @doc """
+  Call a Python function.
+
+  ## Parameters
+
+  - `module` - Either a generated SnakeBridge module atom OR a Python module path string
+  - `function` - Function name (atom or string)
+  - `args` - Positional arguments (list)
+  - `opts` - Options including kwargs, :idempotent, :__runtime__
+
+  ## Examples
+
+      # With generated module
+      {:ok, result} = SnakeBridge.Runtime.call(Numpy, :mean, [[1,2,3]])
+
+      # With string module path (dynamic)
+      {:ok, result} = SnakeBridge.Runtime.call("numpy", "mean", [[1,2,3]])
+      {:ok, result} = SnakeBridge.Runtime.call("math", :sqrt, [16])
+
+  """
+  @spec call(module_ref() | String.t(), function_name() | String.t(), args(), opts()) ::
           {:ok, term()} | {:error, Snakepit.Error.t()}
-  def call(module, function, args \\ [], opts \\ []) do
+  def call(module, function, args \\ [], opts \\ [])
+
+  # String module path - delegate to dynamic
+  def call(module, function, args, opts) when is_binary(module) do
+    function_name = to_string(function)
+    call_dynamic(module, function_name, args, opts)
+  end
+
+  # Atom module - existing behavior
+  def call(module, function, args, opts) when is_atom(module) do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
     encoded_args = encode_args(args ++ extra_args)
     encoded_kwargs = encode_kwargs(kwargs)
@@ -101,10 +136,40 @@ defmodule SnakeBridge.Runtime do
     |> decode_result()
   end
 
-  @spec stream(module_ref(), function_name(), args(), opts(), (term() -> any())) ::
-          :ok | {:error, Snakepit.Error.t()}
+  @doc """
+  Stream results from a Python generator/iterator.
+
+  ## Parameters
+
+  - `module` - Either a generated SnakeBridge module atom OR a Python module path string
+  - `function` - Function name (atom or string)
+  - `args` - Positional arguments (list)
+  - `opts` - Options including kwargs
+  - `callback` - Function called for each streamed item
+
+  ## Examples
+
+      # With string module path
+      SnakeBridge.Runtime.stream("pandas", "read_csv", ["file.csv"], [chunksize: 100], fn chunk ->
+        process(chunk)
+      end)
+
+  """
+  @spec stream(module_ref() | String.t(), function_name() | String.t(), args(), opts(), (term() ->
+                                                                                           any())) ::
+          :ok | {:ok, :done} | {:error, Snakepit.Error.t()}
   def stream(module, function, args \\ [], opts \\ [], callback)
-      when is_function(callback, 1) do
+
+  # String module path - use stream_dynamic
+  def stream(module, function, args, opts, callback)
+      when is_binary(module) and is_function(callback, 1) do
+    function_name = to_string(function)
+    stream_dynamic(module, function_name, args, opts, callback)
+  end
+
+  # Atom module - existing behavior
+  def stream(module, function, args, opts, callback)
+      when is_atom(module) and is_function(callback, 1) do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
     encoded_args = encode_args(args ++ extra_args)
     encoded_kwargs = encode_kwargs(kwargs)
@@ -121,6 +186,70 @@ defmodule SnakeBridge.Runtime do
       )
     end)
     |> apply_error_mode()
+  end
+
+  @doc """
+  Stream results from a Python generator using dynamic dispatch.
+
+  Creates a stream reference and iterates via stream_next until exhausted.
+  """
+  @spec stream_dynamic(String.t(), String.t(), args(), opts(), (term() -> any())) ::
+          {:ok, :done} | {:error, term()}
+  def stream_dynamic(module_path, function, args, opts, callback)
+      when is_binary(module_path) and is_function(callback, 1) do
+    case call_dynamic(module_path, function, args, opts) do
+      {:ok, %SnakeBridge.StreamRef{} = stream_ref} ->
+        stream_iterate(stream_ref, callback, [])
+
+      {:ok, %SnakeBridge.Ref{} = ref} ->
+        # Try to iterate if it's an iterator
+        stream_iterate_ref(ref, callback, [])
+
+      {:ok, other} ->
+        # Not a stream/iterator - return as single value
+        callback.(other)
+        {:ok, :done}
+
+      error ->
+        error
+    end
+  end
+
+  defp stream_iterate(stream_ref, callback, opts) do
+    case stream_next(stream_ref, opts) do
+      {:ok, item} ->
+        callback.(item)
+        stream_iterate(stream_ref, callback, opts)
+
+      {:error, :stop_iteration} ->
+        {:ok, :done}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp stream_iterate_ref(ref, callback, opts) do
+    case call_method(ref, :__next__, [], opts) do
+      {:ok, item} ->
+        callback.(item)
+        stream_iterate_ref(ref, callback, opts)
+
+      {:error, reason} ->
+        if stop_iteration?(reason) do
+          {:ok, :done}
+        else
+          {:error, reason}
+        end
+    end
+  end
+
+  defp stop_iteration?(reason) when is_map(reason) do
+    type =
+      Map.get(reason, :python_type) || Map.get(reason, "python_type") ||
+        Map.get(reason, :error_type) || Map.get(reason, "error_type")
+
+    type == "StopIteration"
   end
 
   @doc """
@@ -214,10 +343,55 @@ defmodule SnakeBridge.Runtime do
 
   @doc """
   Retrieves a module-level attribute (constant, class, etc.).
+
+  ## Parameters
+
+  - `module` - Either a generated SnakeBridge module atom OR a Python module path string
+  - `attr` - Attribute name (atom or string)
+  - `opts` - Runtime options
+
+  ## Examples
+
+      # Get math.pi
+      {:ok, pi} = SnakeBridge.Runtime.get_module_attr("math", "pi")
+      {:ok, pi} = SnakeBridge.Runtime.get_module_attr("math", :pi)
+
   """
-  @spec get_module_attr(module(), atom() | String.t(), opts()) ::
+  @spec get_module_attr(module_ref() | String.t(), atom() | String.t(), opts()) ::
           {:ok, term()} | {:error, Snakepit.Error.t()}
-  def get_module_attr(module, attr, opts \\ []) do
+  def get_module_attr(module, attr, opts \\ [])
+
+  # String module path
+  def get_module_attr(module, attr, opts) when is_binary(module) do
+    {_kwargs, _idempotent, _extra_args, runtime_opts} = split_opts(opts)
+    attr_name = to_string(attr)
+    session_id = current_session_id()
+
+    payload =
+      protocol_payload()
+      |> Map.put("call_type", "module_attr")
+      |> Map.put("python_module", module)
+      |> Map.put("library", library_from_module_path(module))
+      |> Map.put("attr", attr_name)
+      |> maybe_put_session_id(session_id)
+
+    metadata = %{
+      module: module,
+      function: attr_name,
+      library: library_from_module_path(module),
+      python_module: module,
+      call_type: "module_attr"
+    }
+
+    execute_with_telemetry(metadata, fn ->
+      runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    end)
+    |> apply_error_mode()
+    |> decode_result()
+  end
+
+  # Atom module - existing behavior
+  def get_module_attr(module, attr, opts) when is_atom(module) do
     {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
     encoded_kwargs = encode_kwargs(kwargs)
 
@@ -234,6 +408,13 @@ defmodule SnakeBridge.Runtime do
     end)
     |> apply_error_mode()
     |> decode_result()
+  end
+
+  # Helper to extract library name from module path
+  defp library_from_module_path(module_path) when is_binary(module_path) do
+    module_path
+    |> String.split(".")
+    |> List.first()
   end
 
   @spec get_attr(SnakeBridge.Ref.t(), atom() | String.t(), opts()) ::
@@ -544,7 +725,104 @@ defmodule SnakeBridge.Runtime do
   defp current_session_id do
     case SnakeBridge.SessionContext.current() do
       %{session_id: session_id} when is_binary(session_id) -> session_id
-      _ -> nil
+      _ -> ensure_auto_session()
+    end
+  end
+
+  # Auto-session management
+
+  @doc """
+  Returns the current session ID (explicit or auto-generated).
+
+  This is useful for debugging or when you need to know which session is active.
+  """
+  @spec current_session() :: String.t()
+  def current_session do
+    current_session_id()
+  end
+
+  @doc """
+  Clears the auto-session for the current process.
+
+  Useful for testing or when you want to force a new session.
+  Does NOT release the session on the Python side - use `release_auto_session/0` for that.
+  """
+  @spec clear_auto_session() :: :ok
+  def clear_auto_session do
+    Process.delete(@auto_session_key)
+    :ok
+  end
+
+  @doc """
+  Releases and clears the auto-session for the current process.
+
+  This releases all refs associated with the session on both Elixir and Python sides.
+  """
+  @spec release_auto_session() :: :ok
+  def release_auto_session do
+    case Process.get(@auto_session_key) do
+      nil ->
+        :ok
+
+      session_id ->
+        # Release on Python side
+        release_session(session_id)
+        # Unregister from SessionManager
+        SessionManager.unregister_session(session_id)
+        # Clear from process dictionary
+        Process.delete(@auto_session_key)
+        :ok
+    end
+  end
+
+  defp ensure_auto_session do
+    case Process.get(@auto_session_key) do
+      nil ->
+        session_id = generate_auto_session_id()
+        setup_auto_session(session_id)
+        session_id
+
+      session_id ->
+        session_id
+    end
+  end
+
+  defp generate_auto_session_id do
+    pid_string = self() |> :erlang.pid_to_list() |> to_string()
+    timestamp = System.system_time(:millisecond)
+    "auto_#{pid_string}_#{timestamp}"
+  end
+
+  defp setup_auto_session(session_id) do
+    # Store in process dictionary
+    Process.put(@auto_session_key, session_id)
+
+    # Register with SessionManager for monitoring
+    # This ensures cleanup when the process dies
+    SessionManager.register_session(session_id, self())
+
+    # Ensure Snakepit session exists (if SessionStore is available)
+    ensure_snakepit_session(session_id)
+  end
+
+  defp ensure_snakepit_session(session_id) do
+    # Only call if SessionStore module is available
+    # Use apply/3 to avoid compile-time warnings about undefined module
+    if Code.ensure_loaded?(Snakepit.SessionStore) do
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
+      case apply(Snakepit.SessionStore, :create_session, [session_id]) do
+        {:ok, _} ->
+          :ok
+
+        {:error, :already_exists} ->
+          :ok
+
+        {:error, reason} ->
+          Logger.warning("Failed to create Snakepit session #{session_id}: #{inspect(reason)}")
+          :ok
+      end
+    else
+      :ok
     end
   end
 

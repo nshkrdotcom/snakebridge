@@ -12,6 +12,9 @@ defmodule SnakeBridge.RuntimeHelperTest do
     original_pack = Application.get_env(:snakebridge, :helper_pack_enabled)
     original_allowlist = Application.get_env(:snakebridge, :helper_allowlist)
 
+    # Clear auto-session for consistent test behavior
+    SnakeBridge.Runtime.clear_auto_session()
+
     on_exit(fn ->
       if original_runtime do
         Application.put_env(:snakebridge, :runtime_client, original_runtime)
@@ -49,22 +52,25 @@ defmodule SnakeBridge.RuntimeHelperTest do
     Application.put_env(:snakebridge, :helper_allowlist, ["sympy.parse_implicit"])
 
     expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", payload, _opts ->
-      assert payload == %{
-               "protocol_version" => 1,
-               "min_supported_version" => 1,
-               "call_type" => "helper",
-               "helper" => "sympy.parse_implicit",
-               "function" => "sympy.parse_implicit",
-               "library" => "sympy",
-               "args" => ["2x"],
-               "kwargs" => %{"locale" => "en"},
-               "idempotent" => false,
-               "helper_config" => %{
-                 "helper_paths" => [helper_path],
-                 "helper_pack_enabled" => false,
-                 "helper_allowlist" => ["sympy.parse_implicit"]
-               }
+      # Check core fields (session_id is now always present)
+      assert payload["protocol_version"] == 1
+      assert payload["min_supported_version"] == 1
+      assert payload["call_type"] == "helper"
+      assert payload["helper"] == "sympy.parse_implicit"
+      assert payload["function"] == "sympy.parse_implicit"
+      assert payload["library"] == "sympy"
+      assert payload["args"] == ["2x"]
+      assert payload["kwargs"] == %{"locale" => "en"}
+      assert payload["idempotent"] == false
+
+      assert payload["helper_config"] == %{
+               "helper_paths" => [helper_path],
+               "helper_pack_enabled" => false,
+               "helper_allowlist" => ["sympy.parse_implicit"]
              }
+
+      # session_id is now always present
+      assert is_binary(payload["session_id"])
 
       {:ok, :ok}
     end)
@@ -88,14 +94,13 @@ defmodule SnakeBridge.RuntimeHelperTest do
              SnakeBridge.Runtime.call_helper("sympy.parse_implicit", ["2x"])
   end
 
-  test "call_helper maps non-serializable arguments" do
+  test "call_helper raises for non-serializable arguments" do
     Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
 
-    expect(SnakeBridge.RuntimeClientMock, :execute, fn _tool, _payload, _opts ->
-      {:error, {:invalid_parameter, :json_encode_failed, "encode failed"}}
-    end)
-
-    assert {:error, %SnakeBridge.SerializationError{}} =
-             SnakeBridge.Runtime.call_helper("sympy.parse_implicit", [self()])
+    # With the new SerializationError behavior, encoding raises immediately
+    # before the mock is even called
+    assert_raise SnakeBridge.SerializationError, fn ->
+      SnakeBridge.Runtime.call_helper("sympy.parse_implicit", [self()])
+    end
   end
 end

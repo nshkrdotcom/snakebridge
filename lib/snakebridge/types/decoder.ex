@@ -171,6 +171,25 @@ defmodule SnakeBridge.Types.Decoder do
     %{real: real, imag: imag}
   end
 
+  # Tagged dict - maps with non-string keys
+  def decode(%{"__type__" => "dict", "pairs" => pairs}) when is_list(pairs) do
+    pairs
+    |> Enum.map(fn
+      [key, value] ->
+        {decode(key), decode(value)}
+
+      pair when is_list(pair) and length(pair) == 2 ->
+        [key, value] = pair
+        {decode(key), decode(value)}
+    end)
+    |> Map.new()
+  end
+
+  # Tagged dict with schema version
+  def decode(%{"__type__" => "dict", "__schema__" => _schema, "pairs" => pairs}) do
+    decode(%{"__type__" => "dict", "pairs" => pairs})
+  end
+
   # Regular maps - recursively decode values
   def decode(%{} = map) do
     Map.new(map, fn {key, value} ->

@@ -5,6 +5,11 @@ defmodule SnakeBridge.Types.EncoderTest do
 
   @schema SnakeBridge.Types.schema_version()
 
+  # Test struct for SerializationError tests
+  defmodule UnknownStruct do
+    defstruct [:data]
+  end
+
   describe "encode/1 primitives" do
     test "encodes nil" do
       assert Encoder.encode(nil) == nil
@@ -334,7 +339,7 @@ defmodule SnakeBridge.Types.EncoderTest do
   end
 
   describe "encode/1 edge cases" do
-    test "encodes map with mixed key types" do
+    test "encodes map with mixed string and atom keys" do
       # Maps with atom keys get converted to string keys
       result = Encoder.encode(%{"b" => 2, a: 1})
       assert result == %{"a" => 1, "b" => 2}
@@ -357,6 +362,214 @@ defmodule SnakeBridge.Types.EncoderTest do
 
     test "encodes map with nil values" do
       assert Encoder.encode(%{"key" => nil}) == %{"key" => nil}
+    end
+  end
+
+  describe "encode/1 SnakeBridge.Bytes struct" do
+    test "encodes Bytes struct as bytes type" do
+      bytes = SnakeBridge.Bytes.new("hello")
+      encoded = Encoder.encode(bytes)
+
+      assert %{
+               "__type__" => "bytes",
+               "__schema__" => @schema,
+               "data" => data
+             } = encoded
+
+      assert Base.decode64!(data) == "hello"
+    end
+
+    test "encodes UTF-8 string wrapped in Bytes as bytes, not string" do
+      # Without wrapper, "abc" would be a string
+      assert Encoder.encode("abc") == "abc"
+
+      # With wrapper, it's bytes
+      bytes = SnakeBridge.Bytes.new("abc")
+      encoded = Encoder.encode(bytes)
+
+      assert %{"__type__" => "bytes"} = encoded
+    end
+
+    test "encodes binary data in Bytes struct" do
+      bytes = SnakeBridge.Bytes.new(<<0, 1, 2, 255>>)
+      encoded = Encoder.encode(bytes)
+
+      assert %{"__type__" => "bytes", "data" => data} = encoded
+      assert Base.decode64!(data) == <<0, 1, 2, 255>>
+    end
+
+    test "encodes empty Bytes" do
+      bytes = SnakeBridge.Bytes.new("")
+      encoded = Encoder.encode(bytes)
+
+      assert %{"__type__" => "bytes", "data" => ""} = encoded
+    end
+
+    test "encodes UTF-8 bytes (non-ASCII)" do
+      bytes = SnakeBridge.Bytes.new("日本語")
+      encoded = Encoder.encode(bytes)
+
+      assert %{"__type__" => "bytes", "data" => data} = encoded
+      assert Base.decode64!(data) == "日本語"
+    end
+  end
+
+  describe "encode/1 maps with non-string keys (tagged dict)" do
+    test "encodes map with string keys as plain object" do
+      map = %{"a" => 1, "b" => 2}
+      encoded = Encoder.encode(map)
+
+      # Plain JSON object, no __type__ tag
+      assert encoded == %{"a" => 1, "b" => 2}
+      refute Map.has_key?(encoded, "__type__")
+    end
+
+    test "encodes map with atom keys as plain object" do
+      map = %{a: 1, b: 2}
+      encoded = Encoder.encode(map)
+
+      assert encoded == %{"a" => 1, "b" => 2}
+      refute Map.has_key?(encoded, "__type__")
+    end
+
+    test "encodes map with integer keys as tagged dict" do
+      map = %{1 => "one", 2 => "two"}
+      encoded = Encoder.encode(map)
+
+      assert %{
+               "__type__" => "dict",
+               "__schema__" => @schema,
+               "pairs" => pairs
+             } = encoded
+
+      # Sort for deterministic comparison
+      sorted_pairs = Enum.sort(pairs)
+      assert sorted_pairs == [[1, "one"], [2, "two"]]
+    end
+
+    test "encodes map with tuple keys as tagged dict" do
+      map = %{{0, 0} => "origin", {1, 1} => "point"}
+      encoded = Encoder.encode(map)
+
+      assert %{"__type__" => "dict", "pairs" => pairs} = encoded
+      assert length(pairs) == 2
+
+      # Each key should be encoded as tuple
+      Enum.each(pairs, fn [key, _value] ->
+        assert %{"__type__" => "tuple"} = key
+      end)
+    end
+
+    test "encodes map with mixed key types including integers as tagged dict" do
+      map = %{:atom_key => 1, "string_key" => 2, 42 => 3}
+      encoded = Encoder.encode(map)
+
+      # Has integer key, so must be tagged dict
+      assert %{"__type__" => "dict", "pairs" => pairs} = encoded
+      assert length(pairs) == 3
+    end
+
+    test "encodes nested maps with non-string keys" do
+      map = %{
+        "outer" => %{1 => "inner_int_key"},
+        2 => %{"nested" => "value"}
+      }
+
+      encoded = Encoder.encode(map)
+
+      # Outer map has int key (2), so tagged
+      assert %{"__type__" => "dict"} = encoded
+    end
+
+    test "preserves key types through encoding" do
+      map = %{1 => "int", 1.5 => "float", :atom => "atom", {1, 2} => "tuple"}
+      encoded = Encoder.encode(map)
+
+      assert %{"__type__" => "dict", "pairs" => pairs} = encoded
+
+      # Find each key type in pairs
+      keys = Enum.map(pairs, fn [k, _v] -> k end)
+
+      assert 1 in keys
+      assert 1.5 in keys
+      assert %{"__type__" => "atom", "__schema__" => @schema, "value" => "atom"} in keys
+      assert %{"__type__" => "tuple", "__schema__" => @schema, "elements" => [1, 2]} in keys
+    end
+
+    test "encodes map with nil key as tagged dict" do
+      map = %{nil => "nil value", "normal" => "normal value"}
+      encoded = Encoder.encode(map)
+
+      assert %{"__type__" => "dict", "pairs" => pairs} = encoded
+      assert length(pairs) == 2
+    end
+
+    test "encodes map with boolean keys as tagged dict" do
+      map = %{true => "yes", false => "no"}
+      encoded = Encoder.encode(map)
+
+      assert %{"__type__" => "dict", "pairs" => pairs} = encoded
+      assert length(pairs) == 2
+    end
+  end
+
+  describe "encode/1 unsupported types (SerializationError)" do
+    test "raises SerializationError for PID" do
+      assert_raise SnakeBridge.SerializationError, fn ->
+        Encoder.encode(self())
+      end
+    end
+
+    test "raises SerializationError for port" do
+      port = Port.open({:spawn, "cat"}, [:binary])
+
+      try do
+        assert_raise SnakeBridge.SerializationError, fn ->
+          Encoder.encode(port)
+        end
+      after
+        Port.close(port)
+      end
+    end
+
+    test "raises SerializationError for reference" do
+      assert_raise SnakeBridge.SerializationError, fn ->
+        Encoder.encode(make_ref())
+      end
+    end
+
+    test "raises SerializationError for unknown struct" do
+      assert_raise SnakeBridge.SerializationError, fn ->
+        Encoder.encode(%UnknownStruct{data: "test"})
+      end
+    end
+
+    test "error message contains value info" do
+      error =
+        assert_raise SnakeBridge.SerializationError, fn ->
+          Encoder.encode(self())
+        end
+
+      assert error.message =~ "pid"
+      assert error.message =~ "Cannot serialize"
+    end
+
+    test "raises for PID nested in list" do
+      assert_raise SnakeBridge.SerializationError, fn ->
+        Encoder.encode([1, self(), 3])
+      end
+    end
+
+    test "raises for PID nested in map" do
+      assert_raise SnakeBridge.SerializationError, fn ->
+        Encoder.encode(%{pid: self()})
+      end
+    end
+
+    test "raises for PID nested in tuple" do
+      assert_raise SnakeBridge.SerializationError, fn ->
+        Encoder.encode({1, self()})
+      end
     end
   end
 end

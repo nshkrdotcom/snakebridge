@@ -15,6 +15,13 @@ Supported special types:
 - date: date objects (encoded as ISO 8601 strings with __type__ tag)
 - time: time objects (encoded as ISO 8601 strings with __type__ tag)
 - special_float: Positive infinity, negative infinity, and NaN (encoded with __type__ tag)
+- dict: Tagged dict format for non-string keys (with pairs array)
+
+Encoding safety:
+- Non-JSON-serializable values return {"__needs_ref__": True, ...} marker
+- Containers with unencodable items return __needs_ref__ marker for whole container
+- Iterators/generators return {"__needs_stream_ref__": True, ...} marker
+- This ensures NEVER returning partially-encoded or lossy representations
 """
 
 import base64
@@ -22,10 +29,14 @@ import inspect
 import json
 import math
 import os
+import types
 from datetime import datetime, date, time
 from typing import Any, Dict, List, Union
 
 SCHEMA_VERSION = 1
+
+# Supported types for direct JSON encoding (primitives)
+JSON_SAFE_PRIMITIVES = (type(None), bool, int, float, str)
 
 
 class Atom:
@@ -52,6 +63,16 @@ def encode(value: Any) -> Any:
     """
     Encode a Python value to a JSON-safe value with __type__ tags for special types.
 
+    Returns one of:
+    - JSON-safe primitive (None, bool, int, float, str)
+    - JSON-safe list (recursively encoded)
+    - JSON-safe dict with string keys (recursively encoded)
+    - Tagged value with __type__ key
+    - Marker dict with __needs_ref__ = True (for ref-wrapping)
+    - Marker dict with __needs_stream_ref__ = True (for iterators)
+
+    NEVER returns partially-encoded or lossy representations.
+
     Args:
         value: The Python value to encode
 
@@ -75,119 +96,337 @@ def encode(value: Any) -> Any:
     if value is None:
         return None
 
-    # Handle basic JSON-safe types
-    if isinstance(value, (bool, int, str)):
+    # Handle booleans (must check before int - bool is subclass of int)
+    if isinstance(value, bool):
+        return value
+
+    # Handle integers
+    if isinstance(value, int):
         return value
 
     # Handle float (check for special values)
     if isinstance(value, float):
-        if math.isinf(value):
-            if value > 0:
-                return _tag("special_float", {"value": "infinity"})
-            else:
-                return _tag("special_float", {"value": "neg_infinity"})
-        elif math.isnan(value):
-            return _tag("special_float", {"value": "nan"})
-        else:
-            return value
+        return _encode_float(value)
+
+    # Handle strings
+    if isinstance(value, str):
+        return value
+
+    # Handle bytes/bytearray - always tagged
+    if isinstance(value, (bytes, bytearray)):
+        return _tag("bytes", {"data": base64.b64encode(bytes(value)).decode("ascii")})
 
     # Handle tagged atoms
     if isinstance(value, Atom):
         return _tag("atom", {"value": value.value})
 
-    # Handle tuple
+    # Handle tuple - check for unencodable items
     if isinstance(value, tuple):
-        return _tag("tuple", {"elements": [encode(item) for item in value]})
+        return _encode_tuple(value)
 
-    # Handle set
-    if isinstance(value, set):
-        return _tag(
-            "set",
-            {
-                "elements": [
-                    encode(item) for item in sorted(value, key=lambda x: (type(x).__name__, str(x)))
-                ]
-            },
-        )
-
-    # Handle frozenset
+    # Handle frozenset - check for unencodable items
     if isinstance(value, frozenset):
-        return _tag(
-            "frozenset",
-            {
-                "elements": [
-                    encode(item) for item in sorted(value, key=lambda x: (type(x).__name__, str(x)))
-                ]
-            },
-        )
+        return _encode_frozenset(value)
 
-    # Handle bytes
-    if isinstance(value, bytes):
-        return _tag("bytes", {"data": base64.b64encode(value).decode("ascii")})
-
-    # Handle bytearray
-    if isinstance(value, bytearray):
-        return _tag("bytes", {"data": base64.b64encode(bytes(value)).decode("ascii")})
+    # Handle set - check for unencodable items
+    if isinstance(value, set):
+        return _encode_set(value)
 
     # Handle complex
     if isinstance(value, complex):
         return _tag("complex", {"real": value.real, "imag": value.imag})
 
-    # Handle datetime
+    # Handle datetime types
     if isinstance(value, datetime):
         return _tag("datetime", {"value": value.isoformat()})
-
-    # Handle date
     if isinstance(value, date):
         return _tag("date", {"value": value.isoformat()})
-
-    # Handle time
     if isinstance(value, time):
         return _tag("time", {"value": value.isoformat()})
 
-    # Handle list
+    # Handle list - check for unencodable items
     if isinstance(value, list):
-        return [encode(item) for item in value]
+        return _encode_list(value)
 
-    # Handle dict
+    # Handle dict - handle carefully (may need tagged format)
     if isinstance(value, dict):
-        return {encode_dict_key(k): encode(v) for k, v in value.items()}
+        return _encode_dict(value)
 
-    # Detect generators and iterators
-    if inspect.isgenerator(value):
-        return {"__needs_stream_ref__": True, "__stream_type__": "generator"}
+    # Detect generators and iterators - need stream ref
+    if _is_generator_or_iterator(value):
+        return {
+            "__needs_stream_ref__": True,
+            "__stream_type__": _get_stream_type(value),
+            "__type_name__": type(value).__name__,
+            "__module__": type(value).__module__,
+        }
 
-    if hasattr(value, "__iter__") and hasattr(value, "__next__") and not isinstance(
-        value, (str, bytes, bytearray, list, tuple, dict, set)
-    ):
-        # Prefer regular refs for context managers (e.g. file objects).
-        if hasattr(value, "__enter__") and hasattr(value, "__exit__"):
-            pass
-        else:
-            return {"__needs_stream_ref__": True, "__stream_type__": "iterator"}
+    # EVERYTHING ELSE - needs a ref
+    # This is the critical safety net
+    return {
+        "__needs_ref__": True,
+        "__type_name__": type(value).__name__,
+        "__module__": type(value).__module__,
+    }
 
-    # For any other type, create auto-ref if in adapter context
-    # This is handled by encode_result() in snakebridge_adapter.py
-    # which wraps with context. Here we provide fallback.
-    try:
-        # Check if this is a complex object that should be a ref
-        if hasattr(value, "__class__") and not isinstance(
-            value, (str, bytes, int, float, bool, type(None), list, dict, tuple, set)
-        ):
-            # Signal that this needs ref wrapping
+
+def _encode_float(value: float) -> Any:
+    """Encode a float, handling special values."""
+    if math.isinf(value):
+        return _tag("special_float", {"value": "infinity" if value > 0 else "neg_infinity"})
+    if math.isnan(value):
+        return _tag("special_float", {"value": "nan"})
+    return value
+
+
+def _encode_tuple(value: tuple) -> Any:
+    """Encode a tuple, checking for unencodable items."""
+    elements = []
+    for item in value:
+        enc = encode(item)
+        if isinstance(enc, dict) and enc.get("__needs_ref__"):
+            # Item needs ref - whole tuple needs ref
             return {
                 "__needs_ref__": True,
-                "__type_name__": type(value).__name__,
-                "__module__": type(value).__module__,
+                "__type_name__": "tuple",
+                "__module__": "builtins",
+                "__reason__": f"contains unencodable item of type {enc.get('__type_name__')}",
             }
-        return str(value)
-    except Exception:
-        return f"<non-serializable: {type(value).__name__}>"
+        if isinstance(enc, dict) and enc.get("__needs_stream_ref__"):
+            # Item needs stream ref - whole tuple needs ref
+            return {
+                "__needs_ref__": True,
+                "__type_name__": "tuple",
+                "__module__": "builtins",
+                "__reason__": f"contains iterator/generator",
+            }
+        elements.append(enc)
+    return _tag("tuple", {"elements": elements})
+
+
+def _encode_set(value: set) -> Any:
+    """Encode a set, checking for unencodable items."""
+    elements = []
+    try:
+        sorted_values = sorted(value, key=lambda x: (type(x).__name__, str(x)))
+    except TypeError:
+        # If sorting fails, use unsorted
+        sorted_values = list(value)
+    for item in sorted_values:
+        enc = encode(item)
+        if isinstance(enc, dict) and enc.get("__needs_ref__"):
+            return {
+                "__needs_ref__": True,
+                "__type_name__": "set",
+                "__module__": "builtins",
+                "__reason__": f"contains unencodable item of type {enc.get('__type_name__')}",
+            }
+        if isinstance(enc, dict) and enc.get("__needs_stream_ref__"):
+            return {
+                "__needs_ref__": True,
+                "__type_name__": "set",
+                "__module__": "builtins",
+                "__reason__": f"contains iterator/generator",
+            }
+        elements.append(enc)
+    return _tag("set", {"elements": elements})
+
+
+def _encode_frozenset(value: frozenset) -> Any:
+    """Encode a frozenset, checking for unencodable items."""
+    elements = []
+    try:
+        sorted_values = sorted(value, key=lambda x: (type(x).__name__, str(x)))
+    except TypeError:
+        # If sorting fails, use unsorted
+        sorted_values = list(value)
+    for item in sorted_values:
+        enc = encode(item)
+        if isinstance(enc, dict) and enc.get("__needs_ref__"):
+            return {
+                "__needs_ref__": True,
+                "__type_name__": "frozenset",
+                "__module__": "builtins",
+                "__reason__": f"contains unencodable item of type {enc.get('__type_name__')}",
+            }
+        if isinstance(enc, dict) and enc.get("__needs_stream_ref__"):
+            return {
+                "__needs_ref__": True,
+                "__type_name__": "frozenset",
+                "__module__": "builtins",
+                "__reason__": f"contains iterator/generator",
+            }
+        elements.append(enc)
+    return _tag("frozenset", {"elements": elements})
+
+
+def _encode_list(lst: list) -> Any:
+    """
+    Encode a list, checking if any item needs ref-wrapping.
+
+    If any item is unencodable (needs ref), the whole list needs ref-wrapping.
+    """
+    encoded = []
+    for item in lst:
+        enc = encode(item)
+        if isinstance(enc, dict) and enc.get("__needs_ref__"):
+            # Item can't be encoded - whole list needs ref-wrapping
+            return {
+                "__needs_ref__": True,
+                "__type_name__": "list",
+                "__module__": "builtins",
+                "__reason__": f"contains unencodable item of type {enc.get('__type_name__')}",
+            }
+        if isinstance(enc, dict) and enc.get("__needs_stream_ref__"):
+            # Item is an iterator - whole list needs ref-wrapping
+            return {
+                "__needs_ref__": True,
+                "__type_name__": "list",
+                "__module__": "builtins",
+                "__reason__": "contains iterator/generator",
+            }
+        encoded.append(enc)
+    return encoded
+
+
+def _encode_dict(d: dict) -> Any:
+    """
+    Encode a dictionary.
+
+    - If all keys are strings and all values are encodable: plain dict
+    - If keys are not all strings: tagged dict with pairs
+    - If any value is unencodable: needs ref
+    """
+    if not d:
+        return {}
+
+    all_string_keys = all(isinstance(k, str) for k in d.keys())
+
+    if all_string_keys:
+        return _encode_string_key_dict(d)
+    else:
+        return _encode_tagged_dict(d)
+
+
+def _encode_string_key_dict(d: dict) -> Any:
+    """Encode a dict with all string keys."""
+    encoded = {}
+    for k, v in d.items():
+        enc_v = encode(v)
+        if isinstance(enc_v, dict) and enc_v.get("__needs_ref__"):
+            # Value can't be encoded - whole dict needs ref
+            return {
+                "__needs_ref__": True,
+                "__type_name__": "dict",
+                "__module__": "builtins",
+                "__reason__": f"contains unencodable value for key '{k}'",
+            }
+        if isinstance(enc_v, dict) and enc_v.get("__needs_stream_ref__"):
+            return {
+                "__needs_ref__": True,
+                "__type_name__": "dict",
+                "__module__": "builtins",
+                "__reason__": f"contains iterator/generator for key '{k}'",
+            }
+        encoded[k] = enc_v
+    return encoded
+
+
+def _encode_tagged_dict(d: dict) -> Any:
+    """Encode a dict with non-string keys as tagged format."""
+    pairs = []
+    for k, v in d.items():
+        enc_k = encode(k)
+        enc_v = encode(v)
+
+        # If key or value needs ref, whole dict needs ref
+        if isinstance(enc_k, dict) and enc_k.get("__needs_ref__"):
+            return {
+                "__needs_ref__": True,
+                "__type_name__": "dict",
+                "__module__": "builtins",
+                "__reason__": "contains unencodable key",
+            }
+        if isinstance(enc_k, dict) and enc_k.get("__needs_stream_ref__"):
+            return {
+                "__needs_ref__": True,
+                "__type_name__": "dict",
+                "__module__": "builtins",
+                "__reason__": "key is iterator/generator",
+            }
+        if isinstance(enc_v, dict) and enc_v.get("__needs_ref__"):
+            return {
+                "__needs_ref__": True,
+                "__type_name__": "dict",
+                "__module__": "builtins",
+                "__reason__": "contains unencodable value",
+            }
+        if isinstance(enc_v, dict) and enc_v.get("__needs_stream_ref__"):
+            return {
+                "__needs_ref__": True,
+                "__type_name__": "dict",
+                "__module__": "builtins",
+                "__reason__": "value is iterator/generator",
+            }
+
+        pairs.append([enc_k, enc_v])
+
+    return _tag("dict", {"pairs": pairs})
+
+
+def _is_generator_or_iterator(value: Any) -> bool:
+    """Check if value is a generator or iterator."""
+    if isinstance(value, types.GeneratorType):
+        return True
+    # Check for async generators if available
+    if hasattr(types, 'AsyncGeneratorType') and isinstance(value, types.AsyncGeneratorType):
+        return True
+    # Check for iterator protocol
+    if hasattr(value, '__next__') and hasattr(value, '__iter__'):
+        # Exclude basic iterable types and context managers (file handles)
+        if isinstance(value, (str, bytes, bytearray, list, tuple, dict, set, frozenset)):
+            return False
+        # Prefer regular refs for context managers (e.g. file objects)
+        if hasattr(value, "__enter__") and hasattr(value, "__exit__"):
+            return False
+        return True
+    return False
+
+
+def _get_stream_type(value: Any) -> str:
+    """Determine stream type for iterator/generator."""
+    if isinstance(value, types.GeneratorType):
+        return "generator"
+    if hasattr(types, 'AsyncGeneratorType') and isinstance(value, types.AsyncGeneratorType):
+        return "async_generator"
+    return "iterator"
+
+
+def encode_dict(d: Dict[Any, Any]) -> Dict[str, Any]:
+    """
+    Encode a dictionary.
+
+    If all keys are strings, returns a plain dict (JSON object).
+    If any key is not a string, returns a tagged dict with pairs.
+    If any value is unencodable, returns __needs_ref__ marker.
+
+    DEPRECATED: Use _encode_dict() internally. This wrapper is kept for backwards compatibility.
+
+    Args:
+        d: The dictionary to encode
+
+    Returns:
+        Either a plain dict, a tagged dict with pairs, or __needs_ref__ marker
+    """
+    return _encode_dict(d)
 
 
 def encode_dict_key(key: Any) -> str:
     """
     Encode a dictionary key to a string.
+
+    DEPRECATED: This function is kept for backwards compatibility but
+    is no longer used for dict encoding. Use encode_dict() instead.
 
     Args:
         key: The dictionary key to encode
@@ -309,6 +548,9 @@ def decode(value: Any, session_id: str = None, context: Any = None) -> Any:
             elif type_tag == "callback":
                 return _decode_callback(value, session_id, context)
 
+            elif type_tag == "dict":
+                return decode_tagged_dict(value, session_id, context)
+
             else:
                 # Unknown type tag, return as-is
                 return {k: decode(v, session_id=session_id, context=context) for k, v in value.items()}
@@ -318,6 +560,30 @@ def decode(value: Any, session_id: str = None, context: Any = None) -> Any:
 
     # Return as-is for any other type
     return value
+
+
+def decode_tagged_dict(value: Dict[str, Any], session_id: str = None, context: Any = None) -> Dict[Any, Any]:
+    """
+    Decode a tagged dict with potentially non-string keys.
+
+    Args:
+        value: The tagged dict value with "pairs" key
+        session_id: Optional session ID for ref decoding
+        context: Optional context for callback decoding
+
+    Returns:
+        A Python dict with decoded keys and values
+    """
+    pairs = value.get("pairs", [])
+    result = {}
+
+    for pair in pairs:
+        if isinstance(pair, list) and len(pair) == 2:
+            key = decode(pair[0], session_id=session_id, context=context)
+            val = decode(pair[1], session_id=session_id, context=context)
+            result[key] = val
+
+    return result
 
 
 def _decode_callback(value: Dict[str, Any], session_id: str, context: Any):

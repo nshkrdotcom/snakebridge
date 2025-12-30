@@ -505,13 +505,82 @@ def _make_stream_ref(
 
 
 def encode_result(result: Any, session_id: str, python_module: str, library: str) -> Any:
+    """
+    Encode a Python result for transmission to Elixir.
+
+    INVARIANT: The returned value is ALWAYS one of:
+    1. A JSON-safe primitive (None, bool, int, float, str)
+    2. A JSON-safe list/dict (recursively safe)
+    3. A tagged value with __type__ that Elixir can decode
+    4. A ref ({"__type__": "ref", ...}) for non-serializable objects
+    5. A stream_ref ({"__type__": "stream_ref", ...}) for iterators
+
+    NEVER returns partially encoded or lossy data.
+    """
     encoded = encode(result)
+
+    # Stream ref request - create stream ref
     if isinstance(encoded, dict) and encoded.get("__needs_stream_ref__"):
         stream_type = encoded.get("__stream_type__") or "iterator"
         return _make_stream_ref(session_id, result, python_module, library, stream_type)
+
+    # Ref request - create ref
     if isinstance(encoded, dict) and encoded.get("__needs_ref__"):
         return _make_ref(session_id, result, python_module, library)
+
+    # Validate result is actually JSON-safe (safety net)
+    if not _is_json_safe(encoded):
+        # Safety net - this shouldn't happen if encode() is correct
+        # but ensures we never send garbage
+        _log_warning(f"encode() returned non-JSON-safe result for type {type(result).__name__}, wrapping in ref")
+        return _make_ref(session_id, result, python_module, library)
+
     return encoded
+
+
+def _is_json_safe(value: Any) -> bool:
+    """
+    Verify a value is safe to serialize as JSON.
+
+    This is a safety check after encoding - if encode() is correct,
+    this should always return True.
+    """
+    import math
+
+    if value is None:
+        return True
+    if isinstance(value, bool):
+        return True
+    if isinstance(value, (int, float)):
+        # Check for non-JSON floats (should be tagged already)
+        if isinstance(value, float) and (math.isinf(value) or math.isnan(value)):
+            return False
+        return True
+    if isinstance(value, str):
+        return True
+    if isinstance(value, list):
+        return all(_is_json_safe(item) for item in value)
+    if isinstance(value, dict):
+        # Check for valid tagged types
+        type_tag = value.get("__type__")
+        if type_tag in (
+            "bytes", "tuple", "set", "frozenset", "complex",
+            "datetime", "date", "time", "special_float",
+            "atom", "dict", "ref", "stream_ref", "callback",
+            "stop_iteration"
+        ):
+            # Tagged values are safe - validate values recursively
+            return all(_is_json_safe(v) for v in value.values())
+        # Regular dict - keys must be strings
+        if not all(isinstance(k, str) for k in value.keys()):
+            return False
+        return all(_is_json_safe(v) for v in value.values())
+    return False
+
+
+def _log_warning(message: str) -> None:
+    """Log a warning message."""
+    print(f"[SnakeBridge WARNING] {message}", file=sys.stderr)
 
 
 def _is_ref_payload(value: Any) -> bool:

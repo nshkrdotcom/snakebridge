@@ -59,6 +59,17 @@ defmodule SnakeBridge.SessionManager do
     GenServer.call(__MODULE__, {:release_session, session_id})
   end
 
+  @doc """
+  Unregisters a session without releasing refs on the Python side.
+
+  Typically called when manually cleaning up before process death,
+  or when the caller has already released the session.
+  """
+  @spec unregister_session(session_id()) :: :ok
+  def unregister_session(session_id) do
+    GenServer.call(__MODULE__, {:unregister_session, session_id})
+  end
+
   # Server Implementation
 
   @impl true
@@ -130,6 +141,25 @@ defmodule SnakeBridge.SessionManager do
   def handle_call({:release_session, session_id}, _from, state) do
     new_state = do_release_session(state, session_id)
     {:reply, :ok, new_state}
+  end
+
+  @impl true
+  def handle_call({:unregister_session, session_id}, _from, state) do
+    case Map.get(state.sessions, session_id) do
+      nil ->
+        {:reply, :ok, state}
+
+      %{monitor_ref: ref} ->
+        Process.demonitor(ref, [:flush])
+
+        new_state = %{
+          state
+          | sessions: Map.delete(state.sessions, session_id),
+            monitors: Map.delete(state.monitors, ref)
+        }
+
+        {:reply, :ok, new_state}
+    end
   end
 
   @impl true

@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.4] - 2025-12-30
+
+### Added
+- `SnakeBridge.Bytes` struct for explicit binary data encoding to Python `bytes`
+- `SnakeBridge.SerializationError` exception for unsupported type encoding
+- Tagged dict wire format for maps with non-string keys (integers, tuples, etc.)
+- Auto-session: BEAM processes automatically get session IDs without explicit `with_session/1`
+- `SnakeBridge.Runtime.current_session/0` to get current session ID
+- `SnakeBridge.Runtime.release_auto_session/0` for explicit session cleanup
+- `SnakeBridge.Runtime.clear_auto_session/0` for testing
+- `SnakeBridge.SessionManager.unregister_session/1` to unregister without Python-side release
+- Universal FFI: `SnakeBridge.call/4` now accepts string module paths for dynamic Python calls
+- Universal FFI: `SnakeBridge.stream/5` accepts string module paths
+- Universal FFI: `SnakeBridge.get/3` for module attributes with string paths
+- `SnakeBridge.call!/4`, `SnakeBridge.get!/3`, `SnakeBridge.method!/4`, `SnakeBridge.attr!/3` bang variants
+- `SnakeBridge.method/4` as alias for `Dynamic.call/4`
+- `SnakeBridge.attr/3` as alias for `Dynamic.get_attr/3`
+- `SnakeBridge.set_attr/4` as alias for `Dynamic.set_attr/4`
+- `SnakeBridge.bytes/1` convenience function for creating Bytes wrappers
+- `SnakeBridge.ref?/1` to check if a value is a Python ref
+- `SnakeBridge.Runtime.stream_dynamic/5` for streaming with string module paths
+- Python adapter: `_is_json_safe()` validation function as safety net for encode results
+
+### Changed
+- Encoder now raises `SerializationError` instead of silently calling `inspect/1` on unknown types
+- Maps with non-string keys are now encoded as tagged dicts with key-value pairs
+- Session ID is now always included in wire payloads (auto-generated if not explicit)
+- `SnakeBridge.call/4` now dispatches to `call_dynamic/4` when given string module path
+- Python adapter now unconditionally ref-wraps non-JSON-serializable return values
+- Improved Python `encode()` to explicitly mark unencodable values with `__needs_ref__`
+- Added JSON safety validation in `encode_result()` as a safety net
+
+### Fixed
+- Maps with integer/tuple keys now serialize correctly instead of coercing keys to strings
+- Memory leaks from refs in "default" session when not using explicit `SessionContext`
+- Ref collisions between unrelated Elixir processes
+- Lists/dicts containing non-serializable items now properly return refs
+- Eliminated partial/lossy encoding of complex Python objects
+
 ## [0.7.3] - 2025-12-30
 
 ### Added

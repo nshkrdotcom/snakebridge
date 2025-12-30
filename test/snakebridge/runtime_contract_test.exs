@@ -9,6 +9,9 @@ defmodule SnakeBridge.RuntimeContractTest do
   setup do
     original = Application.get_env(:snakebridge, :runtime_client)
 
+    # Clear auto-session for consistent test behavior
+    SnakeBridge.Runtime.clear_auto_session()
+
     on_exit(fn ->
       if original do
         Application.put_env(:snakebridge, :runtime_client, original)
@@ -34,16 +37,17 @@ defmodule SnakeBridge.RuntimeContractTest do
       Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
 
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", payload, _opts ->
-        assert payload == %{
-                 "protocol_version" => 1,
-                 "min_supported_version" => 1,
-                 "library" => "numpy",
-                 "python_module" => "numpy.linalg",
-                 "function" => "solve",
-                 "args" => [1, 2],
-                 "kwargs" => %{"axis" => 0},
-                 "idempotent" => false
-               }
+        # Check core fields (session_id is now always present via auto-session)
+        assert payload["protocol_version"] == 1
+        assert payload["min_supported_version"] == 1
+        assert payload["library"] == "numpy"
+        assert payload["python_module"] == "numpy.linalg"
+        assert payload["function"] == "solve"
+        assert payload["args"] == [1, 2]
+        assert payload["kwargs"] == %{"axis" => 0}
+        assert payload["idempotent"] == false
+        # session_id is now always present
+        assert is_binary(payload["session_id"])
 
         {:ok, :ok}
       end)
@@ -58,18 +62,19 @@ defmodule SnakeBridge.RuntimeContractTest do
       Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
 
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", payload, _opts ->
-        assert payload == %{
-                 "protocol_version" => 1,
-                 "min_supported_version" => 1,
-                 "call_type" => "class",
-                 "library" => "sympy",
-                 "python_module" => "sympy",
-                 "class" => "Symbol",
-                 "function" => "__init__",
-                 "args" => ["x"],
-                 "kwargs" => %{},
-                 "idempotent" => false
-               }
+        # Check core fields (session_id is now always present via auto-session)
+        assert payload["protocol_version"] == 1
+        assert payload["min_supported_version"] == 1
+        assert payload["call_type"] == "class"
+        assert payload["library"] == "sympy"
+        assert payload["python_module"] == "sympy"
+        assert payload["class"] == "Symbol"
+        assert payload["function"] == "__init__"
+        assert payload["args"] == ["x"]
+        assert payload["kwargs"] == %{}
+        assert payload["idempotent"] == false
+        # session_id is now always present
+        assert is_binary(payload["session_id"])
 
         {:ok, :ok}
       end)

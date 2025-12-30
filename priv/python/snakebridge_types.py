@@ -5,6 +5,7 @@ Provides encoding and decoding functions for converting between Python and Elixi
 Uses tagged JSON format with __type__ markers for special types that don't map directly to JSON.
 
 Supported special types:
+- atom: Elixir atoms (encoded with __type__ tag)
 - tuple: Python tuples (encoded as lists with __type__ tag)
 - set: Python sets (encoded as lists with __type__ tag)
 - frozenset: Python frozensets (encoded as lists with __type__ tag)
@@ -13,15 +14,35 @@ Supported special types:
 - datetime: datetime objects (encoded as ISO 8601 strings with __type__ tag)
 - date: date objects (encoded as ISO 8601 strings with __type__ tag)
 - time: time objects (encoded as ISO 8601 strings with __type__ tag)
-- infinity: Positive infinity (encoded with __type__ tag)
-- neg_infinity: Negative infinity (encoded with __type__ tag)
-- nan: Not a Number (encoded with __type__ tag)
+- special_float: Positive infinity, negative infinity, and NaN (encoded with __type__ tag)
 """
 
 import base64
 import math
 from datetime import datetime, date, time
 from typing import Any, Dict, List, Union
+
+SCHEMA_VERSION = 1
+
+
+class Atom:
+    """Represents an Elixir atom value on the Python side."""
+
+    def __init__(self, value: str):
+        self.value = str(value)
+
+    def __repr__(self) -> str:
+        return f"Atom({self.value!r})"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+def _tag(type_tag: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    tagged = dict(payload)
+    tagged["__type__"] = type_tag
+    tagged["__schema__"] = SCHEMA_VERSION
+    return tagged
 
 
 def encode(value: Any) -> Any:
@@ -36,16 +57,16 @@ def encode(value: Any) -> Any:
 
     Examples:
         >>> encode((1, 2, 3))
-        {'__type__': 'tuple', 'value': [1, 2, 3]}
+        {'__type__': 'tuple', '__schema__': 1, 'elements': [1, 2, 3]}
 
         >>> encode({1, 2, 3})
-        {'__type__': 'set', 'value': [1, 2, 3]}
+        {'__type__': 'set', '__schema__': 1, 'elements': [1, 2, 3]}
 
         >>> encode(b'hello')
-        {'__type__': 'bytes', 'value': 'aGVsbG8='}
+        {'__type__': 'bytes', '__schema__': 1, 'data': 'aGVsbG8='}
 
         >>> encode(1+2j)
-        {'__type__': 'complex', 'real': 1.0, 'imag': 2.0}
+        {'__type__': 'complex', '__schema__': 1, 'real': 1.0, 'imag': 2.0}
     """
     # Handle None
     if value is None:
@@ -59,77 +80,67 @@ def encode(value: Any) -> Any:
     if isinstance(value, float):
         if math.isinf(value):
             if value > 0:
-                return {"__type__": "infinity"}
+                return _tag("special_float", {"value": "infinity"})
             else:
-                return {"__type__": "neg_infinity"}
+                return _tag("special_float", {"value": "neg_infinity"})
         elif math.isnan(value):
-            return {"__type__": "nan"}
+            return _tag("special_float", {"value": "nan"})
         else:
             return value
 
+    # Handle tagged atoms
+    if isinstance(value, Atom):
+        return _tag("atom", {"value": value.value})
+
     # Handle tuple
     if isinstance(value, tuple):
-        return {
-            "__type__": "tuple",
-            "value": [encode(item) for item in value]
-        }
+        return _tag("tuple", {"elements": [encode(item) for item in value]})
 
     # Handle set
     if isinstance(value, set):
-        return {
-            "__type__": "set",
-            "value": [encode(item) for item in sorted(value, key=lambda x: (type(x).__name__, x))]
-        }
+        return _tag(
+            "set",
+            {
+                "elements": [
+                    encode(item) for item in sorted(value, key=lambda x: (type(x).__name__, str(x)))
+                ]
+            },
+        )
 
     # Handle frozenset
     if isinstance(value, frozenset):
-        return {
-            "__type__": "frozenset",
-            "value": [encode(item) for item in sorted(value, key=lambda x: (type(x).__name__, x))]
-        }
+        return _tag(
+            "frozenset",
+            {
+                "elements": [
+                    encode(item) for item in sorted(value, key=lambda x: (type(x).__name__, str(x)))
+                ]
+            },
+        )
 
     # Handle bytes
     if isinstance(value, bytes):
-        return {
-            "__type__": "bytes",
-            "value": base64.b64encode(value).decode('ascii')
-        }
+        return _tag("bytes", {"data": base64.b64encode(value).decode("ascii")})
 
     # Handle bytearray
     if isinstance(value, bytearray):
-        return {
-            "__type__": "bytes",
-            "value": base64.b64encode(bytes(value)).decode('ascii')
-        }
+        return _tag("bytes", {"data": base64.b64encode(bytes(value)).decode("ascii")})
 
     # Handle complex
     if isinstance(value, complex):
-        return {
-            "__type__": "complex",
-            "real": value.real,
-            "imag": value.imag
-        }
+        return _tag("complex", {"real": value.real, "imag": value.imag})
 
     # Handle datetime
     if isinstance(value, datetime):
-        return {
-            "__type__": "datetime",
-            "value": value.isoformat()
-        }
+        return _tag("datetime", {"value": value.isoformat()})
 
     # Handle date
     if isinstance(value, date):
-        return {
-            "__type__": "date",
-            "value": value.isoformat()
-        }
+        return _tag("date", {"value": value.isoformat()})
 
     # Handle time
     if isinstance(value, time):
-        return {
-            "__type__": "time",
-            "value": value.isoformat()
-        }
+        return _tag("time", {"value": value.isoformat()})
 
     # Handle list
     if isinstance(value, list):
@@ -177,16 +188,16 @@ def decode(value: Any) -> Any:
         The decoded Python value
 
     Examples:
-        >>> decode({'__type__': 'tuple', 'value': [1, 2, 3]})
+        >>> decode({'__type__': 'tuple', '__schema__': 1, 'elements': [1, 2, 3]})
         (1, 2, 3)
 
-        >>> decode({'__type__': 'set', 'value': [1, 2, 3]})
+        >>> decode({'__type__': 'set', '__schema__': 1, 'elements': [1, 2, 3]})
         {1, 2, 3}
 
-        >>> decode({'__type__': 'bytes', 'value': 'aGVsbG8='})
+        >>> decode({'__type__': 'bytes', '__schema__': 1, 'data': 'aGVsbG8='})
         b'hello'
 
-        >>> decode({'__type__': 'complex', 'real': 1.0, 'imag': 2.0})
+        >>> decode({'__type__': 'complex', '__schema__': 1, 'real': 1.0, 'imag': 2.0})
         (1+2j)
     """
     # Handle None
@@ -206,17 +217,29 @@ def decode(value: Any) -> Any:
         if "__type__" in value:
             type_tag = value["__type__"]
 
+            if type_tag == "atom":
+                atom_value = value.get("value")
+                if atom_value is None:
+                    return value
+                return Atom(atom_value)
+
             if type_tag == "tuple":
-                return tuple(decode(item) for item in value["value"])
+                elements = value.get("elements") or value.get("value") or []
+                return tuple(decode(item) for item in elements)
 
             elif type_tag == "set":
-                return set(decode(item) for item in value["value"])
+                elements = value.get("elements") or value.get("value") or []
+                return set(decode(item) for item in elements)
 
             elif type_tag == "frozenset":
-                return frozenset(decode(item) for item in value["value"])
+                elements = value.get("elements") or value.get("value") or []
+                return frozenset(decode(item) for item in elements)
 
             elif type_tag == "bytes":
-                return base64.b64decode(value["value"])
+                data = value.get("data") or value.get("value")
+                if data is None:
+                    return value
+                return base64.b64decode(data)
 
             elif type_tag == "complex":
                 return complex(value["real"], value["imag"])
@@ -230,14 +253,24 @@ def decode(value: Any) -> Any:
             elif type_tag == "time":
                 return time.fromisoformat(value["value"])
 
+            elif type_tag == "special_float":
+                special = value.get("value")
+                if special == "infinity":
+                    return float("inf")
+                if special == "neg_infinity":
+                    return float("-inf")
+                if special == "nan":
+                    return float("nan")
+                return value
+
             elif type_tag == "infinity":
-                return float('inf')
+                return float("inf")
 
             elif type_tag == "neg_infinity":
-                return float('-inf')
+                return float("-inf")
 
             elif type_tag == "nan":
-                return float('nan')
+                return float("nan")
 
             else:
                 # Unknown type tag, return as-is

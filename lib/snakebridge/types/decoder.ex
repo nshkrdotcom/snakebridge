@@ -4,12 +4,15 @@ defmodule SnakeBridge.Types.Decoder do
 
   Handles lossless decoding of tagged representations produced by the Python
   side or by `SnakeBridge.Types.Encoder`. Recognizes special `__type__` markers
-  to reconstruct Elixir-specific types.
+  to reconstruct Elixir-specific types. Atom decoding is allowlist-based
+  (configure via `:snakebridge, :atom_allowlist`).
 
   ## Supported Tagged Types
 
+  - `{"__type__": "atom", "value": "ok"}` → `:ok` (allowlisted only)
   - `{"__type__": "tuple", "elements": [...]}` → Elixir tuple
   - `{"__type__": "set", "elements": [...]}` → MapSet
+  - `{"__type__": "frozenset", "elements": [...]}` → MapSet
   - `{"__type__": "bytes", "data": "<base64>"}` → binary
   - `{"__type__": "datetime", "value": "<iso8601>"}` → DateTime
   - `{"__type__": "date", "value": "<iso8601>"}` → Date
@@ -53,7 +56,10 @@ defmodule SnakeBridge.Types.Decoder do
       iex> decode([1, 2, 3])
       [1, 2, 3]
 
-      iex> decode(%{"__type__" => "tuple", "elements" => ["ok", "result"]})
+      iex> decode(%{
+      ...>   "__type__" => "tuple",
+      ...>   "elements" => [%{"__type__" => "atom", "value" => "ok"}, "result"]
+      ...> })
       {:ok, "result"}
 
   """
@@ -70,22 +76,47 @@ defmodule SnakeBridge.Types.Decoder do
   end
 
   # Maps with __type__ markers - decode based on type
-  def decode(%{"__type__" => "tuple", "elements" => elements}) when is_list(elements) do
-    elements
+  def decode(%{"__type__" => "atom"} = map) do
+    value = Map.get(map, "value")
+
+    if is_binary(value) and atom_allowed?(value) do
+      String.to_atom(value)
+    else
+      value
+    end
+  end
+
+  def decode(%{"__type__" => "tuple"} = map) do
+    map
+    |> list_field()
     |> Enum.map(&decode/1)
     |> List.to_tuple()
   end
 
-  def decode(%{"__type__" => "set", "elements" => elements}) when is_list(elements) do
-    elements
+  def decode(%{"__type__" => "set"} = map) do
+    map
+    |> list_field()
     |> Enum.map(&decode/1)
     |> MapSet.new()
   end
 
-  def decode(%{"__type__" => "bytes", "data" => data}) when is_binary(data) do
-    case Base.decode64(data) do
-      {:ok, binary} -> binary
-      :error -> data
+  def decode(%{"__type__" => "frozenset"} = map) do
+    map
+    |> list_field()
+    |> Enum.map(&decode/1)
+    |> MapSet.new()
+  end
+
+  def decode(%{"__type__" => "bytes"} = map) do
+    data = Map.get(map, "data") || Map.get(map, "value")
+
+    if is_binary(data) do
+      case Base.decode64(data) do
+        {:ok, binary} -> binary
+        :error -> data
+      end
+    else
+      data
     end
   end
 
@@ -113,6 +144,9 @@ defmodule SnakeBridge.Types.Decoder do
   def decode(%{"__type__" => "special_float", "value" => "infinity"}), do: :infinity
   def decode(%{"__type__" => "special_float", "value" => "neg_infinity"}), do: :neg_infinity
   def decode(%{"__type__" => "special_float", "value" => "nan"}), do: :nan
+  def decode(%{"__type__" => "infinity"}), do: :infinity
+  def decode(%{"__type__" => "neg_infinity"}), do: :neg_infinity
+  def decode(%{"__type__" => "nan"}), do: :nan
 
   def decode(%{"__type__" => "complex", "real" => real, "imag" => imag}) do
     %{real: real, imag: imag}
@@ -127,4 +161,28 @@ defmodule SnakeBridge.Types.Decoder do
 
   # Anything else passes through unchanged
   def decode(other), do: other
+
+  defp list_field(map) do
+    case Map.get(map, "elements") do
+      nil -> Map.get(map, "value", [])
+      elements -> elements
+    end
+    |> List.wrap()
+  end
+
+  defp atom_allowed?(value) when is_binary(value) do
+    case atom_allowlist() do
+      :all -> true
+      allowlist -> value in allowlist
+    end
+  end
+
+  defp atom_allowed?(_), do: false
+
+  defp atom_allowlist do
+    case Application.get_env(:snakebridge, :atom_allowlist, ["ok", "error"]) do
+      :all -> :all
+      list -> Enum.map(List.wrap(list), &to_string/1)
+    end
+  end
 end

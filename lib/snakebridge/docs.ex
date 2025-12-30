@@ -7,28 +7,40 @@ defmodule SnakeBridge.Docs do
 
   @spec get(module(), atom() | String.t()) :: String.t()
   def get(module, function) do
+    start_time = System.monotonic_time()
     key = {module, function}
 
     case lookup_cache(key) do
       {:hit, doc} ->
+        SnakeBridge.Telemetry.docs_fetch(start_time, module, function, :cache)
         doc
 
       :miss ->
-        doc =
-          case docs_source() do
-            :python ->
-              fetch_from_python(module, function)
-
-            :metadata ->
-              fetch_from_metadata(module, function) || "Documentation unavailable."
-
-            :hybrid ->
-              fetch_from_metadata(module, function) ||
-                fetch_from_python(module, function)
-          end
+        {doc, source} = fetch_doc_with_source(module, function)
 
         maybe_cache(key, doc)
+        SnakeBridge.Telemetry.docs_fetch(start_time, module, function, source)
         doc
+    end
+  end
+
+  defp fetch_doc_with_source(module, function) do
+    case docs_source() do
+      :python ->
+        {fetch_from_python(module, function), :python}
+
+      :metadata ->
+        {fetch_from_metadata(module, function) || "Documentation unavailable.", :metadata}
+
+      :hybrid ->
+        fetch_hybrid_doc(module, function)
+    end
+  end
+
+  defp fetch_hybrid_doc(module, function) do
+    case fetch_from_metadata(module, function) do
+      nil -> {fetch_from_python(module, function), :python}
+      metadata -> {metadata, :metadata}
     end
   end
 
@@ -75,8 +87,44 @@ defmodule SnakeBridge.Docs do
     end
   end
 
-  defp fetch_from_metadata(_module, _function) do
-    nil
+  defp fetch_from_metadata(module, function) do
+    function_name = to_string(function)
+
+    with {:docs_v1, _, _, _, _, _, docs} <- Code.fetch_docs(module),
+         entry when not is_nil(entry) <- Enum.find(docs, &doc_entry_matches?(&1, function_name)),
+         docstring when is_binary(docstring) <- docstring_from_entry(entry) do
+      normalize_docstring(docstring)
+    else
+      _ -> nil
+    end
+  end
+
+  defp doc_entry_matches?({{kind, name, _arity}, _, _, _, _}, function_name)
+       when kind in [:function, :macro] and is_atom(name) do
+    Atom.to_string(name) == function_name
+  end
+
+  defp doc_entry_matches?({{name, _arity}, _, _, _, _}, function_name) when is_atom(name) do
+    Atom.to_string(name) == function_name
+  end
+
+  defp doc_entry_matches?(_entry, _function_name), do: false
+
+  defp docstring_from_entry({_id, _anno, _signature, doc, _metadata}) do
+    case doc do
+      :hidden -> nil
+      :none -> nil
+      {_, text} when is_binary(text) -> text
+      text when is_binary(text) -> text
+      _ -> nil
+    end
+  end
+
+  defp normalize_docstring(docstring) do
+    case String.trim(docstring) do
+      "" -> nil
+      trimmed -> trimmed
+    end
   end
 
   defp fetch_from_python(module, function) do

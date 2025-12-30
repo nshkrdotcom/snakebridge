@@ -26,7 +26,7 @@
     }
   },
   "symbols": {
-    "Elixir.MathVerify.grade/2": {
+    "MathVerify.grade/2": {
       "docstring": "Score an answer against the gold expression.",
       "function": "grade",
       "module": "MathVerify",
@@ -44,7 +44,7 @@
       "python_module": "math_verify",
       "return_annotation": null
     },
-    "Elixir.MathVerify.parse/1": {
+    "MathVerify.parse/1": {
       "docstring": "Parse an expression into normalized form.",
       "function": "parse",
       "module": "MathVerify",
@@ -58,7 +58,7 @@
       "python_module": "math_verify",
       "return_annotation": null
     },
-    "Elixir.MathVerify.verify/2": {
+    "MathVerify.verify/2": {
       "docstring": "Verify that an answer matches the gold expression.",
       "function": "verify",
       "module": "MathVerify",
@@ -76,7 +76,7 @@
       "python_module": "math_verify",
       "return_annotation": null
     },
-    "Elixir.PyLatexEnc.Latexencode.unicode_to_latex/1": {
+    "PyLatexEnc.Latexencode.unicode_to_latex/1": {
       "docstring": "Convert unicode text to LaTeX.",
       "function": "unicode_to_latex",
       "module": "PyLatexEnc.Latexencode",
@@ -90,7 +90,7 @@
       "python_module": "pylatexenc.latexencode",
       "return_annotation": null
     },
-    "Elixir.Sympy.latex/1": {
+    "Sympy.latex/1": {
       "docstring": "Return a LaTeX representation of an expression.",
       "function": "latex",
       "module": "Sympy",
@@ -104,7 +104,7 @@
       "python_module": "sympy",
       "return_annotation": null
     },
-    "Elixir.Sympy.simplify/1": {
+    "Sympy.simplify/1": {
       "docstring": "Simplify a symbolic expression.",
       "function": "simplify",
       "module": "Sympy",
@@ -118,7 +118,7 @@
       "python_module": "sympy",
       "return_annotation": null
     },
-    "Elixir.Sympy.sympify/1": {
+    "Sympy.sympify/1": {
       "docstring": "Convert text to a SymPy expression.",
       "function": "sympify",
       "module": "Sympy",

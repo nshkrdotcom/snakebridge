@@ -1,1 +1,1 @@
-{"classes":{},"symbols":{"Elixir.Numpy.array/1":{"function":"array","module":"Numpy","name":"array","python_module":"numpy"}},"version":"0.4.0"}
+{"classes":{},"symbols":{"Numpy.array/1":{"function":"array","module":"Numpy","name":"array","python_module":"numpy"}},"version":"0.4.0"}

@@ -12,8 +12,12 @@ defmodule Demo do
   Run with: mix run -e Demo.run
   """
 
+  alias SnakeBridge.Examples
+
   def run do
     Snakepit.run_as_script(fn ->
+      Examples.reset_failures()
+
       IO.puts("""
       ======================================================================
                     SnakeBridge Types Showcase Demo
@@ -57,14 +61,10 @@ defmodule Demo do
       Try `iex -S mix` to experiment with more types!
       ======================================================================
       """)
-    end)
-    |> case do
-      {:error, reason} ->
-        IO.puts("Snakepit script failed: #{inspect(reason)}")
 
-      _ ->
-        :ok
-    end
+      Examples.assert_no_failures!()
+    end)
+    |> Examples.assert_script_ok()
   end
 
   # ==========================================================================
@@ -461,19 +461,27 @@ defmodule Demo do
 
   # Helper to call Python via Snakepit with proper payload format
   defp snakepit_call(python_module, python_function, args) do
-    payload = %{
-      "library" => python_module |> String.split(".") |> List.first(),
-      "python_module" => python_module,
-      "function" => python_function,
-      "args" => args,
-      "kwargs" => %{},
-      "idempotent" => false
-    }
+    payload =
+      SnakeBridge.Runtime.protocol_payload()
+      |> Map.merge(%{
+        "library" => python_module |> String.split(".") |> List.first(),
+        "python_module" => python_module,
+        "function" => python_function,
+        "args" => args,
+        "kwargs" => %{},
+        "idempotent" => false
+      })
 
     case Snakepit.execute("snakebridge.call", payload) do
-      {:ok, value} -> {:ok, value}
-      {:error, reason} -> {:error, reason}
-      other -> {:ok, other}
+      {:ok, value} ->
+        {:ok, value}
+
+      {:error, reason} ->
+        Examples.record_failure()
+        {:error, reason}
+
+      other ->
+        {:ok, other}
     end
   end
 end

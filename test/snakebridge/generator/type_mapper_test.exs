@@ -185,6 +185,18 @@ defmodule SnakeBridge.Generator.TypeMapperTest do
 
       assert Macro.to_string(spec_ast) == "MyClass.t()"
     end
+
+    test "maps class with module to nested module reference" do
+      python_type = %{
+        "type" => "class",
+        "name" => "Tensor",
+        "module" => "torch"
+      }
+
+      spec_ast = TypeMapper.to_spec(python_type)
+
+      assert Macro.to_string(spec_ast) == "Torch.Tensor.t()"
+    end
   end
 
   describe "to_spec/1 with nested types" do

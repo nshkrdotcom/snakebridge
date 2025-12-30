@@ -36,7 +36,7 @@ defmodule SnakeBridge.HelperGenerator do
       Enum.each(grouped, fn {library, entries} ->
         source = render_library(library, entries, version: Application.spec(:snakebridge, :vsn))
         path = Path.join(dir, "#{library}.ex")
-        File.write!(path, source)
+        SnakeBridge.Generator.write_if_changed(path, source)
       end)
 
       :ok
@@ -136,54 +136,72 @@ defmodule SnakeBridge.HelperGenerator do
   defp helper_docstring(_), do: ""
 
   defp render_function(%{helper: helper_name, function: name, parameters: params, docstring: doc}) do
-    {param_names, has_opts} = build_params(params)
-    call = helper_call(helper_name, param_names, has_opts)
-    spec = function_spec(name, param_names, has_opts)
+    plan = SnakeBridge.Generator.build_params(params)
+    param_names = Enum.map(plan.required, & &1.name)
+    args_name = extra_args_name(param_names)
+    args = args_expr(param_names, plan.has_args, args_name)
+    call = helper_call(helper_name, args)
+    spec = function_spec(name, plan.required, plan.has_args)
+    normalize = normalize_args_line(plan.has_args, args_name, 8)
 
     docstring = String.trim(doc)
 
     """
       @doc #{inspect(docstring)}
       #{spec}
-      def #{name}(#{param_list(param_names, has_opts)}) do
-        #{call}
+      def #{name}(#{param_list(param_names, plan.has_args, plan.has_opts, args_name)}) do
+    #{normalize}        #{call}
       end
     """
   end
 
-  defp helper_call(name, param_names, true) do
-    args = "[" <> Enum.join(param_names, ", ") <> "]"
+  defp helper_call(name, args) do
     "SnakeBridge.Runtime.call_helper(\"#{name}\", #{args}, opts)"
   end
 
-  defp helper_call(name, param_names, false) do
-    args = "[" <> Enum.join(param_names, ", ") <> "]"
-    "SnakeBridge.Runtime.call_helper(\"#{name}\", #{args})"
-  end
-
-  defp function_spec(name, param_names, has_opts) do
-    args = Enum.map(param_names, fn _ -> "term()" end)
-    args = if has_opts, do: args ++ ["keyword()"], else: args
+  defp function_spec(name, param_entries, has_args) do
+    args = Enum.map(param_entries, fn _ -> "term()" end)
+    args = if has_args, do: args ++ ["list(term())"], else: args
+    args = args ++ ["keyword()"]
 
     "@spec #{name}(#{Enum.join(args, ", ")}) :: {:ok, term()} | {:error, term()}"
   end
 
-  defp build_params(params) do
-    required =
-      params
-      |> Enum.filter(&(&1["kind"] in ["POSITIONAL_ONLY", "POSITIONAL_OR_KEYWORD"]))
-      |> Enum.reject(&Map.has_key?(&1, "default"))
-
-    optional =
-      params
-      |> Enum.filter(&(&1["kind"] in ["KEYWORD_ONLY", "VAR_KEYWORD"]))
-
-    param_names = Enum.map(required, &sanitize_name/1)
-    {param_names, optional != []}
+  defp param_list(param_names, has_args, has_opts, args_name) do
+    param_names
+    |> maybe_add_args(has_args, args_name)
+    |> maybe_add_opts(has_opts)
+    |> Enum.join(", ")
   end
 
-  defp param_list(param_names, true), do: Enum.join(param_names ++ ["opts \\ []"], ", ")
-  defp param_list(param_names, false), do: Enum.join(param_names, ", ")
+  defp args_expr(param_names, true, args_name) do
+    base = "[" <> Enum.join(param_names, ", ") <> "]"
+    base <> " ++ List.wrap(" <> args_name <> ")"
+  end
+
+  defp args_expr(param_names, false, _args_name) do
+    "[" <> Enum.join(param_names, ", ") <> "]"
+  end
+
+  defp maybe_add_args(items, true, args_name), do: items ++ ["#{args_name} \\\\ []"]
+  defp maybe_add_args(items, false, _args_name), do: items
+
+  defp maybe_add_opts(items, _has_opts), do: items ++ ["opts \\\\ []"]
+
+  defp normalize_args_line(true, args_name, indent) do
+    String.duplicate(" ", indent) <>
+      "{#{args_name}, opts} = SnakeBridge.Runtime.normalize_args_opts(#{args_name}, opts)\n"
+  end
+
+  defp normalize_args_line(false, _args_name, _indent), do: ""
+
+  defp extra_args_name(param_names) do
+    if "args" in param_names do
+      "extra_args"
+    else
+      "args"
+    end
+  end
 
   defp sanitize_name(%{"name" => name}), do: sanitize_name(name)
 

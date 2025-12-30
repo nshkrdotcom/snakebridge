@@ -14,9 +14,12 @@ defmodule Demo do
 
   alias SnakeBridge.ErrorTranslator
   alias SnakeBridge.Error.{ShapeMismatchError, OutOfMemoryError, DtypeMismatchError}
+  alias SnakeBridge.Examples
 
   def run do
     Snakepit.run_as_script(fn ->
+      Examples.reset_failures()
+
       IO.puts("""
       ====================================================================
       ||           SnakeBridge ML Error Translation Demo                ||
@@ -45,14 +48,10 @@ defmodule Demo do
         5. All errors provide actionable guidance for developers
       ====================================================================
       """)
-    end)
-    |> case do
-      {:error, reason} ->
-        IO.puts("Snakepit script failed: #{inspect(reason)}")
 
-      _ ->
-        :ok
-    end
+      Examples.assert_no_failures!()
+    end)
+    |> Examples.assert_script_ok()
   end
 
   # ===========================================================================
@@ -339,7 +338,8 @@ defmodule Demo do
       description: "A working Python call for comparison",
       python_module: "math",
       python_function: "sqrt",
-      args: [16]
+      args: [16],
+      expect_error: false
     )
 
     IO.puts("")
@@ -424,6 +424,7 @@ defmodule Demo do
     python_module = opts[:python_module]
     python_function = opts[:python_function]
     args = opts[:args]
+    expect_error = Keyword.get(opts, :expect_error, true)
 
     IO.puts("+-----------------------------------------------------------------")
     IO.puts("| #{title}")
@@ -482,6 +483,8 @@ defmodule Demo do
 
     elapsed = System.monotonic_time(:microsecond) - start_time
 
+    record_expectation(expect_error, result)
+
     case result do
       {:ok, value} ->
         IO.puts("|  Response from Python (#{elapsed} us)")
@@ -524,16 +527,27 @@ defmodule Demo do
   defp get_error_message(%{message: message}), do: message
   defp get_error_message(other), do: inspect(other, limit: 50)
 
+  defp record_expectation(true, {:ok, _value}), do: Examples.record_failure()
+  defp record_expectation(true, {:translated, _error}), do: :ok
+  defp record_expectation(true, {:error, _reason}), do: :ok
+  defp record_expectation(true, {:rescue, _exception}), do: Examples.record_failure()
+  defp record_expectation(true, _other), do: Examples.record_failure()
+
+  defp record_expectation(false, {:ok, _value}), do: :ok
+  defp record_expectation(false, _other), do: Examples.record_failure()
+
   # Helper to call Python via Snakepit with proper payload format
   defp snakepit_call(python_module, python_function, args) do
-    payload = %{
-      "library" => python_module |> String.split(".") |> List.first(),
-      "python_module" => python_module,
-      "function" => python_function,
-      "args" => args,
-      "kwargs" => %{},
-      "idempotent" => false
-    }
+    payload =
+      SnakeBridge.Runtime.protocol_payload()
+      |> Map.merge(%{
+        "library" => python_module |> String.split(".") |> List.first(),
+        "python_module" => python_module,
+        "function" => python_function,
+        "args" => args,
+        "kwargs" => %{},
+        "idempotent" => false
+      })
 
     case Snakepit.execute("snakebridge.call", payload) do
       {:ok, value} -> {:ok, value}

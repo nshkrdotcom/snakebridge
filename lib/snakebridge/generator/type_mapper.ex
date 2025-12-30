@@ -73,6 +73,7 @@ defmodule SnakeBridge.Generator.TypeMapper do
   def to_spec(%{"type" => "bool"}), do: quote(do: boolean())
   def to_spec(%{"type" => "boolean"}), do: quote(do: boolean())
   def to_spec(%{"type" => "bytes"}), do: quote(do: binary())
+  def to_spec(%{"type" => "bytearray"}), do: quote(do: binary())
   def to_spec(%{"type" => "none"}), do: quote(do: nil)
   def to_spec(%{"type" => "any"}), do: quote(do: term())
 
@@ -81,6 +82,7 @@ defmodule SnakeBridge.Generator.TypeMapper do
   def to_spec(%{"type" => "dict"} = python_type), do: map_dict_type(python_type)
   def to_spec(%{"type" => "tuple"} = python_type), do: map_tuple_type(python_type)
   def to_spec(%{"type" => "set"} = python_type), do: map_set_type(python_type)
+  def to_spec(%{"type" => "frozenset"} = python_type), do: map_set_type(python_type)
   def to_spec(%{"type" => "optional"} = python_type), do: map_optional_type(python_type)
   def to_spec(%{"type" => "union"} = python_type), do: map_union_type(python_type)
   def to_spec(%{"type" => "class"} = python_type), do: map_class_type(python_type)
@@ -165,8 +167,20 @@ defmodule SnakeBridge.Generator.TypeMapper do
   defp map_union_type(_), do: quote(do: term())
 
   @spec map_class_type(map()) :: Macro.t()
+  defp map_class_type(%{"name" => name, "module" => module})
+       when is_binary(name) and is_binary(module) do
+    module_parts =
+      module
+      |> String.split(".")
+      |> Enum.map(&Macro.camelize/1)
+      |> Kernel.++([name])
+
+    module_alias = {:__aliases__, [alias: false], Enum.map(module_parts, &String.to_atom/1)}
+
+    {{:., [], [module_alias, :t]}, [], []}
+  end
+
   defp map_class_type(%{"name" => name}) when is_binary(name) do
-    # Convert class name to module alias and add .t()
     module_alias = {:__aliases__, [alias: false], [String.to_atom(name)]}
 
     {{:., [], [module_alias, :t]}, [], []}

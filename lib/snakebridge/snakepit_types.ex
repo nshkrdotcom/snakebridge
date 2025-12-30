@@ -6,7 +6,7 @@ if Code.ensure_loaded?(Snakepit.PyRef) == false do
     This is a stub type definition used when the Snakepit library is not loaded.
     When Snakepit is available, its actual `Snakepit.PyRef` module takes precedence.
     """
-    @type t :: term()
+    @type t :: SnakeBridge.Ref.t()
   end
 end
 

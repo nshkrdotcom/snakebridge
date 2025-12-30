@@ -12,12 +12,15 @@ defmodule Demo do
   """
 
   alias TelemetryShowcase.TelemetryHandler
+  alias SnakeBridge.Examples
 
   def run do
     # Start the telemetry handler agent
     {:ok, _pid} = TelemetryHandler.start_link()
 
     Snakepit.run_as_script(fn ->
+      Examples.reset_failures()
+
       # Attach telemetry handlers AFTER Snakepit startup.
       TelemetryHandler.attach()
       SnakeBridge.Telemetry.RuntimeForwarder.attach()
@@ -38,18 +41,13 @@ defmodule Demo do
         TelemetryHandler.print_summary()
 
         print_footer()
+        Examples.assert_no_failures!()
       after
         TelemetryHandler.detach()
         SnakeBridge.Telemetry.RuntimeForwarder.detach()
       end
     end)
-    |> case do
-      {:error, reason} ->
-        IO.puts("Snakepit script failed: #{inspect(reason)}")
-
-      _ ->
-        :ok
-    end
+    |> Examples.assert_script_ok()
   end
 
   # ============================================================
@@ -127,7 +125,8 @@ defmodule Demo do
       elixir_call: "Math.sqrt/1",
       python_module: "math",
       python_function: "sqrt",
-      args: [-1]
+      args: [-1],
+      expect_error: true
     )
 
     # Call with invalid module
@@ -136,7 +135,8 @@ defmodule Demo do
       elixir_call: "NonExistent.foo/0",
       python_module: "this_module_does_not_exist",
       python_function: "foo",
-      args: []
+      args: [],
+      expect_error: true
     )
   end
 
@@ -184,6 +184,7 @@ defmodule Demo do
 
     # Wait for all tasks
     results = Task.await_many(tasks, 30_000)
+    Enum.each(results, &record_expectation(false, &1))
 
     IO.puts("│")
     IO.puts("│  All #{length(results)} concurrent calls completed!")
@@ -202,6 +203,7 @@ defmodule Demo do
     python_module = Keyword.fetch!(opts, :python_module)
     python_function = Keyword.fetch!(opts, :python_function)
     args = Keyword.fetch!(opts, :args)
+    expect_error = Keyword.get(opts, :expect_error, false)
 
     IO.puts("┌─ #{description}")
     IO.puts("│")
@@ -216,6 +218,8 @@ defmodule Demo do
     elapsed = System.monotonic_time(:microsecond) - start_time
 
     IO.puts("│")
+
+    record_expectation(expect_error, result)
 
     case result do
       {:ok, value} ->
@@ -248,6 +252,13 @@ defmodule Demo do
   defp format_result({:ok, value}), do: inspect(value, limit: 20)
   defp format_result({:error, _}), do: "<error>"
   defp format_result(other), do: inspect(other, limit: 20)
+
+  defp record_expectation(true, {:ok, _value}), do: Examples.record_failure()
+  defp record_expectation(true, {:error, _reason}), do: :ok
+  defp record_expectation(true, _other), do: Examples.record_failure()
+
+  defp record_expectation(false, {:ok, _value}), do: :ok
+  defp record_expectation(false, _other), do: Examples.record_failure()
 
   # ============================================================
   # HEADER/FOOTER
@@ -303,14 +314,16 @@ defmodule Demo do
   defp snakepit_call(python_module, python_function, args) do
     start_time = System.monotonic_time()
 
-    payload = %{
-      "library" => python_module |> String.split(".") |> List.first(),
-      "python_module" => python_module,
-      "function" => python_function,
-      "args" => args,
-      "kwargs" => %{},
-      "idempotent" => false
-    }
+    payload =
+      SnakeBridge.Runtime.protocol_payload()
+      |> Map.merge(%{
+        "library" => python_module |> String.split(".") |> List.first(),
+        "python_module" => python_module,
+        "function" => python_function,
+        "args" => args,
+        "kwargs" => %{},
+        "idempotent" => false
+      })
 
     metadata = %{
       module: python_module,

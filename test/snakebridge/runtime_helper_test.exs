@@ -50,6 +50,8 @@ defmodule SnakeBridge.RuntimeHelperTest do
 
     expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", payload, _opts ->
       assert payload == %{
+               "protocol_version" => 1,
+               "min_supported_version" => 1,
                "call_type" => "helper",
                "helper" => "sympy.parse_implicit",
                "function" => "sympy.parse_implicit",

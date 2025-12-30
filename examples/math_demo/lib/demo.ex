@@ -3,8 +3,12 @@ defmodule Demo do
   Run with: mix run -e Demo.run
   """
 
+  alias SnakeBridge.Examples
+
   def run do
     Snakepit.run_as_script(fn ->
+      Examples.reset_failures()
+
       IO.puts("""
       ╔═══════════════════════════════════════════════════════════╗
       ║              SnakeBridge v3 Demo                          ║
@@ -16,14 +20,10 @@ defmodule Demo do
       demo_runtime_math_verbose()
 
       IO.puts("\nDone! Try `iex -S mix` to explore more.")
-    end)
-    |> case do
-      {:error, reason} ->
-        IO.puts("Snakepit script failed: #{inspect(reason)}")
 
-      _ ->
-        :ok
-    end
+      Examples.assert_no_failures!()
+    end)
+    |> Examples.assert_script_ok()
   end
 
   defp demo_generated_structure do
@@ -37,6 +37,7 @@ defmodule Demo do
 
       {:error, _} ->
         IO.puts("  Not found. Run `mix compile` to generate bindings.")
+        Examples.record_failure()
     end
 
     IO.puts("")
@@ -89,9 +90,11 @@ defmodule Demo do
       else
         error ->
           IO.puts("  Some calls failed: #{inspect(error)}")
+          Examples.record_failure()
       end
     else
       IO.puts("  Math module not available. Run `mix compile`.")
+      Examples.record_failure()
     end
 
     IO.puts("")
@@ -113,6 +116,7 @@ defmodule Demo do
   defp print_result({:error, reason}) do
     IO.puts("└─ Result: {:error, #{inspect(reason)}}")
     IO.puts("")
+    Examples.record_failure()
   end
 
   defp print_result(other) do

@@ -7,13 +7,42 @@ defmodule SnakeBridge.Scanner do
 
   @spec scan_project(SnakeBridge.Config.t()) :: [call_ref()]
   def scan_project(config) do
+    start_time = System.monotonic_time()
     library_modules = Enum.map(config.libraries, & &1.module_name)
+    files = source_files(config)
 
-    source_files(config)
-    |> Task.async_stream(&scan_file(&1, library_modules), ordered: false)
-    |> Enum.flat_map(fn {:ok, calls} -> calls end)
-    |> Enum.uniq()
-    |> Enum.sort()
+    {calls, failures} =
+      files
+      |> Task.async_stream(&scan_file(&1, library_modules))
+      |> Enum.zip(files)
+      |> Enum.reduce({[], []}, fn
+        {{:ok, calls}, _path}, {acc_calls, acc_failures} ->
+          {calls ++ acc_calls, acc_failures}
+
+        {{:exit, reason}, path}, {acc_calls, acc_failures} ->
+          {acc_calls, [%{path: path, reason: reason, type: :exit} | acc_failures]}
+
+        {{:error, reason}, path}, {acc_calls, acc_failures} ->
+          {acc_calls, [%{path: path, reason: reason, type: :error} | acc_failures]}
+      end)
+
+    calls =
+      calls
+      |> Enum.uniq()
+      |> Enum.sort()
+
+    SnakeBridge.Telemetry.scan_stop(
+      start_time,
+      length(files),
+      length(calls),
+      config.scan_paths || ["lib"]
+    )
+
+    if failures != [] do
+      raise SnakeBridge.ScanError, failures: Enum.reverse(failures)
+    end
+
+    calls
   end
 
   defp source_files(config) do

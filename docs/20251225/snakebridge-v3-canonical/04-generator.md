@@ -335,26 +335,29 @@ end
 
 ## Argument Handling and Keyword Options
 
-SnakeBridge generates wrapper signatures that separate **required positional** arguments from **optional/keyword** arguments.
+SnakeBridge generates wrapper signatures that separate required positional arguments,
+extra positional arguments, and keyword options.
 
 - Required positionals become explicit parameters.
-- Optional and keyword-only args are passed via a `opts \\ []` keyword list.
+- Optional/variadic positionals are passed via an `args \\ []` list appended after required args.
+- Keyword-only args and runtime flags are passed via `opts \\ []`.
 - `opts` is converted into Python kwargs.
-- `*args` (VAR_POSITIONAL) are passed via `opts[:__args__]` as a list.
 
 Example:
 
 ```elixir
-@spec reshape(term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
-def reshape(a, opts \\ []) do
-  # opts: [shape: {2, 3}, order: "C", __args__: []]
-  SnakeBridge.Runtime.call(__MODULE__, :reshape, [a], opts)
+@spec reshape(term(), list(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+def reshape(a, args \\ [], opts \\ []) do
+  # args: [[2, 3]]
+  SnakeBridge.Runtime.call(__MODULE__, :reshape, [a] ++ List.wrap(args), opts)
 end
 ```
 
 Reserved keyword keys:
 
-- `:__args__` — additional positional arguments for Python `*args`
+- `:idempotent` — runtime idempotency/caching hint
+- `:__runtime__` — runtime options (pool/session/timeouts)
+- `:__args__` — legacy extra positional args for direct runtime calls
 
 ## Submodule Generation
 
@@ -371,7 +374,9 @@ defmodule Numpy do
 end
 ```
 
-The introspector uses dotted Python names (`numpy.linalg`) and the generator writes nested modules that include a `__snakebridge_python_name__/0` function so runtime can resolve to `numpy.linalg`.
+The introspector uses dotted Python names (`numpy.linalg`) and the generator writes nested
+modules that include `__snakebridge_python_name__/0` and `__snakebridge_library__/0`
+so runtime can resolve the full dotted module path and library root.
 
 ## Class Generation
 

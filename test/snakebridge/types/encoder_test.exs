@@ -3,6 +3,8 @@ defmodule SnakeBridge.Types.EncoderTest do
 
   alias SnakeBridge.Types.Encoder
 
+  @schema SnakeBridge.Types.schema_version()
+
   describe "encode/1 primitives" do
     test "encodes nil" do
       assert Encoder.encode(nil) == nil
@@ -41,10 +43,24 @@ defmodule SnakeBridge.Types.EncoderTest do
   end
 
   describe "encode/1 atoms" do
-    test "encodes atoms as strings" do
-      assert Encoder.encode(:ok) == "ok"
-      assert Encoder.encode(:error) == "error"
-      assert Encoder.encode(:some_atom) == "some_atom"
+    test "encodes atoms as tagged values" do
+      assert Encoder.encode(:ok) == %{
+               "__type__" => "atom",
+               "__schema__" => @schema,
+               "value" => "ok"
+             }
+
+      assert Encoder.encode(:error) == %{
+               "__type__" => "atom",
+               "__schema__" => @schema,
+               "value" => "error"
+             }
+
+      assert Encoder.encode(:some_atom) == %{
+               "__type__" => "atom",
+               "__schema__" => @schema,
+               "value" => "some_atom"
+             }
     end
 
     test "encodes nil atom specifically" do
@@ -61,6 +77,7 @@ defmodule SnakeBridge.Types.EncoderTest do
     test "encodes infinity" do
       assert Encoder.encode(:infinity) == %{
                "__type__" => "special_float",
+               "__schema__" => @schema,
                "value" => "infinity"
              }
     end
@@ -68,6 +85,7 @@ defmodule SnakeBridge.Types.EncoderTest do
     test "encodes negative infinity" do
       assert Encoder.encode(:neg_infinity) == %{
                "__type__" => "special_float",
+               "__schema__" => @schema,
                "value" => "neg_infinity"
              }
     end
@@ -75,6 +93,7 @@ defmodule SnakeBridge.Types.EncoderTest do
     test "encodes NaN" do
       assert Encoder.encode(:nan) == %{
                "__type__" => "special_float",
+               "__schema__" => @schema,
                "value" => "nan"
              }
     end
@@ -84,6 +103,7 @@ defmodule SnakeBridge.Types.EncoderTest do
     test "encodes empty tuple" do
       assert Encoder.encode({}) == %{
                "__type__" => "tuple",
+               "__schema__" => @schema,
                "elements" => []
              }
     end
@@ -91,6 +111,7 @@ defmodule SnakeBridge.Types.EncoderTest do
     test "encodes simple tuple" do
       assert Encoder.encode({1, 2, 3}) == %{
                "__type__" => "tuple",
+               "__schema__" => @schema,
                "elements" => [1, 2, 3]
              }
     end
@@ -98,16 +119,21 @@ defmodule SnakeBridge.Types.EncoderTest do
     test "encodes tuple with mixed types" do
       assert Encoder.encode({:ok, "result"}) == %{
                "__type__" => "tuple",
-               "elements" => ["ok", "result"]
+               "__schema__" => @schema,
+               "elements" => [
+                 %{"__type__" => "atom", "__schema__" => @schema, "value" => "ok"},
+                 "result"
+               ]
              }
     end
 
     test "encodes nested tuples" do
       assert Encoder.encode({{1, 2}, {3, 4}}) == %{
                "__type__" => "tuple",
+               "__schema__" => @schema,
                "elements" => [
-                 %{"__type__" => "tuple", "elements" => [1, 2]},
-                 %{"__type__" => "tuple", "elements" => [3, 4]}
+                 %{"__type__" => "tuple", "__schema__" => @schema, "elements" => [1, 2]},
+                 %{"__type__" => "tuple", "__schema__" => @schema, "elements" => [3, 4]}
                ]
              }
     end
@@ -117,6 +143,7 @@ defmodule SnakeBridge.Types.EncoderTest do
     test "encodes empty MapSet" do
       assert Encoder.encode(MapSet.new()) == %{
                "__type__" => "set",
+               "__schema__" => @schema,
                "elements" => []
              }
     end
@@ -124,13 +151,24 @@ defmodule SnakeBridge.Types.EncoderTest do
     test "encodes MapSet with elements" do
       result = Encoder.encode(MapSet.new([1, 2, 3]))
       assert result["__type__"] == "set"
+      assert result["__schema__"] == @schema
       assert Enum.sort(result["elements"]) == [1, 2, 3]
     end
 
     test "encodes MapSet with atoms" do
       result = Encoder.encode(MapSet.new([:a, :b, :c]))
       assert result["__type__"] == "set"
-      assert Enum.sort(result["elements"]) == ["a", "b", "c"]
+      assert result["__schema__"] == @schema
+
+      values =
+        result["elements"]
+        |> Enum.map(fn element ->
+          %{"__type__" => "atom", "value" => value} = element
+          value
+        end)
+        |> Enum.sort()
+
+      assert values == ["a", "b", "c"]
     end
   end
 
@@ -144,6 +182,7 @@ defmodule SnakeBridge.Types.EncoderTest do
 
       assert Encoder.encode(binary) == %{
                "__type__" => "bytes",
+               "__schema__" => @schema,
                "data" => Base.encode64(binary)
              }
     end
@@ -160,6 +199,7 @@ defmodule SnakeBridge.Types.EncoderTest do
 
       assert Encoder.encode(dt) == %{
                "__type__" => "datetime",
+               "__schema__" => @schema,
                "value" => "2023-12-25T10:30:00Z"
              }
     end
@@ -169,6 +209,7 @@ defmodule SnakeBridge.Types.EncoderTest do
 
       assert Encoder.encode(dt) == %{
                "__type__" => "datetime",
+               "__schema__" => @schema,
                "value" => "2023-12-25T10:30:00.123456Z"
              }
     end
@@ -180,6 +221,7 @@ defmodule SnakeBridge.Types.EncoderTest do
 
       assert Encoder.encode(date) == %{
                "__type__" => "date",
+               "__schema__" => @schema,
                "value" => "2023-12-25"
              }
     end
@@ -191,6 +233,7 @@ defmodule SnakeBridge.Types.EncoderTest do
 
       assert Encoder.encode(time) == %{
                "__type__" => "time",
+               "__schema__" => @schema,
                "value" => "10:30:00"
              }
     end
@@ -200,6 +243,7 @@ defmodule SnakeBridge.Types.EncoderTest do
 
       assert Encoder.encode(time) == %{
                "__type__" => "time",
+               "__schema__" => @schema,
                "value" => "10:30:00.123456"
              }
     end
@@ -208,14 +252,28 @@ defmodule SnakeBridge.Types.EncoderTest do
   describe "encode/1 nested structures" do
     test "encodes list with tuples" do
       assert Encoder.encode([{:ok, 1}, {:error, "msg"}]) == [
-               %{"__type__" => "tuple", "elements" => ["ok", 1]},
-               %{"__type__" => "tuple", "elements" => ["error", "msg"]}
+               %{
+                 "__type__" => "tuple",
+                 "__schema__" => @schema,
+                 "elements" => [
+                   %{"__type__" => "atom", "__schema__" => @schema, "value" => "ok"},
+                   1
+                 ]
+               },
+               %{
+                 "__type__" => "tuple",
+                 "__schema__" => @schema,
+                 "elements" => [
+                   %{"__type__" => "atom", "__schema__" => @schema, "value" => "error"},
+                   "msg"
+                 ]
+               }
              ]
     end
 
     test "encodes map with atom keys" do
       assert Encoder.encode(%{status: :ok, value: 42}) == %{
-               "status" => "ok",
+               "status" => %{"__type__" => "atom", "__schema__" => @schema, "value" => "ok"},
                "value" => 42
              }
     end
@@ -231,14 +289,16 @@ defmodule SnakeBridge.Types.EncoderTest do
       assert encoded == %{
                "result" => %{
                  "__type__" => "tuple",
+                 "__schema__" => @schema,
                  "elements" => [
-                   "ok",
-                   %{"__type__" => "set", "elements" => [1, 2]}
+                   %{"__type__" => "atom", "__schema__" => @schema, "value" => "ok"},
+                   %{"__type__" => "set", "__schema__" => @schema, "elements" => [1, 2]}
                  ]
                },
                "metadata" => %{
                  "timestamp" => %{
                    "__type__" => "date",
+                   "__schema__" => @schema,
                    "value" => "2023-12-25"
                  }
                }
@@ -251,6 +311,7 @@ defmodule SnakeBridge.Types.EncoderTest do
 
       assert length(encoded) == 2
       assert Enum.all?(encoded, fn item -> item["__type__"] == "set" end)
+      assert Enum.all?(encoded, fn item -> item["__schema__"] == @schema end)
     end
 
     test "encodes tuple containing DateTime" do
@@ -259,10 +320,12 @@ defmodule SnakeBridge.Types.EncoderTest do
 
       assert Encoder.encode(tuple) == %{
                "__type__" => "tuple",
+               "__schema__" => @schema,
                "elements" => [
-                 "timestamp",
+                 %{"__type__" => "atom", "__schema__" => @schema, "value" => "timestamp"},
                  %{
                    "__type__" => "datetime",
+                   "__schema__" => @schema,
                    "value" => "2023-12-25T10:30:00Z"
                  }
                ]
@@ -278,7 +341,12 @@ defmodule SnakeBridge.Types.EncoderTest do
     end
 
     test "encodes empty structures" do
-      assert Encoder.encode({}) == %{"__type__" => "tuple", "elements" => []}
+      assert Encoder.encode({}) == %{
+               "__type__" => "tuple",
+               "__schema__" => @schema,
+               "elements" => []
+             }
+
       assert Encoder.encode([]) == []
       assert Encoder.encode(%{}) == %{}
     end

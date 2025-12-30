@@ -28,7 +28,7 @@
     }
   },
   "symbols": {
-    "Elixir.Json.dumps/1": {
+    "Json.dumps/1": {
       "docstring": "Serialize obj to a JSON formatted str.",
       "function": "dumps",
       "module": "Json",
@@ -46,7 +46,7 @@
       "python_module": "json",
       "return_annotation": null
     },
-    "Elixir.Json.loads/1": {
+    "Json.loads/1": {
       "docstring": "Deserialize s to a Python object.",
       "function": "loads",
       "module": "Json",
@@ -60,7 +60,7 @@
       "python_module": "json",
       "return_annotation": null
     },
-    "Elixir.Math.cos/1": {
+    "Math.cos/1": {
       "docstring": "Return the cosine of x.",
       "function": "cos",
       "module": "Math",
@@ -74,7 +74,7 @@
       "python_module": "math",
       "return_annotation": null
     },
-    "Elixir.Math.sin/1": {
+    "Math.sin/1": {
       "docstring": "Return the sine of x.",
       "function": "sin",
       "module": "Math",
@@ -88,7 +88,7 @@
       "python_module": "math",
       "return_annotation": null
     },
-    "Elixir.Math.sqrt/1": {
+    "Math.sqrt/1": {
       "docstring": "Return the square root of x.",
       "function": "sqrt",
       "module": "Math",

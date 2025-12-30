@@ -3,8 +3,9 @@ defmodule SnakeBridge.Types.Encoder do
   Encodes Elixir data structures into JSON-compatible formats for Python interop.
 
   Handles lossless encoding of Elixir types that don't have direct JSON equivalents
-  using tagged representations. All encoded values can be round-tripped through
-  the corresponding Decoder.
+  using tagged representations. Tagged values include a `__schema__` marker for
+  the current wire schema version. Atom round-trips depend on the decoder
+  allowlist.
 
   ## Supported Types
 
@@ -18,7 +19,7 @@ defmodule SnakeBridge.Types.Encoder do
   - Maps with string keys → objects
 
   ### Tagged Types
-  - Atoms → strings (except `nil`, `true`, `false`)
+  - Atoms → `{"__type__": "atom", "value": "ok"}`
   - Tuples → `{"__type__": "tuple", "elements": [...]}`
   - MapSets → `{"__type__": "set", "elements": [...]}`
   - Binaries (non-UTF-8) → `{"__type__": "bytes", "data": "<base64>"}`
@@ -34,10 +35,14 @@ defmodule SnakeBridge.Types.Encoder do
       %{"a" => 1, "b" => 2}
 
       iex> SnakeBridge.Types.Encoder.encode({:ok, "result"})
-      %{"__type__" => "tuple", "elements" => ["ok", "result"]}
+      %{
+        "__type__" => "tuple",
+        "__schema__" => 1,
+        "elements" => [%{"__type__" => "atom", "__schema__" => 1, "value" => "ok"}, "result"]
+      }
 
       iex> SnakeBridge.Types.Encoder.encode(MapSet.new([1, 2, 3]))
-      %{"__type__" => "set", "elements" => [1, 2, 3]}
+      %{"__type__" => "set", "__schema__" => 1, "elements" => [1, 2, 3]}
 
   """
 
@@ -50,10 +55,10 @@ defmodule SnakeBridge.Types.Encoder do
       42
 
       iex> encode(:ok)
-      "ok"
+      %{"__type__" => "atom", "__schema__" => 1, "value" => "ok"}
 
       iex> encode({1, 2, 3})
-      %{"__type__" => "tuple", "elements" => [1, 2, 3]}
+      %{"__type__" => "tuple", "__schema__" => 1, "elements" => [1, 2, 3]}
 
   """
   @spec encode(term()) :: term()
@@ -62,12 +67,14 @@ defmodule SnakeBridge.Types.Encoder do
   def encode(false), do: false
 
   # Special float atoms
-  def encode(:infinity), do: %{"__type__" => "special_float", "value" => "infinity"}
-  def encode(:neg_infinity), do: %{"__type__" => "special_float", "value" => "neg_infinity"}
-  def encode(:nan), do: %{"__type__" => "special_float", "value" => "nan"}
+  def encode(:infinity), do: tagged("special_float", %{"value" => "infinity"})
+  def encode(:neg_infinity), do: tagged("special_float", %{"value" => "neg_infinity"})
+  def encode(:nan), do: tagged("special_float", %{"value" => "nan"})
 
-  # Regular atoms become strings
-  def encode(atom) when is_atom(atom), do: Atom.to_string(atom)
+  # Regular atoms are tagged for lossless interop
+  def encode(atom) when is_atom(atom) do
+    tagged("atom", %{"value" => Atom.to_string(atom)})
+  end
 
   # Numbers
   def encode(num) when is_integer(num), do: num
@@ -79,10 +86,7 @@ defmodule SnakeBridge.Types.Encoder do
       binary
     else
       # Non-UTF-8 binary - encode as base64
-      %{
-        "__type__" => "bytes",
-        "data" => Base.encode64(binary)
-      }
+      tagged("bytes", %{"data" => Base.encode64(binary)})
     end
   end
 
@@ -93,42 +97,27 @@ defmodule SnakeBridge.Types.Encoder do
 
   # Tuples
   def encode(tuple) when is_tuple(tuple) do
-    %{
-      "__type__" => "tuple",
-      "elements" => tuple |> Tuple.to_list() |> Enum.map(&encode/1)
-    }
+    tagged("tuple", %{"elements" => tuple |> Tuple.to_list() |> Enum.map(&encode/1)})
   end
 
   # MapSets
   def encode(%MapSet{} = mapset) do
-    %{
-      "__type__" => "set",
-      "elements" => mapset |> MapSet.to_list() |> Enum.map(&encode/1)
-    }
+    tagged("set", %{"elements" => mapset |> MapSet.to_list() |> Enum.map(&encode/1)})
   end
 
   # DateTime
   def encode(%DateTime{} = dt) do
-    %{
-      "__type__" => "datetime",
-      "value" => DateTime.to_iso8601(dt)
-    }
+    tagged("datetime", %{"value" => DateTime.to_iso8601(dt)})
   end
 
   # Date
   def encode(%Date{} = date) do
-    %{
-      "__type__" => "date",
-      "value" => Date.to_iso8601(date)
-    }
+    tagged("date", %{"value" => Date.to_iso8601(date)})
   end
 
   # Time
   def encode(%Time{} = time) do
-    %{
-      "__type__" => "time",
-      "value" => Time.to_iso8601(time)
-    }
+    tagged("time", %{"value" => Time.to_iso8601(time)})
   end
 
   # Maps - convert atom keys to strings, recursively encode values
@@ -148,5 +137,11 @@ defmodule SnakeBridge.Types.Encoder do
   # Fallback for any other type - convert to string representation
   def encode(other) do
     inspect(other)
+  end
+
+  defp tagged(type, fields) when is_map(fields) do
+    fields
+    |> Map.put("__type__", type)
+    |> Map.put("__schema__", SnakeBridge.Types.schema_version())
   end
 end

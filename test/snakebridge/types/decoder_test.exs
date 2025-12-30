@@ -3,6 +3,8 @@ defmodule SnakeBridge.Types.DecoderTest do
 
   alias SnakeBridge.Types.Decoder
 
+  @schema SnakeBridge.Types.schema_version()
+
   describe "decode/1 primitives" do
     test "decodes nil" do
       assert Decoder.decode(nil) == nil
@@ -40,10 +42,47 @@ defmodule SnakeBridge.Types.DecoderTest do
     end
   end
 
+  describe "decode/1 atoms" do
+    setup do
+      original = Application.get_env(:snakebridge, :atom_allowlist)
+
+      on_exit(fn ->
+        if is_nil(original) do
+          Application.delete_env(:snakebridge, :atom_allowlist)
+        else
+          Application.put_env(:snakebridge, :atom_allowlist, original)
+        end
+      end)
+
+      :ok
+    end
+
+    test "decodes allowlisted atom tags into atoms" do
+      Application.put_env(:snakebridge, :atom_allowlist, ["ok"])
+
+      assert Decoder.decode(%{
+               "__type__" => "atom",
+               "__schema__" => @schema,
+               "value" => "ok"
+             }) == :ok
+    end
+
+    test "decodes non-allowlisted atom tags into strings" do
+      Application.put_env(:snakebridge, :atom_allowlist, ["ok"])
+
+      assert Decoder.decode(%{
+               "__type__" => "atom",
+               "__schema__" => @schema,
+               "value" => "not_allowed"
+             }) == "not_allowed"
+    end
+  end
+
   describe "decode/1 special floats" do
     test "decodes infinity" do
       assert Decoder.decode(%{
                "__type__" => "special_float",
+               "__schema__" => @schema,
                "value" => "infinity"
              }) == :infinity
     end
@@ -51,6 +90,7 @@ defmodule SnakeBridge.Types.DecoderTest do
     test "decodes negative infinity" do
       assert Decoder.decode(%{
                "__type__" => "special_float",
+               "__schema__" => @schema,
                "value" => "neg_infinity"
              }) == :neg_infinity
     end
@@ -58,6 +98,7 @@ defmodule SnakeBridge.Types.DecoderTest do
     test "decodes NaN" do
       assert Decoder.decode(%{
                "__type__" => "special_float",
+               "__schema__" => @schema,
                "value" => "nan"
              }) == :nan
     end
@@ -67,6 +108,7 @@ defmodule SnakeBridge.Types.DecoderTest do
     test "decodes empty tuple" do
       assert Decoder.decode(%{
                "__type__" => "tuple",
+               "__schema__" => @schema,
                "elements" => []
              }) == {}
     end
@@ -74,6 +116,7 @@ defmodule SnakeBridge.Types.DecoderTest do
     test "decodes simple tuple" do
       assert Decoder.decode(%{
                "__type__" => "tuple",
+               "__schema__" => @schema,
                "elements" => [1, 2, 3]
              }) == {1, 2, 3}
     end
@@ -81,6 +124,7 @@ defmodule SnakeBridge.Types.DecoderTest do
     test "decodes tuple with mixed types" do
       assert Decoder.decode(%{
                "__type__" => "tuple",
+               "__schema__" => @schema,
                "elements" => ["ok", "result"]
              }) == {"ok", "result"}
     end
@@ -88,9 +132,10 @@ defmodule SnakeBridge.Types.DecoderTest do
     test "decodes nested tuples" do
       assert Decoder.decode(%{
                "__type__" => "tuple",
+               "__schema__" => @schema,
                "elements" => [
-                 %{"__type__" => "tuple", "elements" => [1, 2]},
-                 %{"__type__" => "tuple", "elements" => [3, 4]}
+                 %{"__type__" => "tuple", "__schema__" => @schema, "elements" => [1, 2]},
+                 %{"__type__" => "tuple", "__schema__" => @schema, "elements" => [3, 4]}
                ]
              }) == {{1, 2}, {3, 4}}
     end
@@ -98,6 +143,7 @@ defmodule SnakeBridge.Types.DecoderTest do
     test "decodes single element tuple" do
       assert Decoder.decode(%{
                "__type__" => "tuple",
+               "__schema__" => @schema,
                "elements" => [42]
              }) == {42}
     end
@@ -107,6 +153,7 @@ defmodule SnakeBridge.Types.DecoderTest do
     test "decodes empty set" do
       assert Decoder.decode(%{
                "__type__" => "set",
+               "__schema__" => @schema,
                "elements" => []
              }) == MapSet.new()
     end
@@ -115,6 +162,7 @@ defmodule SnakeBridge.Types.DecoderTest do
       result =
         Decoder.decode(%{
           "__type__" => "set",
+          "__schema__" => @schema,
           "elements" => [1, 2, 3]
         })
 
@@ -125,6 +173,7 @@ defmodule SnakeBridge.Types.DecoderTest do
       result =
         Decoder.decode(%{
           "__type__" => "set",
+          "__schema__" => @schema,
           "elements" => ["a", "b", "c"]
         })
 
@@ -135,7 +184,19 @@ defmodule SnakeBridge.Types.DecoderTest do
       result =
         Decoder.decode(%{
           "__type__" => "set",
+          "__schema__" => @schema,
           "elements" => [1, 2, 2, 3, 3]
+        })
+
+      assert MapSet.equal?(result, MapSet.new([1, 2, 3]))
+    end
+
+    test "decodes frozenset into MapSet" do
+      result =
+        Decoder.decode(%{
+          "__type__" => "frozenset",
+          "__schema__" => @schema,
+          "elements" => [1, 2, 3]
         })
 
       assert MapSet.equal?(result, MapSet.new([1, 2, 3]))
@@ -149,6 +210,7 @@ defmodule SnakeBridge.Types.DecoderTest do
 
       assert Decoder.decode(%{
                "__type__" => "bytes",
+               "__schema__" => @schema,
                "data" => encoded
              }) == binary
     end
@@ -156,6 +218,7 @@ defmodule SnakeBridge.Types.DecoderTest do
     test "decodes empty bytes" do
       assert Decoder.decode(%{
                "__type__" => "bytes",
+               "__schema__" => @schema,
                "data" => ""
              }) == <<>>
     end
@@ -166,6 +229,7 @@ defmodule SnakeBridge.Types.DecoderTest do
 
       assert Decoder.decode(%{
                "__type__" => "bytes",
+               "__schema__" => @schema,
                "data" => encoded
              }) == binary
     end
@@ -178,6 +242,7 @@ defmodule SnakeBridge.Types.DecoderTest do
       result =
         Decoder.decode(%{
           "__type__" => "datetime",
+          "__schema__" => @schema,
           "value" => "2023-12-25T10:30:00Z"
         })
 
@@ -190,6 +255,7 @@ defmodule SnakeBridge.Types.DecoderTest do
       result =
         Decoder.decode(%{
           "__type__" => "datetime",
+          "__schema__" => @schema,
           "value" => "2023-12-25T10:30:00.123456Z"
         })
 
@@ -202,6 +268,7 @@ defmodule SnakeBridge.Types.DecoderTest do
       result =
         Decoder.decode(%{
           "__type__" => "datetime",
+          "__schema__" => @schema,
           "value" => "2023-12-25T10:30:00+05:00"
         })
 
@@ -215,13 +282,23 @@ defmodule SnakeBridge.Types.DecoderTest do
 
       assert Decoder.decode(%{
                "__type__" => "date",
+               "__schema__" => @schema,
                "value" => "2023-12-25"
              }) == expected
     end
 
     test "decodes various dates" do
-      assert Decoder.decode(%{"__type__" => "date", "value" => "2000-01-01"}) == ~D[2000-01-01]
-      assert Decoder.decode(%{"__type__" => "date", "value" => "1999-12-31"}) == ~D[1999-12-31]
+      assert Decoder.decode(%{
+               "__type__" => "date",
+               "__schema__" => @schema,
+               "value" => "2000-01-01"
+             }) == ~D[2000-01-01]
+
+      assert Decoder.decode(%{
+               "__type__" => "date",
+               "__schema__" => @schema,
+               "value" => "1999-12-31"
+             }) == ~D[1999-12-31]
     end
   end
 
@@ -231,6 +308,7 @@ defmodule SnakeBridge.Types.DecoderTest do
 
       assert Decoder.decode(%{
                "__type__" => "time",
+               "__schema__" => @schema,
                "value" => "10:30:00"
              }) == expected
     end
@@ -240,13 +318,23 @@ defmodule SnakeBridge.Types.DecoderTest do
 
       assert Decoder.decode(%{
                "__type__" => "time",
+               "__schema__" => @schema,
                "value" => "10:30:00.123456"
              }) == expected
     end
 
     test "decodes various times" do
-      assert Decoder.decode(%{"__type__" => "time", "value" => "00:00:00"}) == ~T[00:00:00]
-      assert Decoder.decode(%{"__type__" => "time", "value" => "23:59:59"}) == ~T[23:59:59]
+      assert Decoder.decode(%{
+               "__type__" => "time",
+               "__schema__" => @schema,
+               "value" => "00:00:00"
+             }) == ~T[00:00:00]
+
+      assert Decoder.decode(%{
+               "__type__" => "time",
+               "__schema__" => @schema,
+               "value" => "23:59:59"
+             }) == ~T[23:59:59]
     end
   end
 
@@ -254,6 +342,7 @@ defmodule SnakeBridge.Types.DecoderTest do
     test "decodes complex number" do
       assert Decoder.decode(%{
                "__type__" => "complex",
+               "__schema__" => @schema,
                "real" => 3.0,
                "imag" => 4.0
              }) == %{real: 3.0, imag: 4.0}
@@ -262,6 +351,7 @@ defmodule SnakeBridge.Types.DecoderTest do
     test "decodes complex number with integer parts" do
       assert Decoder.decode(%{
                "__type__" => "complex",
+               "__schema__" => @schema,
                "real" => 5,
                "imag" => -2
              }) == %{real: 5, imag: -2}
@@ -270,17 +360,53 @@ defmodule SnakeBridge.Types.DecoderTest do
     test "decodes complex number with zero imaginary part" do
       assert Decoder.decode(%{
                "__type__" => "complex",
+               "__schema__" => @schema,
                "real" => 7.5,
                "imag" => 0
              }) == %{real: 7.5, imag: 0}
     end
   end
 
+  describe "decode/1 legacy wire formats" do
+    test "decodes tuple using legacy value key" do
+      assert Decoder.decode(%{
+               "__type__" => "tuple",
+               "value" => [1, 2, 3]
+             }) == {1, 2, 3}
+    end
+
+    test "decodes set using legacy value key" do
+      result =
+        Decoder.decode(%{
+          "__type__" => "set",
+          "value" => [1, 2, 3]
+        })
+
+      assert MapSet.equal?(result, MapSet.new([1, 2, 3]))
+    end
+
+    test "decodes bytes using legacy value key" do
+      binary = <<1, 2, 3>>
+      encoded = Base.encode64(binary)
+
+      assert Decoder.decode(%{
+               "__type__" => "bytes",
+               "value" => encoded
+             }) == binary
+    end
+
+    test "decodes legacy special float tags" do
+      assert Decoder.decode(%{"__type__" => "infinity"}) == :infinity
+      assert Decoder.decode(%{"__type__" => "neg_infinity"}) == :neg_infinity
+      assert Decoder.decode(%{"__type__" => "nan"}) == :nan
+    end
+  end
+
   describe "decode/1 nested structures" do
     test "decodes list with tuples" do
       assert Decoder.decode([
-               %{"__type__" => "tuple", "elements" => ["ok", 1]},
-               %{"__type__" => "tuple", "elements" => ["error", "msg"]}
+               %{"__type__" => "tuple", "__schema__" => @schema, "elements" => ["ok", 1]},
+               %{"__type__" => "tuple", "__schema__" => @schema, "elements" => ["error", "msg"]}
              ]) == [{"ok", 1}, {"error", "msg"}]
     end
 
@@ -288,14 +414,16 @@ defmodule SnakeBridge.Types.DecoderTest do
       data = %{
         "result" => %{
           "__type__" => "tuple",
+          "__schema__" => @schema,
           "elements" => [
             "ok",
-            %{"__type__" => "set", "elements" => [1, 2]}
+            %{"__type__" => "set", "__schema__" => @schema, "elements" => [1, 2]}
           ]
         },
         "metadata" => %{
           "timestamp" => %{
             "__type__" => "date",
+            "__schema__" => @schema,
             "value" => "2023-12-25"
           }
         }
@@ -309,8 +437,8 @@ defmodule SnakeBridge.Types.DecoderTest do
 
     test "decodes list with sets" do
       list = [
-        %{"__type__" => "set", "elements" => [1, 2]},
-        %{"__type__" => "set", "elements" => [3, 4]}
+        %{"__type__" => "set", "__schema__" => @schema, "elements" => [1, 2]},
+        %{"__type__" => "set", "__schema__" => @schema, "elements" => [3, 4]}
       ]
 
       decoded = Decoder.decode(list)
@@ -326,10 +454,12 @@ defmodule SnakeBridge.Types.DecoderTest do
       result =
         Decoder.decode(%{
           "__type__" => "tuple",
+          "__schema__" => @schema,
           "elements" => [
             "timestamp",
             %{
               "__type__" => "datetime",
+              "__schema__" => @schema,
               "value" => "2023-12-25T10:30:00Z"
             }
           ]
@@ -341,9 +471,9 @@ defmodule SnakeBridge.Types.DecoderTest do
 
     test "decodes map containing multiple type-tagged values" do
       data = %{
-        "tuple" => %{"__type__" => "tuple", "elements" => [1, 2]},
-        "set" => %{"__type__" => "set", "elements" => [3, 4]},
-        "date" => %{"__type__" => "date", "value" => "2023-12-25"},
+        "tuple" => %{"__type__" => "tuple", "__schema__" => @schema, "elements" => [1, 2]},
+        "set" => %{"__type__" => "set", "__schema__" => @schema, "elements" => [3, 4]},
+        "date" => %{"__type__" => "date", "__schema__" => @schema, "value" => "2023-12-25"},
         "regular" => "value"
       }
 
@@ -358,8 +488,18 @@ defmodule SnakeBridge.Types.DecoderTest do
 
   describe "decode/1 edge cases" do
     test "decodes empty structures" do
-      assert Decoder.decode(%{"__type__" => "tuple", "elements" => []}) == {}
-      assert Decoder.decode(%{"__type__" => "set", "elements" => []}) == MapSet.new()
+      assert Decoder.decode(%{
+               "__type__" => "tuple",
+               "__schema__" => @schema,
+               "elements" => []
+             }) == {}
+
+      assert Decoder.decode(%{
+               "__type__" => "set",
+               "__schema__" => @schema,
+               "elements" => []
+             }) == MapSet.new()
+
       assert Decoder.decode([]) == []
       assert Decoder.decode(%{}) == %{}
     end
@@ -382,12 +522,14 @@ defmodule SnakeBridge.Types.DecoderTest do
       # Tuple containing a set containing tuples
       data = %{
         "__type__" => "tuple",
+        "__schema__" => @schema,
         "elements" => [
           %{
             "__type__" => "set",
+            "__schema__" => @schema,
             "elements" => [
-              %{"__type__" => "tuple", "elements" => [1, 2]},
-              %{"__type__" => "tuple", "elements" => [3, 4]}
+              %{"__type__" => "tuple", "__schema__" => @schema, "elements" => [1, 2]},
+              %{"__type__" => "tuple", "__schema__" => @schema, "elements" => [3, 4]}
             ]
           }
         ]
@@ -409,20 +551,23 @@ defmodule SnakeBridge.Types.DecoderTest do
       data = %{
         "status" => %{
           "__type__" => "tuple",
+          "__schema__" => @schema,
           "elements" => ["ok", 200]
         },
         "data" => %{
           "items" => [
-            %{"__type__" => "tuple", "elements" => ["a", 1]},
-            %{"__type__" => "tuple", "elements" => ["b", 2]}
+            %{"__type__" => "tuple", "__schema__" => @schema, "elements" => ["a", 1]},
+            %{"__type__" => "tuple", "__schema__" => @schema, "elements" => ["b", 2]}
           ],
           "tags" => %{
             "__type__" => "set",
+            "__schema__" => @schema,
             "elements" => ["tag1", "tag2"]
           }
         },
         "timestamp" => %{
           "__type__" => "datetime",
+          "__schema__" => @schema,
           "value" => "2023-12-25T10:30:00Z"
         }
       }

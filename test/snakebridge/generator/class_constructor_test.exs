@@ -79,8 +79,8 @@ defmodule SnakeBridge.Generator.ClassConstructorTest do
 
       source = Generator.render_class(class_info, library)
 
-      assert source =~ "def new(path, opts \\\\ [])"
-      assert source =~ "call_class(__MODULE__, :__init__, [path], opts)"
+      assert source =~ "def new(path, args \\\\ [], opts \\\\ [])"
+      assert source =~ "call_class(__MODULE__, :__init__, [path] ++ List.wrap(args), opts)"
     end
   end
 end

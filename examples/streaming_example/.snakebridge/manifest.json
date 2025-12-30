@@ -1,7 +1,7 @@
 {
   "classes": {},
   "symbols": {
-    "Elixir.Streaming.generate/1": {
+    "Streaming.generate/1": {
       "docstring": "Generate either a full response or a stream of chunks.",
       "function": "generate",
       "module": "Streaming",

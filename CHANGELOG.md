@@ -7,7 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- (no changes yet)
+## [0.7.2] - 2025-12-29
+
+### Added
+- Wire schema version tagging and atom tags across Elixir/Python with tolerant decoding for legacy keys
+- Protocol version markers on runtime payloads with adapter compatibility checks
+- `SnakeBridge.Ref` schema plus `release_ref`/`release_session` runtime helpers
+- `error_mode` configuration for translated or raised runtime errors
+- Ref registry TTL/LRU controls in the Python adapter (`SNAKEBRIDGE_REF_TTL_SECONDS`, `SNAKEBRIDGE_REF_MAX`)
+- Telemetry emission for scan, introspection, generate, docs fetch, and lock verification
+- `protocol_payload/0` and `normalize_args_opts/2` helpers in `SnakeBridge.Runtime` for runtime payload consistency
+- Example failure tracking helper to hard-fail on unexpected demo errors
+- `SNAKEBRIDGE_ALLOW_LEGACY_PROTOCOL` toggle for protocol compatibility checks
+
+### Changed
+- Manifest symbol keys normalized without `Elixir.` prefixes and migrated on load
+- Strict verification now validates class modules, methods, and attributes via AST parsing
+- Dotted python library roots handled consistently in submodule generation and runtime metadata
+- Generated wrappers accept extra positional args via `args \\ []` and emit typed specs
+- Helper generation now writes only when content changes; Mix compiler reports manifest/lock artifacts
+- Protocol compatibility is strict by default; legacy payloads require `SNAKEBRIDGE_ALLOW_LEGACY_PROTOCOL=1`
+- Generated wrappers normalize keyword lists passed as args into opts when opts are omitted
+- Example runners now raise on Snakepit script failures instead of printing and continuing
+- Docs showcase fetches docstrings via the Python runner instead of raw runtime payloads
+
+### Fixed
+- Async scan/introspection task failures now surface structured errors instead of crashing
+- Snakepit lockfile now aligns with the declared `~> 0.8.3` requirement
+- Example payloads include protocol metadata to avoid version mismatches
+- Wrapper/streaming/class constructor examples no longer fail JSON encoding for keyword options
 
 ## [0.7.1] - 2025-12-29
 
@@ -144,6 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type system mapper
 - Basic code generation
 
+[0.7.2]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.5.0...v0.6.0

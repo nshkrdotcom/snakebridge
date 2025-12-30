@@ -5,8 +5,12 @@ defmodule Demo do
   Run with: mix run -e Demo.run
   """
 
+  alias SnakeBridge.Examples
+
   def run do
     Snakepit.run_as_script(fn ->
+      Examples.reset_failures()
+
       IO.puts("""
       ╔═══════════════════════════════════════════════════════════╗
       ║           SnakeBridge Basic Demo - Explicit Calls         ║
@@ -33,14 +37,10 @@ defmodule Demo do
         Elixir → gRPC → Python → gRPC → Elixir
       ════════════════════════════════════════════════════════════
       """)
-    end)
-    |> case do
-      {:error, reason} ->
-        IO.puts("Snakepit script failed: #{inspect(reason)}")
 
-      _ ->
-        :ok
-    end
+      Examples.assert_no_failures!()
+    end)
+    |> Examples.assert_script_ok()
   end
 
   defp demo_basic_math do
@@ -231,14 +231,16 @@ defmodule Demo do
     # Actually make the call via Snakepit with proper payload
     start_time = System.monotonic_time(:microsecond)
 
-    payload = %{
-      "library" => opts[:python_module] |> String.split(".") |> List.first(),
-      "python_module" => opts[:python_module],
-      "function" => opts[:python_function],
-      "args" => opts[:args],
-      "kwargs" => %{},
-      "idempotent" => false
-    }
+    payload =
+      SnakeBridge.Runtime.protocol_payload()
+      |> Map.merge(%{
+        "library" => opts[:python_module] |> String.split(".") |> List.first(),
+        "python_module" => opts[:python_module],
+        "function" => opts[:python_function],
+        "args" => opts[:args],
+        "kwargs" => %{},
+        "idempotent" => false
+      })
 
     result =
       case Snakepit.execute("snakebridge.call", payload) do
@@ -259,6 +261,7 @@ defmodule Demo do
         IO.puts("│  Error from Python (#{elapsed} us)")
         IO.puts("│")
         IO.puts("└─ Result: {:error, #{inspect(reason, limit: 50)}}")
+        Examples.record_failure()
     end
 
     IO.puts("")

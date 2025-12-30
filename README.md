@@ -16,7 +16,7 @@ Add to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:snakebridge, "~> 0.7.1",
+    {:snakebridge, "~> 0.7.2",
       libraries: [
         {:numpy, "1.26.0"},
         {:pandas, version: "2.0.0", include: ["DataFrame", "read_csv"]}
@@ -48,14 +48,15 @@ SnakeBridge generates Elixir modules that wrap Python libraries:
 # Python: numpy.mean(a, axis=None, dtype=None, keepdims=False)
 # Generated: Numpy.mean(a, opts \\ [])
 
-Numpy.mean([1, 2, 3])                    # Basic call
-Numpy.mean([1, 2, 3], axis: 0)           # With Python kwargs
-Numpy.mean([1, 2, 3], idempotent: true)  # With runtime flags
+Numpy.mean([1, 2, 3])                      # Basic call
+Numpy.mean([1, 2, 3], axis: 0)             # With Python kwargs
+Numpy.mean([1, 2, 3], idempotent: true)    # With runtime flags
+Numpy.reshape([1, 2, 3, 4], [[2, 2]], order: "C") # Extra positional args list
 ```
 
-All wrappers accept `opts` for:
-- **Python kwargs**: Passed to the Python function
-- **Runtime flags**: `idempotent`, `__runtime__`, `__args__`
+All wrappers accept:
+- **Extra positional args**: `args` list appended after required parameters
+- **Keyword options**: `opts` for Python kwargs and runtime flags (`idempotent`, `__runtime__`)
 
 ### Class Constructors
 
@@ -68,6 +69,7 @@ Classes generate `new/N` matching their Python `__init__`:
 
 {:ok, point} = Geometry.Point.new(10, 20)
 {:ok, x} = Geometry.Point.x(point)  # Attribute access
+:ok = SnakeBridge.Runtime.release_ref(point)
 ```
 
 ### Instance Attributes
@@ -76,10 +78,10 @@ Read and write Python object attributes:
 
 ```elixir
 # Get attribute
-{:ok, value} = SnakeBridge.get_attr(instance, "attribute_name")
+{:ok, value} = SnakeBridge.Runtime.get_attr(instance, "attribute_name")
 
 # Set attribute
-:ok = SnakeBridge.set_attr(instance, "attribute_name", new_value)
+:ok = SnakeBridge.Runtime.set_attr(instance, "attribute_name", new_value)
 ```
 
 ### Streaming Functions
@@ -123,6 +125,16 @@ Python docstrings are converted to ExDoc Markdown:
 - Sphinx/Epytext styles supported
 - RST math (``:math:`E=mc^2``) -> KaTeX (`$E=mc^2$`)
 
+### Wire Schema (v1)
+
+SnakeBridge tags non-JSON values with `__type__` and `__schema__` markers to keep
+the Elixir/Python contract stable across versions. Atoms are encoded as tagged
+values and decoded only when allowlisted:
+
+```elixir
+config :snakebridge, atom_allowlist: ["ok", "error"]
+```
+
 ### ML Error Translation
 
 Python ML exceptions are translated to structured Elixir errors:
@@ -138,7 +150,12 @@ Python ML exceptions are translated to structured Elixir errors:
 %SnakeBridge.Error.DtypeMismatchError{expected: :float32, actual: :float64}
 ```
 
-Use `SnakeBridge.ErrorTranslator.translate/1` for manual translation.
+Use `SnakeBridge.ErrorTranslator.translate/1` for manual translation, or set
+`error_mode` to translate on every runtime call:
+
+```elixir
+config :snakebridge, error_mode: :translated
+```
 
 ### Telemetry
 
@@ -153,18 +170,20 @@ end, nil)
 
 Compile events:
 - `[:snakebridge, :compile, :start|:stop|:exception]`
-- `[:snakebridge, :scan, :start|:stop]`
+- `[:snakebridge, :scan, :stop]`
 - `[:snakebridge, :introspect, :start|:stop]`
-- `[:snakebridge, :generate, :start|:stop]`
+- `[:snakebridge, :generate, :stop]`
+- `[:snakebridge, :docs, :fetch]`
+- `[:snakebridge, :lock, :verify]`
 
 Runtime events (forwarded from Snakepit):
-- `[:snakebridge, :call, :start|:stop|:exception]`
+- `[:snakebridge, :runtime, :call, :start|:stop|:exception]`
 
 ## Configuration
 
 ```elixir
 # mix.exs
-{:snakebridge, "~> 0.7.1",
+{:snakebridge, "~> 0.7.2",
   libraries: [
     # Simple: name and version
     {:numpy, "1.26.0"},
@@ -189,13 +208,32 @@ Runtime events (forwarded from Snakepit):
 config :snakebridge,
   auto_install: :dev,      # :never | :dev | :always
   strict: false,           # or SNAKEBRIDGE_STRICT=1
-  verbose: false
+  verbose: false,
+  error_mode: :raw,        # :raw | :translated | :raise_translated
+  atom_allowlist: ["ok", "error"]
 
 # Advanced introspection config
 config :snakebridge, :introspector,
   max_concurrency: 4,
   timeout: 30_000
 ```
+
+Python adapter ref lifecycle (environment variables):
+
+```bash
+SNAKEBRIDGE_REF_TTL_SECONDS=3600
+SNAKEBRIDGE_REF_MAX=10000
+```
+
+Python adapter protocol compatibility (environment variables):
+
+```bash
+# Strict by default. Set to 1/true/yes to accept legacy payloads without protocol metadata.
+SNAKEBRIDGE_ALLOW_LEGACY_PROTOCOL=0
+```
+
+Protocol checks are strict by default. Ensure callers include `protocol_version` and
+`min_supported_version` in runtime payloads (all `SnakeBridge.Runtime` helpers do this automatically).
 
 ## Mix Tasks
 
@@ -231,6 +269,10 @@ For dynamic calls when module/function names aren't known at compile time:
 
 # Streaming call
 SnakeBridge.stream("llm", "generate", ["prompt"], [], fn chunk -> IO.write(chunk) end)
+
+# Release refs when done
+:ok = SnakeBridge.Runtime.release_ref(ref)
+:ok = SnakeBridge.Runtime.release_session("session-id")
 ```
 
 ## Architecture
@@ -248,7 +290,7 @@ Runtime calls delegate to [Snakepit](https://hex.pm/packages/snakepit).
 
 - Elixir ~> 1.14
 - Python 3.8+
-- Snakepit ~> 0.8.2
+- Snakepit ~> 0.8.3
 
 ## License
 

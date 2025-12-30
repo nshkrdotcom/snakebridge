@@ -3,8 +3,12 @@ defmodule Demo do
   Run with: mix run -e Demo.run
   """
 
+  alias SnakeBridge.Examples
+
   def run do
     Snakepit.run_as_script(fn ->
+      Examples.reset_failures()
+
       IO.puts("Class Constructor Example")
       IO.puts("-------------------------")
 
@@ -37,14 +41,10 @@ defmodule Demo do
         _ ->
           :ok
       end
-    end)
-    |> case do
-      {:error, reason} ->
-        IO.puts("Snakepit script failed: #{inspect(reason)}")
 
-      _ ->
-        :ok
-    end
+      Examples.assert_no_failures!()
+    end)
+    |> Examples.assert_script_ok()
   end
 
   defp step(title) do
@@ -58,6 +58,7 @@ defmodule Demo do
 
   defp print_result({:error, reason}) do
     IO.puts("Result: {:error, #{inspect(reason)}}")
+    Examples.record_failure()
   end
 
   defp print_result(other) do

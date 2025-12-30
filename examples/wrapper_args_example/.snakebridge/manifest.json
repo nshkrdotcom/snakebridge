@@ -1,7 +1,7 @@
 {
   "classes": {},
   "symbols": {
-    "Elixir.WrapperArgs.join_values/0": {
+    "WrapperArgs.join_values/0": {
       "docstring": "Join values with a separator, demonstrating Python varargs.",
       "function": "join_values",
       "module": "WrapperArgs",
@@ -20,7 +20,7 @@
       "python_module": "wrapper_args_example",
       "return_annotation": null
     },
-    "Elixir.WrapperArgs.mean/1": {
+    "WrapperArgs.mean/1": {
       "docstring": "Compute a simple mean with optional axis and dtype placeholders.",
       "function": "mean",
       "module": "WrapperArgs",

@@ -35,6 +35,8 @@ defmodule SnakeBridge.RuntimeContractTest do
 
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", payload, _opts ->
         assert payload == %{
+                 "protocol_version" => 1,
+                 "min_supported_version" => 1,
                  "library" => "numpy",
                  "python_module" => "numpy.linalg",
                  "function" => "solve",
@@ -57,6 +59,8 @@ defmodule SnakeBridge.RuntimeContractTest do
 
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", payload, _opts ->
         assert payload == %{
+                 "protocol_version" => 1,
+                 "min_supported_version" => 1,
                  "call_type" => "class",
                  "library" => "sympy",
                  "python_module" => "sympy",
@@ -88,12 +92,80 @@ defmodule SnakeBridge.RuntimeContractTest do
         assert payload["function"] == "solve"
         assert payload["kwargs"] == %{}
         assert payload["idempotent"] == false
+        assert payload["protocol_version"] == 1
+        assert payload["min_supported_version"] == 1
 
         :ok
       end)
 
       assert :ok =
                SnakeBridge.Runtime.stream(NumpyLinalg, :solve, [1, 2], fn _chunk -> :ok end)
+    end
+  end
+
+  describe "release_ref/2" do
+    test "sends protocol payload and returns :ok" do
+      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
+
+      ref = %{
+        "__type__" => "ref",
+        "__schema__" => 1,
+        "id" => "ref-1",
+        "session_id" => "session-1",
+        "python_module" => "sympy",
+        "library" => "sympy"
+      }
+
+      expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.release_ref",
+                                                         payload,
+                                                         _opts ->
+        assert payload == %{
+                 "protocol_version" => 1,
+                 "min_supported_version" => 1,
+                 "ref" => ref
+               }
+
+        {:ok, :released}
+      end)
+
+      assert :ok = SnakeBridge.Runtime.release_ref(ref)
+    end
+  end
+
+  describe "release_session/2" do
+    test "sends protocol payload and returns :ok" do
+      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
+
+      expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.release_session",
+                                                         payload,
+                                                         _opts ->
+        assert payload == %{
+                 "protocol_version" => 1,
+                 "min_supported_version" => 1,
+                 "session_id" => "session-1"
+               }
+
+        {:ok, :released}
+      end)
+
+      assert :ok = SnakeBridge.Runtime.release_session("session-1")
+    end
+  end
+
+  describe "normalize_args_opts/2" do
+    test "moves keyword args into opts when opts are empty" do
+      assert {[], [axis: 0]} = SnakeBridge.Runtime.normalize_args_opts([axis: 0], [])
+    end
+
+    test "keeps args when opts are provided" do
+      args = [axis: 0]
+      opts = [timeout: 1]
+
+      assert {^args, ^opts} = SnakeBridge.Runtime.normalize_args_opts(args, opts)
+    end
+
+    test "keeps non-keyword args" do
+      assert {[1, 2], []} = SnakeBridge.Runtime.normalize_args_opts([1, 2], [])
     end
   end
 end

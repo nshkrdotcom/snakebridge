@@ -3,8 +3,12 @@ defmodule Demo do
   Run with: mix run -e Demo.run
   """
 
+  alias SnakeBridge.Examples
+
   def run do
     Snakepit.run_as_script(fn ->
+      Examples.reset_failures()
+
       IO.puts("Strict Mode Example")
       IO.puts("-------------------")
       IO.puts("Strict mode is enabled in config/config.exs")
@@ -14,14 +18,10 @@ defmodule Demo do
 
       step("multiply/2")
       print_result(StrictModeExample.multiply(4, 5))
-    end)
-    |> case do
-      {:error, reason} ->
-        IO.puts("Snakepit script failed: #{inspect(reason)}")
 
-      _ ->
-        :ok
-    end
+      Examples.assert_no_failures!()
+    end)
+    |> Examples.assert_script_ok()
   end
 
   defp step(title) do
@@ -35,6 +35,7 @@ defmodule Demo do
 
   defp print_result({:error, reason}) do
     IO.puts("Result: {:error, #{inspect(reason)}}")
+    Examples.record_failure()
   end
 
   defp print_result(other) do

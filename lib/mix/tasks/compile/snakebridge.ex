@@ -43,7 +43,13 @@ defmodule Mix.Tasks.Compile.Snakebridge do
 
   @impl Mix.Task.Compiler
   def manifests do
-    []
+    Mix.Task.run("loadconfig")
+    config = Config.load()
+
+    [
+      Path.join(config.metadata_dir, "manifest.json"),
+      "snakebridge.lock"
+    ]
   end
 
   defp skip_generation? do
@@ -160,7 +166,8 @@ defmodule Mix.Tasks.Compile.Snakebridge do
         "python_module" => python_module,
         "parameters" => info["parameters"] || [],
         "docstring" => info["docstring"] || "",
-        "return_annotation" => info["return_annotation"]
+        "return_annotation" => info["return_annotation"],
+        "return_type" => info["return_type"]
       }
     }
   end
@@ -366,29 +373,80 @@ defmodule Mix.Tasks.Compile.Snakebridge do
 
   @spec verify_symbols_present!(Config.t(), map()) :: :ok
   def verify_symbols_present!(config, manifest) do
-    symbols = Map.get(manifest, "symbols", %{})
-
     Enum.each(config.libraries, fn library ->
       path = Path.join(config.generated_dir, "#{library.python_name}.ex")
       content = read_generated_file!(path)
-      expected_functions = expected_functions_for_library(symbols, library)
+      defs = parse_definitions!(content, path)
 
-      missing_in_file =
-        Enum.reject(expected_functions, fn name ->
-          String.contains?(content, "def #{name}(")
-        end)
+      missing_functions = missing_functions_for_library(manifest, library, defs)
+      classes_for_library = classes_for_library(manifest, library)
+      missing_classes = missing_classes_for_library(classes_for_library, defs)
+      missing_class_members = missing_class_members_for_library(classes_for_library, defs)
 
-      if missing_in_file != [] do
-        raise SnakeBridge.CompileError, """
-        Strict mode: Generated file #{path} is missing expected functions:
-        #{Enum.map_join(missing_in_file, "\n", &"  - #{&1}")}
-
-        Run `mix compile` locally to regenerate and commit the updated files.
-        """
-      end
+      maybe_raise_missing!(path, missing_functions, missing_classes, missing_class_members)
     end)
 
     :ok
+  end
+
+  defp missing_functions_for_library(manifest, library, defs) do
+    manifest
+    |> functions_for_library(library)
+    |> Enum.reject(fn info ->
+      function_defined?(defs, info["module"], info["name"])
+    end)
+  end
+
+  defp missing_classes_for_library(classes_for_library, defs) do
+    Enum.reject(classes_for_library, fn info ->
+      module = info["module"]
+      Map.has_key?(defs, module)
+    end)
+  end
+
+  defp missing_class_members_for_library(classes_for_library, defs) do
+    classes_for_library
+    |> Enum.filter(fn info -> Map.has_key?(defs, info["module"]) end)
+    |> Enum.flat_map(&missing_members_for_class(&1, defs))
+  end
+
+  defp missing_members_for_class(info, defs) do
+    module = info["module"]
+    method_names = missing_method_names(info["methods"] || [], defs, module)
+    attr_names = missing_attr_names(info["attributes"] || [], defs, module)
+
+    Enum.map(method_names ++ attr_names, fn name ->
+      {module, name}
+    end)
+  end
+
+  defp missing_method_names(methods, defs, module) do
+    methods
+    |> Enum.map(&method_expected_name/1)
+    |> Enum.reject(fn name ->
+      name == "" or function_defined?(defs, module, name)
+    end)
+  end
+
+  defp missing_attr_names(attrs, defs, module) do
+    attrs
+    |> Enum.map(&to_string/1)
+    |> Enum.reject(fn name ->
+      name == "" or function_defined?(defs, module, name)
+    end)
+  end
+
+  defp maybe_raise_missing!(path, missing_functions, missing_classes, missing_class_members) do
+    if missing_functions != [] or missing_classes != [] or missing_class_members != [] do
+      raise SnakeBridge.CompileError, """
+      Strict mode: Generated file #{path} is missing expected bindings.
+
+      #{missing_functions_message(missing_functions)}\
+      #{missing_classes_message(missing_classes)}\
+      #{missing_class_members_message(missing_class_members)}
+      Run `mix compile` locally to regenerate and commit the updated files.
+      """
+    end
   end
 
   defp required_arity(params) do
@@ -423,14 +481,142 @@ defmodule Mix.Tasks.Compile.Snakebridge do
     end
   end
 
-  defp expected_functions_for_library(symbols, library) do
-    symbols
-    |> Map.values()
-    |> Enum.filter(fn info ->
-      python_module = info["python_module"] || ""
-      String.starts_with?(python_module, library.python_name)
-    end)
-    |> Enum.map(& &1["name"])
+  defp parse_definitions!(content, path) do
+    case Code.string_to_quoted(content, file: path) do
+      {:ok, ast} ->
+        collect_definitions(ast)
+
+      {:error, {line, error, token}} ->
+        raise SnakeBridge.CompileError, """
+        Strict mode: Cannot parse generated file #{path}: #{error} #{inspect(token)} on line #{line}
+        """
+    end
+  end
+
+  defp collect_definitions(ast) do
+    initial = %{stack: [], defs: %{}}
+
+    {_, acc} =
+      Macro.traverse(ast, initial, &collect_pre/2, &collect_post/2)
+
+    acc.defs
+  end
+
+  defp collect_pre({:defmodule, _, [{:__aliases__, _, parts}, _]} = node, acc) do
+    segments = module_segments(parts, acc.stack)
+    module_name = Enum.join(segments, ".")
+
+    acc =
+      acc
+      |> Map.update!(:stack, &[segments | &1])
+      |> Map.update(:defs, %{}, &Map.put_new(&1, module_name, MapSet.new()))
+
+    {node, acc}
+  end
+
+  defp collect_pre({:def, _, [head | _]} = node, acc) do
+    {node, track_def(acc, head)}
+  end
+
+  defp collect_pre(node, acc), do: {node, acc}
+
+  defp track_def(acc, head) do
+    case {def_name(head), List.first(acc.stack)} do
+      {nil, _} ->
+        acc
+
+      {_, nil} ->
+        acc
+
+      {name, current_module} ->
+        module_name = Enum.join(current_module, ".")
+
+        Map.update(acc, :defs, %{}, fn defs ->
+          Map.update(defs, module_name, MapSet.new([name]), &MapSet.put(&1, name))
+        end)
+    end
+  end
+
+  defp collect_post({:defmodule, _, _} = node, acc) do
+    {_popped, rest} = List.pop_at(acc.stack, 0)
+    {node, %{acc | stack: rest}}
+  end
+
+  defp collect_post(node, acc), do: {node, acc}
+
+  defp module_segments(parts, []) do
+    Enum.map(parts, &Atom.to_string/1)
+  end
+
+  defp module_segments(parts, [parent | _]) do
+    parent ++ Enum.map(parts, &Atom.to_string/1)
+  end
+
+  defp def_name({:when, _, [inner | _]}), do: def_name(inner)
+  defp def_name({name, _, _}) when is_atom(name), do: Atom.to_string(name)
+  defp def_name(_), do: nil
+
+  defp function_defined?(defs, module, name) when is_binary(module) and is_binary(name) do
+    case Map.get(defs, module) do
+      nil -> false
+      set -> MapSet.member?(set, name)
+    end
+  end
+
+  defp method_expected_name(%{"name" => "__init__"}), do: "new"
+  defp method_expected_name(%{"name" => name}) when is_binary(name), do: name
+  defp method_expected_name(%{name: "__init__"}), do: "new"
+  defp method_expected_name(%{name: name}) when is_binary(name), do: name
+  defp method_expected_name(_), do: ""
+
+  defp missing_functions_message([]), do: ""
+
+  defp missing_functions_message(missing) do
+    formatted =
+      missing
+      |> Enum.map_join("\n", fn info ->
+        module = info["module"] || "Unknown"
+        name = info["name"] || "unknown"
+        "  - #{module}.#{name}"
+      end)
+
+    """
+    Missing functions:
+    #{formatted}
+
+    """
+  end
+
+  defp missing_classes_message([]), do: ""
+
+  defp missing_classes_message(missing) do
+    formatted =
+      missing
+      |> Enum.map_join("\n", fn info ->
+        info["module"] || "Unknown"
+      end)
+
+    """
+    Missing classes:
+    #{formatted}
+
+    """
+  end
+
+  defp missing_class_members_message([]), do: ""
+
+  defp missing_class_members_message(missing) do
+    formatted =
+      missing
+      |> Enum.map_join("\n", fn {module, name} ->
+        "  - #{module}.#{name}"
+      end)
+
+    """
+    Missing class members:
+    #{formatted}
+
+    """
   end
 
   defp count_symbols(manifest) do

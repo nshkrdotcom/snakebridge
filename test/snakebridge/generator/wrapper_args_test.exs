@@ -12,10 +12,11 @@ defmodule SnakeBridge.Generator.WrapperArgsTest do
         %{"name" => "dtype", "kind" => "POSITIONAL_OR_KEYWORD", "default" => "None"}
       ]
 
-      {param_names, has_opts} = Generator.build_params(params)
+      plan = Generator.build_params(params)
 
-      assert param_names == ["a"]
-      assert has_opts == true, "opts should be enabled for defaulted params"
+      assert Enum.map(plan.required, & &1.name) == ["a"]
+      assert plan.has_args == true, "extra args should be enabled for defaulted params"
+      assert plan.has_opts == true, "opts should be enabled for defaulted params"
     end
 
     test "function with VAR_POSITIONAL enables opts" do
@@ -25,10 +26,11 @@ defmodule SnakeBridge.Generator.WrapperArgsTest do
         %{"name" => "sep", "kind" => "KEYWORD_ONLY", "default" => "' '"}
       ]
 
-      {param_names, has_opts} = Generator.build_params(params)
+      plan = Generator.build_params(params)
 
-      assert param_names == []
-      assert has_opts == true
+      assert Enum.map(plan.required, & &1.name) == []
+      assert plan.has_args == true
+      assert plan.has_opts == true
     end
 
     test "pure positional function still accepts opts for runtime flags" do
@@ -38,12 +40,13 @@ defmodule SnakeBridge.Generator.WrapperArgsTest do
         %{"name" => "x", "kind" => "POSITIONAL_OR_KEYWORD"}
       ]
 
-      {param_names, has_opts} = Generator.build_params(params)
+      plan = Generator.build_params(params)
 
-      assert param_names == ["x"]
+      assert Enum.map(plan.required, & &1.name) == ["x"]
+      assert plan.has_args == false
       # DESIGN DECISION: If Option A chosen, this should be true
       # If Option B chosen, this should be false
-      assert has_opts == true, "runtime flags require opts access"
+      assert plan.has_opts == true, "runtime flags require opts access"
     end
   end
 
@@ -67,8 +70,9 @@ defmodule SnakeBridge.Generator.WrapperArgsTest do
 
       source = Generator.render_function(info, library)
 
-      assert source =~ "def mean(a, opts \\\\ [])"
-      assert source =~ "SnakeBridge.Runtime.call(__MODULE__, :mean, [a], opts)"
+      assert source =~ "def mean(a, args \\\\ [], opts \\\\ [])"
+      assert source =~ "{args, opts} = SnakeBridge.Runtime.normalize_args_opts(args, opts)"
+      assert source =~ "SnakeBridge.Runtime.call(__MODULE__, :mean, [a] ++ List.wrap(args), opts)"
     end
   end
 end

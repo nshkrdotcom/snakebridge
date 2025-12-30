@@ -37,6 +37,34 @@ defmodule SnakeBridge.Generator.TypespecTest do
     source = SnakeBridge.Generator.render_library(library, functions, classes, version: "3.0.0")
 
     assert source =~ "Snakepit.Error.t()"
-    assert source =~ "Snakepit.PyRef.t()"
+    assert source =~ "SnakeBridge.Ref.t()"
+  end
+
+  test "generated specs use mapped types when available" do
+    library = %SnakeBridge.Config.Library{
+      name: :math,
+      python_name: "math",
+      module_name: Math,
+      version: "~> 1.0"
+    }
+
+    functions = [
+      %{
+        "name" => "sum",
+        "parameters" => [
+          %{
+            "name" => "values",
+            "kind" => "POSITIONAL_OR_KEYWORD",
+            "type" => %{"type" => "list", "element_type" => %{"type" => "int"}}
+          }
+        ],
+        "return_type" => %{"type" => "int"}
+      }
+    ]
+
+    source = SnakeBridge.Generator.render_library(library, functions, [], version: "3.0.0")
+
+    assert source =~
+             "@spec sum(list(integer()), keyword()) :: {:ok, integer()} | {:error, Snakepit.Error.t()}"
   end
 end

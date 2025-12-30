@@ -8,9 +8,12 @@ defmodule Demo do
   alias SnakeBridge.Docs.RstParser
   alias SnakeBridge.Docs.MarkdownConverter
   alias SnakeBridge.Docs.MathRenderer
+  alias SnakeBridge.Examples
 
   def run do
     Snakepit.run_as_script(fn ->
+      Examples.reset_failures()
+
       IO.puts("""
       ╔═══════════════════════════════════════════════════════════╗
       ║         SnakeBridge Documentation Showcase                ║
@@ -35,14 +38,10 @@ defmodule Demo do
         - Python-to-Elixir type conversion
       ════════════════════════════════════════════════════════════
       """)
-    end)
-    |> case do
-      {:error, reason} ->
-        IO.puts("Snakepit script failed: #{inspect(reason)}")
 
-      _ ->
-        :ok
-    end
+      Examples.assert_no_failures!()
+    end)
+    |> Examples.assert_script_ok()
   end
 
   # ============================================================================
@@ -277,25 +276,29 @@ defmodule Demo do
   end
 
   defp fetch_python_doc(module, function) do
-    # Use snakepit_call to invoke inspect.getdoc on the Python function
-    # First, we need to get the function object, then get its docstring
-    case snakepit_call("importlib", "import_module", [module]) do
-      {:ok, mod_obj} ->
-        # Get the function from the module using builtins.getattr
-        case snakepit_call("builtins", "getattr", [mod_obj, function, nil]) do
-          {:ok, nil} ->
-            {:ok, nil}
+    script = """
+    import importlib
+    import inspect
+    import sys
 
-          {:ok, func_obj} ->
-            # Get the docstring using inspect.getdoc
-            snakepit_call("inspect", "getdoc", [func_obj])
+    module_name = sys.argv[1]
+    function_name = sys.argv[2]
 
-          error ->
-            error
-        end
+    module = importlib.import_module(module_name)
+    obj = getattr(module, function_name, None)
+    if obj is None:
+        print("")
+    else:
+        print(inspect.getdoc(obj) or "")
+    """
 
-      error ->
-        error
+    case SnakeBridge.PythonRunner.System.run(script, [module, function], []) do
+      {:ok, output} ->
+        {:ok, String.trim(output)}
+
+      {:error, reason} ->
+        Examples.record_failure()
+        {:error, reason}
     end
   end
 
@@ -381,24 +384,6 @@ defmodule Demo do
       String.slice(text, 0, max) <> "..."
     else
       text
-    end
-  end
-
-  # Helper to call Python via Snakepit with proper payload format
-  defp snakepit_call(python_module, python_function, args) do
-    payload = %{
-      "library" => python_module |> String.split(".") |> List.first(),
-      "python_module" => python_module,
-      "function" => python_function,
-      "args" => args,
-      "kwargs" => %{},
-      "idempotent" => false
-    }
-
-    case Snakepit.execute("snakebridge.call", payload) do
-      {:ok, value} -> {:ok, value}
-      {:error, reason} -> {:error, reason}
-      other -> {:ok, other}
     end
   end
 end

@@ -23,6 +23,7 @@ defmodule SnakeBridge.Generator.ClassSubmoduleTest do
     assert source =~ "defmodule Sympy do"
     assert source =~ "defmodule Core.Symbol do"
     assert source =~ "def __snakebridge_python_name__, do: \"sympy.core.symbol\""
+    assert source =~ "def __snakebridge_library__, do: \"sympy\""
     refute source =~ "defmodule Core.Symbol.Symbol"
   end
 end

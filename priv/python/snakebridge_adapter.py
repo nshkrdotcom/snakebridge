@@ -25,6 +25,7 @@ import uuid
 import os
 import glob
 import hashlib
+import time
 from contextlib import nullcontext
 from typing import Any, Dict, List, Tuple, Optional
 
@@ -50,6 +51,17 @@ _helper_registry: Dict[str, Any] = {}
 _helper_registry_key: Optional[Tuple[Any, ...]] = None
 _helper_registry_index: List[Dict[str, Any]] = []
 
+PROTOCOL_VERSION = 1
+MIN_SUPPORTED_VERSION = 1
+REF_SCHEMA_VERSION = 1
+DEFAULT_REF_TTL_SECONDS = 3600.0
+DEFAULT_REF_MAX_SIZE = 10000
+ALLOW_LEGACY_PROTOCOL = os.getenv("SNAKEBRIDGE_ALLOW_LEGACY_PROTOCOL", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
 
 class SnakeBridgeHelperNotFoundError(Exception):
     pass
@@ -62,6 +74,110 @@ class SnakeBridgeHelperLoadError(Exception):
 class SnakeBridgeSerializationError(Exception):
     pass
 
+
+class SnakeBridgeProtocolError(Exception):
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(message)
+        self.details = details or {}
+
+
+def _protocol_compatibility(arguments: Dict[str, Any]) -> None:
+    protocol_version = arguments.get("protocol_version")
+    min_supported_version = arguments.get("min_supported_version")
+
+    if protocol_version is None and min_supported_version is None and ALLOW_LEGACY_PROTOCOL:
+        protocol_version = MIN_SUPPORTED_VERSION
+        min_supported_version = 0
+    else:
+        if protocol_version is None:
+            protocol_version = 0
+        if min_supported_version is None:
+            min_supported_version = 0
+
+    if protocol_version < MIN_SUPPORTED_VERSION or min_supported_version > PROTOCOL_VERSION:
+        details = {
+            "caller_protocol_version": protocol_version,
+            "caller_min_supported_version": min_supported_version,
+            "adapter_protocol_version": PROTOCOL_VERSION,
+            "adapter_min_supported_version": MIN_SUPPORTED_VERSION,
+        }
+        message = (
+            "SnakeBridge protocol version mismatch "
+            f"(caller_protocol_version={protocol_version}, "
+            f"caller_min_supported_version={min_supported_version}, "
+            f"adapter_protocol_version={PROTOCOL_VERSION}, "
+            f"adapter_min_supported_version={MIN_SUPPORTED_VERSION}). "
+            "Ensure Elixir and Python SnakeBridge versions are compatible."
+        )
+        raise SnakeBridgeProtocolError(
+            message,
+            details=details,
+        )
+
+
+def _registry_limits() -> Tuple[float, int]:
+    ttl_env = os.getenv("SNAKEBRIDGE_REF_TTL_SECONDS")
+    max_env = os.getenv("SNAKEBRIDGE_REF_MAX")
+
+    try:
+        ttl = float(ttl_env) if ttl_env is not None else DEFAULT_REF_TTL_SECONDS
+    except ValueError:
+        ttl = DEFAULT_REF_TTL_SECONDS
+
+    try:
+        max_size = int(max_env) if max_env is not None else DEFAULT_REF_MAX_SIZE
+    except ValueError:
+        max_size = DEFAULT_REF_MAX_SIZE
+
+    return ttl, max_size
+
+
+def _entry_last_access(entry: Any) -> float:
+    if isinstance(entry, dict):
+        return float(entry.get("last_access") or entry.get("created_at") or 0.0)
+    return 0.0
+
+
+def _touch_entry(entry: Any) -> None:
+    if isinstance(entry, dict):
+        entry["last_access"] = time.time()
+
+
+def _prune_registry() -> None:
+    ttl_seconds, max_size = _registry_limits()
+    now = time.time()
+
+    if ttl_seconds and ttl_seconds > 0:
+        for key, entry in list(_instance_registry.items()):
+            if now - _entry_last_access(entry) > ttl_seconds:
+                del _instance_registry[key]
+
+    if max_size and max_size > 0 and len(_instance_registry) > max_size:
+        overflow = len(_instance_registry) - max_size
+        oldest = sorted(_instance_registry.items(), key=lambda item: _entry_last_access(item[1]))
+        for key, _entry in oldest[:overflow]:
+            del _instance_registry[key]
+
+
+def _store_ref(key: str, obj: Any) -> None:
+    now = time.time()
+    _instance_registry[key] = {"obj": obj, "created_at": now, "last_access": now}
+
+
+def _extract_ref_identity(ref: dict, session_id: str) -> Tuple[str, str]:
+    if ref.get("__type__") == "ref":
+        ref_id = ref.get("id") or ref.get("ref_id")
+        ref_session = ref.get("session_id") or session_id
+    elif ref.get("__snakebridge_ref__"):
+        ref_id = ref.get("ref_id")
+        ref_session = ref.get("session_id") or session_id
+    else:
+        raise ValueError("Invalid SnakeBridge reference payload")
+
+    if not ref_id:
+        raise ValueError("SnakeBridge reference missing id")
+
+    return ref_id, ref_session
 
 def _call_telemetry_span(metadata: Dict[str, Any]):
     if snakepit_telemetry is None:
@@ -342,29 +458,63 @@ def _import_module(module_name: str) -> Any:
 def _make_ref(session_id: str, obj: Any, python_module: str, library: str) -> dict:
     ref_id = uuid.uuid4().hex
     key = f"{session_id}:{ref_id}"
-    _instance_registry[key] = obj
+    _prune_registry()
+    _store_ref(key, obj)
 
     return {
-        "__snakebridge_ref__": True,
-        "ref_id": ref_id,
+        "__type__": "ref",
+        "__schema__": REF_SCHEMA_VERSION,
+        "id": ref_id,
         "session_id": session_id,
         "python_module": python_module,
-        "library": library
+        "library": library,
     }
 
 
 def _resolve_ref(ref: dict, session_id: str) -> Any:
-    if not isinstance(ref, dict) or not ref.get("__snakebridge_ref__"):
+    if not isinstance(ref, dict):
         raise ValueError("Invalid SnakeBridge reference payload")
 
-    ref_id = ref.get("ref_id")
-    ref_session = ref.get("session_id") or session_id
+    _prune_registry()
+    ref_id, ref_session = _extract_ref_identity(ref, session_id)
     key = f"{ref_session}:{ref_id}"
 
     if key not in _instance_registry:
         raise KeyError(f"Unknown SnakeBridge reference: {ref_id}")
 
-    return _instance_registry[key]
+    entry = _instance_registry[key]
+    if isinstance(entry, dict):
+        _touch_entry(entry)
+        return entry.get("obj")
+    return entry
+
+
+def _release_ref(ref: dict, session_id: str) -> bool:
+    if not isinstance(ref, dict):
+        raise ValueError("Invalid SnakeBridge reference payload")
+
+    _prune_registry()
+    ref_id, ref_session = _extract_ref_identity(ref, session_id)
+    key = f"{ref_session}:{ref_id}"
+
+    if key in _instance_registry:
+        del _instance_registry[key]
+        return True
+    return False
+
+
+def _release_session(session_id: str) -> int:
+    if not session_id:
+        return 0
+
+    removed = 0
+    prefix = f"{session_id}:"
+    for key in list(_instance_registry.keys()):
+        if key.startswith(prefix):
+            del _instance_registry[key]
+            removed += 1
+
+    return removed
 
 
 def _default_helper_config() -> Dict[str, Any]:
@@ -565,8 +715,16 @@ class SnakeBridgeAdapter:
                 helper_config = arguments.get("helper_config") or arguments
             return helper_registry_index(helper_config)
 
-        if tool_name not in ["snakebridge.call", "snakebridge.stream"]:
+        if tool_name not in [
+            "snakebridge.call",
+            "snakebridge.stream",
+            "snakebridge.release_ref",
+            "snakebridge.release_session",
+        ]:
             raise AttributeError(f"Tool '{tool_name}' not supported by SnakeBridgeAdapter")
+
+        if isinstance(arguments, dict):
+            _protocol_compatibility(arguments)
 
         session_id = None
         if context is not None and hasattr(context, "session_id"):
@@ -575,6 +733,17 @@ class SnakeBridgeAdapter:
             session_id = self.session_context.session_id
         else:
             session_id = "default"
+
+        if tool_name == "snakebridge.release_ref":
+            ref = arguments.get("ref") if isinstance(arguments, dict) else None
+            if ref is None:
+                raise ValueError("snakebridge.release_ref requires ref")
+            return _release_ref(ref, session_id)
+
+        if tool_name == "snakebridge.release_session":
+            if isinstance(arguments, dict) and arguments.get("session_id"):
+                session_id = arguments.get("session_id")
+            return _release_session(session_id)
 
         call_type = arguments.get("call_type") or "function"
         python_module = arguments.get("python_module") or arguments.get("module")

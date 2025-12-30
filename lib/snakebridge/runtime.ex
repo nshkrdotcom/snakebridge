@@ -11,6 +11,9 @@ defmodule SnakeBridge.Runtime do
   @type args :: list()
   @type opts :: keyword()
 
+  @protocol_version 1
+  @min_supported_version 1
+
   @spec call(module_ref(), function_name(), args(), opts()) ::
           {:ok, term()} | {:error, Snakepit.Error.t()}
   def call(module, function, args \\ [], opts \\ []) do
@@ -21,6 +24,7 @@ defmodule SnakeBridge.Runtime do
     execute_with_telemetry(metadata, fn ->
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
+    |> apply_error_mode()
   end
 
   @spec call_helper(String.t(), args(), opts() | map()) :: {:ok, term()} | {:error, term()}
@@ -58,6 +62,7 @@ defmodule SnakeBridge.Runtime do
     execute_with_telemetry(metadata, fn ->
       runtime_client().execute_stream("snakebridge.stream", payload, callback, runtime_opts)
     end)
+    |> apply_error_mode()
   end
 
   @spec call_class(module_ref(), function_name(), args(), opts()) ::
@@ -76,9 +81,10 @@ defmodule SnakeBridge.Runtime do
     execute_with_telemetry(metadata, fn ->
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
+    |> apply_error_mode()
   end
 
-  @spec call_method(Snakepit.PyRef.t(), function_name(), args(), opts()) ::
+  @spec call_method(SnakeBridge.Ref.t(), function_name(), args(), opts()) ::
           {:ok, term()} | {:error, Snakepit.Error.t()}
   def call_method(ref, function, args \\ [], opts \\ []) do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
@@ -94,9 +100,10 @@ defmodule SnakeBridge.Runtime do
     execute_with_telemetry(metadata, fn ->
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
+    |> apply_error_mode()
   end
 
-  @spec get_attr(Snakepit.PyRef.t(), atom() | String.t(), opts()) ::
+  @spec get_attr(SnakeBridge.Ref.t(), atom() | String.t(), opts()) ::
           {:ok, term()} | {:error, Snakepit.Error.t()}
   def get_attr(ref, attr, opts \\ []) do
     {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
@@ -113,9 +120,10 @@ defmodule SnakeBridge.Runtime do
     execute_with_telemetry(metadata, fn ->
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
+    |> apply_error_mode()
   end
 
-  @spec set_attr(Snakepit.PyRef.t(), atom() | String.t(), term(), opts()) ::
+  @spec set_attr(SnakeBridge.Ref.t(), atom() | String.t(), term(), opts()) ::
           {:ok, term()} | {:error, Snakepit.Error.t()}
   def set_attr(ref, attr, value, opts \\ []) do
     {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
@@ -132,6 +140,33 @@ defmodule SnakeBridge.Runtime do
     execute_with_telemetry(metadata, fn ->
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
+    |> apply_error_mode()
+  end
+
+  @spec release_ref(SnakeBridge.Ref.t(), opts()) :: :ok | {:error, Snakepit.Error.t()}
+  def release_ref(ref, opts \\ []) do
+    {_, _, _, runtime_opts} = split_opts(opts)
+
+    payload =
+      protocol_payload()
+      |> Map.put("ref", ref)
+
+    runtime_client().execute("snakebridge.release_ref", payload, runtime_opts)
+    |> apply_error_mode()
+    |> normalize_release_result()
+  end
+
+  @spec release_session(String.t(), opts()) :: :ok | {:error, Snakepit.Error.t()}
+  def release_session(session_id, opts \\ []) when is_binary(session_id) do
+    {_, _, _, runtime_opts} = split_opts(opts)
+
+    payload =
+      protocol_payload()
+      |> Map.put("session_id", session_id)
+
+    runtime_client().execute("snakebridge.release_session", payload, runtime_opts)
+    |> apply_error_mode()
+    |> normalize_release_result()
   end
 
   defp runtime_client do
@@ -229,10 +264,22 @@ defmodule SnakeBridge.Runtime do
     {kwargs, idempotent, List.wrap(extra_args), runtime_opts}
   end
 
+  @doc false
+  @spec normalize_args_opts(list(), keyword()) :: {list(), keyword()}
+  def normalize_args_opts(args, opts) do
+    if opts == [] and Keyword.keyword?(args) do
+      {[], args}
+    else
+      {args, opts}
+    end
+  end
+
   defp base_payload(module, function, args, kwargs, idempotent) do
     python_module = python_module_name(module)
 
     %{
+      "protocol_version" => @protocol_version,
+      "min_supported_version" => @min_supported_version,
       "library" => library_name(module, python_module),
       "python_module" => python_module,
       "function" => to_string(function),
@@ -244,11 +291,13 @@ defmodule SnakeBridge.Runtime do
 
   defp base_payload_for_ref(ref, function, args, kwargs, idempotent) do
     python_module =
-      Map.get(ref, :python_module) || Map.get(ref, :library) || python_module_name(ref)
+      ref_field(ref, "python_module") || ref_field(ref, "library") || python_module_name(ref)
 
-    library = Map.get(ref, :library) || library_name(ref, python_module)
+    library = ref_field(ref, "library") || library_name(ref, python_module)
 
     %{
+      "protocol_version" => @protocol_version,
+      "min_supported_version" => @min_supported_version,
       "library" => library,
       "python_module" => python_module,
       "function" => to_string(function),
@@ -295,6 +344,8 @@ defmodule SnakeBridge.Runtime do
 
   defp helper_payload(helper, args, kwargs, idempotent) do
     %{
+      "protocol_version" => @protocol_version,
+      "min_supported_version" => @min_supported_version,
       "call_type" => "helper",
       "helper" => helper,
       "function" => helper,
@@ -303,6 +354,14 @@ defmodule SnakeBridge.Runtime do
       "kwargs" => kwargs,
       "idempotent" => idempotent,
       "helper_config" => SnakeBridge.Helpers.payload_config(SnakeBridge.Helpers.runtime_config())
+    }
+  end
+
+  @doc false
+  def protocol_payload do
+    %{
+      "protocol_version" => @protocol_version,
+      "min_supported_version" => @min_supported_version
     }
   end
 
@@ -354,4 +413,75 @@ defmodule SnakeBridge.Runtime do
   defp stringify_keys(map) when is_map(map) do
     Enum.into(map, %{}, fn {key, value} -> {to_string(key), value} end)
   end
+
+  defp apply_error_mode({:error, reason}) do
+    case error_mode() do
+      :raw ->
+        {:error, reason}
+
+      :translated ->
+        {:error, translate_reason(reason)}
+
+      :raise_translated ->
+        translated = translate_reason(reason)
+
+        if translated == reason do
+          {:error, reason}
+        else
+          raise translated
+        end
+    end
+  end
+
+  defp apply_error_mode(result), do: result
+
+  defp normalize_release_result({:ok, _}), do: :ok
+  defp normalize_release_result(:ok), do: :ok
+  defp normalize_release_result(result), do: result
+
+  defp translate_reason(reason) do
+    case python_error_payload(reason) do
+      {message, traceback} when is_binary(message) ->
+        translated =
+          SnakeBridge.ErrorTranslator.translate(%RuntimeError{message: message}, traceback)
+
+        case translated do
+          %RuntimeError{} -> reason
+          _ -> translated
+        end
+
+      _ ->
+        reason
+    end
+  end
+
+  defp python_error_payload(%{message: message} = error) when is_binary(message) do
+    traceback = Map.get(error, :traceback) || Map.get(error, :python_traceback)
+    {message, traceback}
+  end
+
+  defp python_error_payload(%{"message" => message} = error) when is_binary(message) do
+    traceback = Map.get(error, "traceback") || Map.get(error, "python_traceback")
+    {message, traceback}
+  end
+
+  defp python_error_payload(_), do: {nil, nil}
+
+  defp error_mode do
+    Application.get_env(:snakebridge, :error_mode, :raw)
+  end
+
+  defp ref_field(ref, "python_module") when is_map(ref),
+    do: Map.get(ref, "python_module") || Map.get(ref, :python_module)
+
+  defp ref_field(ref, "library") when is_map(ref),
+    do: Map.get(ref, "library") || Map.get(ref, :library)
+
+  defp ref_field(ref, "session_id") when is_map(ref),
+    do: Map.get(ref, "session_id") || Map.get(ref, :session_id)
+
+  defp ref_field(ref, "id") when is_map(ref),
+    do: Map.get(ref, "id") || Map.get(ref, :id) || Map.get(ref, "ref_id") || Map.get(ref, :ref_id)
+
+  defp ref_field(_ref, _key), do: nil
 end

@@ -35,9 +35,14 @@ defmodule SnakeBridge.Lock.Verifier do
   or `{:error, errors}` for critical incompatibilities.
   """
   @spec verify(map() | nil) :: verification_result()
-  def verify(nil), do: {:error, ["No lock file provided"]}
+  def verify(nil) do
+    start_time = System.monotonic_time()
+    SnakeBridge.Telemetry.lock_verify(start_time, :error, ["No lock file provided"])
+    {:error, ["No lock file provided"]}
+  end
 
   def verify(lock) when is_map(lock) do
+    start_time = System.monotonic_time()
     errors = []
     warnings = []
 
@@ -62,11 +67,20 @@ defmodule SnakeBridge.Lock.Verifier do
     errors = errors ++ feature_errors
     warnings = warnings ++ feature_warnings
 
-    cond do
-      errors != [] -> {:error, errors}
-      warnings != [] -> {:warning, warnings}
-      true -> :ok
+    result =
+      cond do
+        errors != [] -> {:error, errors}
+        warnings != [] -> {:warning, warnings}
+        true -> :ok
+      end
+
+    case result do
+      :ok -> SnakeBridge.Telemetry.lock_verify(start_time, :ok, [])
+      {:warning, warn} -> SnakeBridge.Telemetry.lock_verify(start_time, :warning, warn)
+      {:error, errs} -> SnakeBridge.Telemetry.lock_verify(start_time, :error, errs)
     end
+
+    result
   end
 
   @doc """

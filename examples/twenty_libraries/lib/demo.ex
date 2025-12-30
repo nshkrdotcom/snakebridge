@@ -5,22 +5,22 @@ defmodule Demo do
   Run with: mix run -e Demo.run
   """
 
+  alias SnakeBridge.Examples
+
   @doc """
   Run the complete 20-library demonstration.
   """
   def run do
     Snakepit.run_as_script(fn ->
+      Examples.reset_failures()
+
       print_header()
       results = run_all_libraries()
       print_summary(results)
-    end)
-    |> case do
-      {:error, reason} ->
-        IO.puts("Snakepit script failed: #{inspect(reason)}")
 
-      _ ->
-        :ok
-    end
+      Examples.assert_no_failures!()
+    end)
+    |> Examples.assert_script_ok()
   end
 
   defp print_header do
@@ -162,6 +162,10 @@ defmodule Demo do
     end_time = System.monotonic_time(:microsecond)
     elapsed_ms = (end_time - start_time) / 1000
 
+    if match?({:error, _}, result) do
+      Examples.record_failure()
+    end
+
     %{
       module: python_module,
       function: func_name,
@@ -266,14 +270,16 @@ defmodule Demo do
 
   # Helper to call Python via Snakepit with proper payload format
   defp snakepit_call(python_module, python_function, args) do
-    payload = %{
-      "library" => python_module |> String.split(".") |> List.first(),
-      "python_module" => python_module,
-      "function" => python_function,
-      "args" => args,
-      "kwargs" => %{},
-      "idempotent" => false
-    }
+    payload =
+      SnakeBridge.Runtime.protocol_payload()
+      |> Map.merge(%{
+        "library" => python_module |> String.split(".") |> List.first(),
+        "python_module" => python_module,
+        "function" => python_function,
+        "args" => args,
+        "kwargs" => %{},
+        "idempotent" => false
+      })
 
     case Snakepit.execute("snakebridge.call", payload) do
       {:ok, value} -> {:ok, value}

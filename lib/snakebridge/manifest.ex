@@ -9,7 +9,9 @@ defmodule SnakeBridge.Manifest do
 
     case File.read(path) do
       {:ok, content} ->
-        Jason.decode!(content)
+        content
+        |> Jason.decode!()
+        |> normalize_manifest()
 
       {:error, :enoent} ->
         %{"version" => version(), "symbols" => %{}, "classes" => %{}}
@@ -69,7 +71,8 @@ defmodule SnakeBridge.Manifest do
 
   @spec symbol_key({module(), atom(), non_neg_integer()}) :: String.t()
   def symbol_key({module, function, arity}) do
-    "#{module}.#{function}/#{arity}"
+    mod = module |> Module.split() |> Enum.join(".")
+    "#{mod}.#{function}/#{arity}"
   end
 
   @spec class_key(module()) :: String.t()
@@ -88,6 +91,41 @@ defmodule SnakeBridge.Manifest do
   defp version do
     Application.spec(:snakebridge, :vsn) |> to_string()
   end
+
+  defp normalize_manifest(manifest) do
+    symbols = Map.get(manifest, "symbols", %{})
+
+    normalized_symbols =
+      Enum.reduce(symbols, %{}, fn {key, value}, acc ->
+        normalized = normalize_symbol_key(key)
+
+        if normalized == key do
+          Map.put(acc, normalized, value)
+        else
+          Map.put_new(acc, normalized, value)
+        end
+      end)
+
+    Map.put(manifest, "symbols", normalized_symbols)
+  end
+
+  defp normalize_symbol_key(key) when is_binary(key) do
+    case String.split(key, ".") do
+      ["Elixir" | rest] ->
+        case Enum.split(rest, -1) do
+          {module_parts, [fun_part]} when module_parts != [] ->
+            Enum.join(module_parts, ".") <> "." <> fun_part
+
+          _ ->
+            key
+        end
+
+      _ ->
+        key
+    end
+  end
+
+  defp normalize_symbol_key(key), do: key
 
   defp sort_manifest(manifest) do
     manifest

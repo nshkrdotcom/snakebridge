@@ -58,6 +58,8 @@ defmodule SnakeBridge.Runtime do
     encoded_args = encode_args(args ++ extra_args)
     encoded_kwargs = encode_kwargs(kwargs)
     payload = base_payload(module, function, encoded_args, encoded_kwargs, idempotent)
+    session_id = Map.get(payload, "session_id")
+    runtime_opts = ensure_session_opt(runtime_opts, session_id)
     metadata = call_metadata(payload, module, function, "function")
 
     execute_with_telemetry(metadata, fn ->
@@ -91,6 +93,9 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("idempotent", idempotent)
       |> maybe_put_session_id(current_session_id())
 
+    session_id = Map.get(payload, "session_id")
+    runtime_opts = ensure_session_opt(runtime_opts, session_id)
+
     metadata = %{
       module: module_path,
       function: to_string(function),
@@ -113,10 +118,12 @@ defmodule SnakeBridge.Runtime do
     encoded_args = encode_args(args)
     encoded_kwargs = encode_kwargs(stringify_keys(opts))
     payload = helper_payload(helper, encoded_args, encoded_kwargs, false)
+    session_id = Map.get(payload, "session_id")
+    runtime_opts = ensure_session_opt([], session_id)
     metadata = helper_metadata(helper)
 
     execute_with_telemetry(metadata, fn ->
-      runtime_client().execute("snakebridge.call", payload, [])
+      runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> classify_helper_result(helper)
     |> decode_result()
@@ -127,6 +134,8 @@ defmodule SnakeBridge.Runtime do
     encoded_args = encode_args(args ++ extra_args)
     encoded_kwargs = encode_kwargs(kwargs)
     payload = helper_payload(helper, encoded_args, encoded_kwargs, idempotent)
+    session_id = Map.get(payload, "session_id")
+    runtime_opts = ensure_session_opt(runtime_opts, session_id)
     metadata = helper_metadata(helper)
 
     execute_with_telemetry(metadata, fn ->
@@ -174,6 +183,8 @@ defmodule SnakeBridge.Runtime do
     encoded_args = encode_args(args ++ extra_args)
     encoded_kwargs = encode_kwargs(kwargs)
     payload = base_payload(module, function, encoded_args, encoded_kwargs, idempotent)
+    session_id = Map.get(payload, "session_id")
+    runtime_opts = ensure_session_opt(runtime_opts, session_id)
     metadata = call_metadata(payload, module, function, "stream")
     decode_callback = fn chunk -> callback.(Types.decode(chunk)) end
 
@@ -230,10 +241,31 @@ defmodule SnakeBridge.Runtime do
   end
 
   defp stream_iterate_ref(ref, callback, opts) do
+    case call_method(ref, :__iter__, [], opts) do
+      {:ok, %SnakeBridge.StreamRef{} = stream_ref} ->
+        stream_iterate(stream_ref, callback, opts)
+
+      {:ok, %SnakeBridge.Ref{} = iter_ref} ->
+        stream_iterate_ref_next(iter_ref, callback, opts)
+
+      {:ok, other} ->
+        callback.(other)
+        {:ok, :done}
+
+      {:error, reason} ->
+        if stop_iteration?(reason) do
+          {:ok, :done}
+        else
+          stream_iterate_ref_next(ref, callback, opts)
+        end
+    end
+  end
+
+  defp stream_iterate_ref_next(ref, callback, opts) do
     case call_method(ref, :__next__, [], opts) do
       {:ok, item} ->
         callback.(item)
-        stream_iterate_ref(ref, callback, opts)
+        stream_iterate_ref_next(ref, callback, opts)
 
       {:error, reason} ->
         if stop_iteration?(reason) do
@@ -263,6 +295,7 @@ defmodule SnakeBridge.Runtime do
 
     wire_ref = SnakeBridge.StreamRef.to_wire_format(stream_ref)
     session_id = ref_field(stream_ref, "session_id") || current_session_id()
+    runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
       protocol_payload()
@@ -309,6 +342,8 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("call_type", "class")
       |> Map.put("class", python_class_name(module))
 
+    session_id = Map.get(payload, "session_id")
+    runtime_opts = ensure_session_opt(runtime_opts, session_id)
     metadata = call_metadata(payload, module, function, "class")
 
     execute_with_telemetry(metadata, fn ->
@@ -325,6 +360,8 @@ defmodule SnakeBridge.Runtime do
     encoded_args = encode_args(args ++ extra_args)
     encoded_kwargs = encode_kwargs(kwargs)
     wire_ref = normalize_ref(ref)
+    session_id = ref_field(wire_ref, "session_id") || current_session_id()
+    runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
       wire_ref
@@ -366,6 +403,7 @@ defmodule SnakeBridge.Runtime do
     {_kwargs, _idempotent, _extra_args, runtime_opts} = split_opts(opts)
     attr_name = to_string(attr)
     session_id = current_session_id()
+    runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
       protocol_payload()
@@ -401,6 +439,8 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("call_type", "module_attr")
       |> Map.put("attr", to_string(attr))
 
+    session_id = Map.get(payload, "session_id")
+    runtime_opts = ensure_session_opt(runtime_opts, session_id)
     metadata = call_metadata(payload, module, attr, "module_attr")
 
     execute_with_telemetry(metadata, fn ->
@@ -423,6 +463,8 @@ defmodule SnakeBridge.Runtime do
     {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
     encoded_kwargs = encode_kwargs(kwargs)
     wire_ref = normalize_ref(ref)
+    session_id = ref_field(wire_ref, "session_id") || current_session_id()
+    runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
       wire_ref
@@ -470,6 +512,8 @@ defmodule SnakeBridge.Runtime do
     encoded_kwargs = encode_kwargs(kwargs)
     encoded_args = encode_args([value])
     wire_ref = normalize_ref(ref)
+    session_id = ref_field(wire_ref, "session_id") || current_session_id()
+    runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
       wire_ref
@@ -490,6 +534,8 @@ defmodule SnakeBridge.Runtime do
   @spec release_ref(SnakeBridge.Ref.t(), opts()) :: :ok | {:error, Snakepit.Error.t()}
   def release_ref(ref, opts \\ []) do
     {_, _, _, runtime_opts} = split_opts(opts)
+    session_id = ref_field(ref, "session_id") || current_session_id()
+    runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
       protocol_payload()
@@ -503,6 +549,7 @@ defmodule SnakeBridge.Runtime do
   @spec release_session(String.t(), opts()) :: :ok | {:error, Snakepit.Error.t()}
   def release_session(session_id, opts \\ []) when is_binary(session_id) do
     {_, _, _, runtime_opts} = split_opts(opts)
+    runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
       protocol_payload()
@@ -607,6 +654,21 @@ defmodule SnakeBridge.Runtime do
 
     {kwargs, idempotent, List.wrap(extra_args), runtime_opts}
   end
+
+  defp ensure_session_opt(runtime_opts, session_id) when is_binary(session_id) do
+    cond do
+      runtime_opts == nil ->
+        [session_id: session_id]
+
+      is_list(runtime_opts) ->
+        Keyword.put_new(runtime_opts, :session_id, session_id)
+
+      true ->
+        runtime_opts
+    end
+  end
+
+  defp ensure_session_opt(runtime_opts, _session_id), do: runtime_opts
 
   @doc false
   @spec normalize_args_opts(list(), keyword()) :: {list(), keyword()}

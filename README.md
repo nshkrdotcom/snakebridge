@@ -16,7 +16,7 @@ Add to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:snakebridge, "~> 0.7.4",
+    {:snakebridge, "~> 0.7.5",
       libraries: [
         {:numpy, "1.26.0"},
         {:pandas, version: "2.0.0", include: ["DataFrame", "read_csv"]}
@@ -195,6 +195,11 @@ LLM.generate_stream("Hello", [], fn chunk ->
   IO.write(chunk)
 end)
 ```
+
+Streaming calls use Snakepit's server-side streaming RPC
+`BridgeService.ExecuteStreamingTool`. Tools must be registered with
+`supports_streaming: true` for streaming to work; the `ExecuteToolRequest.stream`
+field alone is not sufficient.
 
 ### Generators and Iterators
 
@@ -391,7 +396,7 @@ config :snakebridge,
 
 ```elixir
 # mix.exs
-{:snakebridge, "~> 0.7.4",
+{:snakebridge, "~> 0.7.5",
   libraries: [
     # Simple: name and version
     {:numpy, "1.26.0"},

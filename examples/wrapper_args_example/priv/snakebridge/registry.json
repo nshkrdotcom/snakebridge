@@ -1,12 +1,12 @@
 {
-  "generated_at": "2025-12-30T22:44:35.940035Z",
+  "generated_at": "2025-12-31T04:03:54.557554Z",
   "libraries": {
     "wrapper_args_example": {
       "elixir_module": "WrapperArgs",
       "files": [
         "wrapper_args_example.ex"
       ],
-      "generated_at": "2025-12-30T22:44:35.877050Z",
+      "generated_at": "2025-12-31T04:03:54.496724Z",
       "path": "lib/snakebridge_generated",
       "python_module": "wrapper_args_example",
       "python_version": "stdlib",

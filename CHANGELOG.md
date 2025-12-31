@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.5] - 2025-12-30
+
+### Added
+- Python BridgeClient for gRPC execution with streaming support
+- Streaming client decoding for ToolChunk payloads (JSON + raw bytes) with metadata and chunk ids
+- Correlation ID propagation via `x-snakepit-correlation-id` metadata header
+- Any encoding compatibility for tool parameters (raw JSON bytes)
+- Streaming client tests covering RPC selection, headers, decoding, and binary parameter validation
+- `bridge_client_example` demonstrating Python BridgeClient usage against the Elixir BridgeServer
+
+### Changed
+- README streaming documentation clarifies server-side streaming RPC usage and `supports_streaming` requirement
+
+### Fixed
+- Ensure session affinity is always passed to Snakepit pool for ref-based operations
+- Preserve boolean results in Python gRPC response type inference
+- Stream iteration now prefers `__iter__` before falling back to `__next__`
+
 ## [0.7.4] - 2025-12-30
 
 ### Added
@@ -260,6 +278,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Type system mapper
 - Basic code generation
 
+[0.7.5]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.4...v0.7.5
+[0.7.4]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.3...v0.7.4
+[0.7.3]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.6.0...v0.7.0

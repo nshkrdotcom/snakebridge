@@ -1,12 +1,12 @@
 {
-  "generated_at": "2025-12-30T22:45:03.226478Z",
+  "generated_at": "2025-12-31T04:04:20.833490Z",
   "libraries": {
     "streaming_example": {
       "elixir_module": "Streaming",
       "files": [
         "streaming_example.ex"
       ],
-      "generated_at": "2025-12-30T22:45:03.189550Z",
+      "generated_at": "2025-12-31T04:04:20.799306Z",
       "path": "lib/snakebridge_generated",
       "python_module": "streaming_example",
       "python_version": "stdlib",

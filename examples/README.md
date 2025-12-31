@@ -50,6 +50,7 @@ cd universal_ffi_example && mix run -e Demo.run
 | **signature_showcase** | Signature + arity model | Optional args, keyword-only validation, variadic fallback |
 | **class_constructor_example** | Class constructors | `new/N` generation from `__init__`, method calls |
 | **streaming_example** | Streaming wrappers | `*_stream` variants with callbacks |
+| **bridge_client_example** | Python BridgeClient demo | ExecuteTool/ExecuteStreamingTool, chunk decoding |
 | **strict_mode_example** | Strict mode verification | Manifest and generated file checks |
 | **session_lifecycle_example** | Session lifecycle management | Auto-ref, SessionContext, cleanup |
 | **python_idioms_example** | Python idioms bridge | Generators, context managers, callbacks |
@@ -162,6 +163,13 @@ Demonstrates class constructors generated from `__init__`:
 Demonstrates streaming wrapper generation:
 - `*_stream` variants with callbacks
 - Runtime opts passed through `opts`
+
+### bridge_client_example
+
+Demonstrates Python BridgeClient usage against the Elixir BridgeServer:
+- ExecuteTool and ExecuteStreamingTool via `snakebridge_client.py`
+- Correlation header propagation and chunk decoding
+- Enable with `SNAKEBRIDGE_BRIDGE_CLIENT=1`
 
 ### strict_mode_example
 

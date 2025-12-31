@@ -1,5 +1,5 @@
 defmodule SnakeBridge.UniversalApiTest do
-  use ExUnit.Case, async: true
+  use SnakeBridge.RealPythonCase
 
   @moduletag :integration
   @moduletag :real_python

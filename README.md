@@ -29,7 +29,7 @@ defmodule MyApp.MixProject do
 
   defp deps do
     [
-      {:snakebridge, "~> 0.7.8"}
+      {:snakebridge, "~> 0.7.9"}
     ]
   end
 
@@ -45,6 +45,15 @@ end
 
 The `python_deps` function mirrors how `deps` works - a list of tuples with the library name,
 version, and optional configuration.
+
+Then add runtime configuration in `config/runtime.exs`:
+
+```elixir
+import Config
+
+# Auto-configure snakepit for snakebridge
+SnakeBridge.ConfigHelper.configure_snakepit!()
+```
 
 ## Quick Start
 
@@ -470,6 +479,30 @@ config :snakebridge, :introspector,
   timeout: 30_000
 ```
 
+### Runtime Config (config/runtime.exs)
+
+SnakeBridge provides a configuration helper that automatically sets up Snakepit
+with the correct Python executable, adapter, and PYTHONPATH. Add this to your
+`config/runtime.exs`:
+
+```elixir
+import Config
+
+# Auto-configure snakepit for snakebridge
+SnakeBridge.ConfigHelper.configure_snakepit!()
+```
+
+This replaces ~30 lines of manual configuration and automatically:
+- Finds the Python venv (in `.venv`, snakebridge dep location, or via `$SNAKEBRIDGE_VENV`)
+- Configures the snakebridge adapter
+- Sets up PYTHONPATH with snakepit and snakebridge priv directories
+
+For custom pool sizes or explicit venv paths:
+
+```elixir
+SnakeBridge.ConfigHelper.configure_snakepit!(pool_size: 4, venv_path: "/path/to/venv")
+```
+
 Python adapter ref lifecycle (environment variables):
 
 ```bash
@@ -667,7 +700,7 @@ MyLib.func(args, __runtime__: [timeout: 60_000, pool: :my_pool])
 
 - Elixir ~> 1.14
 - Python 3.8+
-- Snakepit ~> 0.8.7
+- Snakepit ~> 0.8.8
 
 ## License
 

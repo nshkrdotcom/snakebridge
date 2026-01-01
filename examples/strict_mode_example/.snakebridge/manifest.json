@@ -1,7 +1,7 @@
 {
   "classes": {},
   "symbols": {
-    "Elixir.StrictModeExample.add/2": {
+    "StrictModeExample.add/2": {
       "docstring": "",
       "function": "add",
       "module": "StrictModeExample",
@@ -19,7 +19,7 @@
       "python_module": "strict_mode_example",
       "return_annotation": null
     },
-    "Elixir.StrictModeExample.multiply/2": {
+    "StrictModeExample.multiply/2": {
       "docstring": "",
       "function": "multiply",
       "module": "StrictModeExample",

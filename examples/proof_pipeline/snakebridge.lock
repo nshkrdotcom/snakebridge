@@ -28,9 +28,9 @@
     },
     "python_packages_hash": "sha256:67ded8e74b12664c6ec48d3e7388d0133854554b365219f5b5d745a73f637ef6",
     "python_platform": "x86_64-pc-linux-gnu",
-    "python_runtime_hash": "1319c137ea5d30f1d7599943cb0e72666648c20a94cf5932dd095364d07dafeb",
+    "python_runtime_hash": "4933b6c4a8521fb3aa93856701e30b3ac2626d3c47ceb22965a3b0b422e85b44",
     "python_version": "3.12.3",
-    "snakebridge_version": "0.7.8"
+    "snakebridge_version": "0.7.9"
   },
   "libraries": {
     "math_verify": {
@@ -63,5 +63,5 @@
       "hash": null
     }
   },
-  "version": "0.7.8"
+  "version": "0.7.9"
 }

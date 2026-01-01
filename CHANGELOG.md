@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.9] - 2026-01-01
+
+### Added
+- **ConfigHelper**: New `SnakeBridge.ConfigHelper` module for zero-boilerplate snakepit configuration
+- Add `configure_snakepit!/1` for runtime auto-configuration of Python venv, adapter, and PYTHONPATH
+- Add `snakepit_config/1` for declarative config generation
+- Add `debug_config/0` for troubleshooting venv detection
+
+### Changed
+- All examples now use simplified `config/runtime.exs` with ConfigHelper (replaces ~30 lines of boilerplate)
+- Updated README installation instructions to include runtime.exs setup
+- ConfigHelper automatically follows symlinks to find venv in path dependencies
+
+### Fixed
+- External projects using snakebridge as a dependency no longer need manual snakepit configuration
+- Venv detection now works correctly for path deps, hex deps, and local development
+
 ## [0.7.8] - 2026-01-01
 
 ### Changed

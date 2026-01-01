@@ -2,13 +2,69 @@ defmodule SnakeBridge.SessionContext do
   @moduledoc """
   Provides scoped session context for Python calls.
 
+  Sessions control the lifecycle of Python object references (refs). Each session
+  is isolated, meaning refs from one session cannot be used in another.
+
+  ## Automatic vs Explicit Sessions
+
+  By default, SnakeBridge creates an auto-session for each Elixir process. This is
+  convenient for most use cases where Python objects don't need to be shared.
+
+  Use explicit sessions when you need:
+  - Multiple processes to access the same Python objects
+  - Long-lived refs that outlive a single request/task
+  - Fine-grained control over cleanup timing
+
   ## Usage
 
+      # Explicit session with custom ID
+      SnakeBridge.SessionContext.with_session([session_id: "my-session"], fn ->
+        {:ok, model} = SnakeBridge.call("sklearn.linear_model", "LinearRegression", [])
+        # model ref is accessible by other processes using "my-session"
+        model
+      end)
+
+      # Simple scoped session (auto-generated ID)
       SnakeBridge.SessionContext.with_session(fn ->
         # All Python calls here use the same session
-        Python.some_function()
-        Python.another_function()
+        {:ok, df} = SnakeBridge.call("pandas", "DataFrame", [[1, 2, 3]])
+        {:ok, mean} = SnakeBridge.method(df, "mean", [])
+        mean
       end)
+
+  ## Session Cleanup
+
+  Sessions are automatically cleaned up when:
+  - The owning process dies (auto-sessions)
+  - `SnakeBridge.Runtime.release_session/1` is called explicitly
+  - Refs exceed TTL (SessionContext default: 1 hour) or max count (default 10,000)
+
+  ## Sharing Refs Across Processes
+
+  To share Python objects across processes, use the same explicit session_id:
+
+      # Process A
+      session_id = "shared-#{System.unique_integer()}"
+      SessionContext.with_session([session_id: session_id], fn ->
+        {:ok, ref} = SnakeBridge.call("heavy_model", "load", [])
+        send(process_b, {:model, session_id, ref})
+      end)
+
+      # Process B - can use the ref if it adopts the same session
+      receive do
+        {:model, session_id, ref} ->
+          SessionContext.with_session([session_id: session_id], fn ->
+            {:ok, result} = SnakeBridge.method(ref, "predict", [data])
+            result
+          end)
+      end
+
+  ## Options
+
+  - `:session_id` - Custom session ID (default: auto-generated)
+  - `:max_refs` - Maximum refs per session (default: 10,000)
+  - `:ttl_seconds` - Session time-to-live in seconds (default: 3600, i.e., 1 hour)
+  - `:tags` - Custom metadata for debugging
   """
 
   alias Snakepit.Bridge.SessionStore

@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.6] - 2025-12-31
+
+### Added
+- First-class ref lifecycle errors: `RefNotFoundError`, `SessionMismatchError`, `InvalidRefError`
+- Error translator now converts Python ref errors to structured Elixir exceptions
+- Introspection failures now logged with details during normal mode compilation
+- Telemetry event `[:snakebridge, :introspection, :error]` emitted for introspection failures
+- Introspection summary displayed after compilation if errors occurred
+- `SnakeBridge.release_ref/1,2` delegates for explicit ref cleanup
+- `SnakeBridge.release_session/1,2` delegates for session cleanup
+
+### Fixed
+- `set_attr` @spec and documentation now correctly show `{:ok, term()}` return type
+- TTL documentation now consistently states: disabled by default (env var), SessionContext default 3600s
+- Introspection errors no longer silently swallowed in normal mode compilation
+- Users now see which symbols failed to introspect and why
+- Session ID consistency across all Runtime call paths - `__runtime__: [session_id: X]` now respected by:
+  - `call/4` with atom modules
+  - `get_module_attr/3` with both atom and string modules
+  - `call_class/4`
+  - `call_helper/3` (both list and map opts variants)
+  - `call_method/4` (runtime opts now override ref's embedded session)
+  - `stream/5` with atom modules
+- All call paths now use `resolve_session_id()` for consistent priority: runtime_opts > ref > context > auto-session
+
+### Removed
+- Pre-populated `priv/snakebridge/registry.json` files from repository; registry is now generated per-project during `mix compile`
+
+### Changed
+- Added `priv/snakebridge/registry.json` to `.gitignore` to prevent tracking of generated registry artifacts
+- Release validation against Snakepit 0.8.7 with passing Elixir/Python test suites and dialyzer
+
 ## [0.7.5] - 2025-12-30
 
 ### Added

@@ -57,8 +57,13 @@ defmodule SnakeBridge.Runtime do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
     encoded_args = encode_args(args ++ extra_args)
     encoded_kwargs = encode_kwargs(kwargs)
-    payload = base_payload(module, function, encoded_args, encoded_kwargs, idempotent)
-    session_id = Map.get(payload, "session_id")
+    # Determine session_id ONCE using correct priority
+    session_id = resolve_session_id(runtime_opts)
+
+    payload =
+      base_payload(module, function, encoded_args, encoded_kwargs, idempotent)
+      |> Map.put("session_id", session_id)
+
     runtime_opts = ensure_session_opt(runtime_opts, session_id)
     metadata = call_metadata(payload, module, function, "function")
 
@@ -83,6 +88,9 @@ defmodule SnakeBridge.Runtime do
     encoded_args = encode_args(args ++ extra_args)
     encoded_kwargs = encode_kwargs(kwargs)
 
+    # Determine session_id ONCE - this is the single source of truth
+    session_id = resolve_session_id(runtime_opts)
+
     payload =
       protocol_payload()
       |> Map.put("call_type", "dynamic")
@@ -91,9 +99,8 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("args", encoded_args)
       |> Map.put("kwargs", encoded_kwargs)
       |> Map.put("idempotent", idempotent)
-      |> maybe_put_session_id(current_session_id())
+      |> maybe_put_session_id(session_id)
 
-    session_id = Map.get(payload, "session_id")
     runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     metadata = %{
@@ -117,8 +124,13 @@ defmodule SnakeBridge.Runtime do
   def call_helper(helper, args, opts) when is_map(opts) do
     encoded_args = encode_args(args)
     encoded_kwargs = encode_kwargs(stringify_keys(opts))
-    payload = helper_payload(helper, encoded_args, encoded_kwargs, false)
-    session_id = Map.get(payload, "session_id")
+    # Map opts cannot have __runtime__, use context/auto-session
+    session_id = resolve_session_id([])
+
+    payload =
+      helper_payload(helper, encoded_args, encoded_kwargs, false)
+      |> Map.put("session_id", session_id)
+
     runtime_opts = ensure_session_opt([], session_id)
     metadata = helper_metadata(helper)
 
@@ -133,8 +145,13 @@ defmodule SnakeBridge.Runtime do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
     encoded_args = encode_args(args ++ extra_args)
     encoded_kwargs = encode_kwargs(kwargs)
-    payload = helper_payload(helper, encoded_args, encoded_kwargs, idempotent)
-    session_id = Map.get(payload, "session_id")
+    # Determine session_id ONCE using correct priority
+    session_id = resolve_session_id(runtime_opts)
+
+    payload =
+      helper_payload(helper, encoded_args, encoded_kwargs, idempotent)
+      |> Map.put("session_id", session_id)
+
     runtime_opts = ensure_session_opt(runtime_opts, session_id)
     metadata = helper_metadata(helper)
 
@@ -156,10 +173,24 @@ defmodule SnakeBridge.Runtime do
   - `opts` - Options including kwargs
   - `callback` - Function called for each streamed item
 
+  ## Performance
+
+  When called with a **generated module atom**, this function can use Snakepit's
+  native gRPC streaming for efficient data transfer.
+
+  When called with a **string module path**, this delegates to `stream_dynamic/5`
+  which uses RPC-per-item iteration. See `stream_dynamic/5` docs for performance
+  guidance on large streams.
+
   ## Examples
 
-      # With string module path
+      # With string module path (dynamic, RPC-per-item)
       SnakeBridge.Runtime.stream("pandas", "read_csv", ["file.csv"], [chunksize: 100], fn chunk ->
+        process(chunk)
+      end)
+
+      # With generated module (native streaming when available)
+      SnakeBridge.Runtime.stream(MyApp.Pandas, :read_csv, ["file.csv"], [chunksize: 100], fn chunk ->
         process(chunk)
       end)
 
@@ -182,8 +213,13 @@ defmodule SnakeBridge.Runtime do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
     encoded_args = encode_args(args ++ extra_args)
     encoded_kwargs = encode_kwargs(kwargs)
-    payload = base_payload(module, function, encoded_args, encoded_kwargs, idempotent)
-    session_id = Map.get(payload, "session_id")
+    # Determine session_id ONCE using correct priority
+    session_id = resolve_session_id(runtime_opts)
+
+    payload =
+      base_payload(module, function, encoded_args, encoded_kwargs, idempotent)
+      |> Map.put("session_id", session_id)
+
     runtime_opts = ensure_session_opt(runtime_opts, session_id)
     metadata = call_metadata(payload, module, function, "stream")
     decode_callback = fn chunk -> callback.(Types.decode(chunk)) end
@@ -203,6 +239,23 @@ defmodule SnakeBridge.Runtime do
   Stream results from a Python generator using dynamic dispatch.
 
   Creates a stream reference and iterates via stream_next until exhausted.
+
+  ## Performance Note
+
+  Dynamic streaming uses an RPC-per-item approach: each item from the Python
+  iterator triggers a separate `stream_next` gRPC call. This is correct and
+  safe but may be slow for large streams (thousands of items).
+
+  For high-throughput streaming workloads, consider:
+  - **Generated streaming wrappers**: Use `SnakeBridge.stream/5` with compiled
+    modules, which can leverage Snakepit's server-side streaming for better
+    throughput.
+  - **Batched iteration**: Have Python yield batches of items rather than
+    individual items.
+  - **Dedicated data transfer**: For very large datasets, consider writing
+    Python results to files/databases and loading from Elixir.
+
+  Dynamic streaming is ideal for convenience and moderate-sized iterables.
   """
   @spec stream_dynamic(String.t(), String.t(), args(), opts(), (term() -> any())) ::
           {:ok, :done} | {:error, term()}
@@ -286,6 +339,9 @@ defmodule SnakeBridge.Runtime do
 
   @doc """
   Gets the next item from a Python iterator or generator.
+
+  Each call makes a separate RPC to Python. For high-throughput streaming,
+  see the performance note on `stream_dynamic/5`.
   """
   @spec stream_next(SnakeBridge.StreamRef.t(), opts()) ::
           {:ok, term()} | {:error, :stop_iteration} | {:error, Snakepit.Error.t()}
@@ -294,7 +350,8 @@ defmodule SnakeBridge.Runtime do
     {_, _, _, runtime_opts} = split_opts(opts)
 
     wire_ref = SnakeBridge.StreamRef.to_wire_format(stream_ref)
-    session_id = ref_field(stream_ref, "session_id") || current_session_id()
+    # Single source of truth: prioritize runtime_opts, then stream_ref session, then context
+    session_id = resolve_session_id(runtime_opts, stream_ref)
     runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
@@ -335,14 +392,16 @@ defmodule SnakeBridge.Runtime do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
     encoded_args = encode_args(args ++ extra_args)
     encoded_kwargs = encode_kwargs(kwargs)
+    # Determine session_id ONCE using correct priority
+    session_id = resolve_session_id(runtime_opts)
 
     payload =
       module
       |> base_payload(function, encoded_args, encoded_kwargs, idempotent)
       |> Map.put("call_type", "class")
       |> Map.put("class", python_class_name(module))
+      |> Map.put("session_id", session_id)
 
-    session_id = Map.get(payload, "session_id")
     runtime_opts = ensure_session_opt(runtime_opts, session_id)
     metadata = call_metadata(payload, module, function, "class")
 
@@ -360,7 +419,8 @@ defmodule SnakeBridge.Runtime do
     encoded_args = encode_args(args ++ extra_args)
     encoded_kwargs = encode_kwargs(kwargs)
     wire_ref = normalize_ref(ref)
-    session_id = ref_field(wire_ref, "session_id") || current_session_id()
+    # Single source of truth: prioritize runtime_opts, then ref session, then context
+    session_id = resolve_session_id(runtime_opts, wire_ref)
     runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
@@ -368,6 +428,7 @@ defmodule SnakeBridge.Runtime do
       |> base_payload_for_ref(function, encoded_args, encoded_kwargs, idempotent)
       |> Map.put("call_type", "method")
       |> Map.put("instance", wire_ref)
+      |> Map.put("session_id", session_id)
 
     metadata = ref_metadata(payload, function, "method")
 
@@ -402,7 +463,8 @@ defmodule SnakeBridge.Runtime do
   def get_module_attr(module, attr, opts) when is_binary(module) do
     {_kwargs, _idempotent, _extra_args, runtime_opts} = split_opts(opts)
     attr_name = to_string(attr)
-    session_id = current_session_id()
+    # Determine session_id ONCE using correct priority
+    session_id = resolve_session_id(runtime_opts)
     runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
@@ -411,7 +473,7 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("python_module", module)
       |> Map.put("library", library_from_module_path(module))
       |> Map.put("attr", attr_name)
-      |> maybe_put_session_id(session_id)
+      |> Map.put("session_id", session_id)
 
     metadata = %{
       module: module,
@@ -432,14 +494,16 @@ defmodule SnakeBridge.Runtime do
   def get_module_attr(module, attr, opts) when is_atom(module) do
     {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
     encoded_kwargs = encode_kwargs(kwargs)
+    # Determine session_id ONCE using correct priority
+    session_id = resolve_session_id(runtime_opts)
 
     payload =
       module
       |> base_payload(attr, [], encoded_kwargs, idempotent)
       |> Map.put("call_type", "module_attr")
       |> Map.put("attr", to_string(attr))
+      |> Map.put("session_id", session_id)
 
-    session_id = Map.get(payload, "session_id")
     runtime_opts = ensure_session_opt(runtime_opts, session_id)
     metadata = call_metadata(payload, module, attr, "module_attr")
 
@@ -463,7 +527,8 @@ defmodule SnakeBridge.Runtime do
     {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
     encoded_kwargs = encode_kwargs(kwargs)
     wire_ref = normalize_ref(ref)
-    session_id = ref_field(wire_ref, "session_id") || current_session_id()
+    # Single source of truth: prioritize runtime_opts, then ref session, then context
+    session_id = resolve_session_id(runtime_opts, wire_ref)
     runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
@@ -512,7 +577,8 @@ defmodule SnakeBridge.Runtime do
     encoded_kwargs = encode_kwargs(kwargs)
     encoded_args = encode_args([value])
     wire_ref = normalize_ref(ref)
-    session_id = ref_field(wire_ref, "session_id") || current_session_id()
+    # Single source of truth: prioritize runtime_opts, then ref session, then context
+    session_id = resolve_session_id(runtime_opts, wire_ref)
     runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
@@ -534,12 +600,15 @@ defmodule SnakeBridge.Runtime do
   @spec release_ref(SnakeBridge.Ref.t(), opts()) :: :ok | {:error, Snakepit.Error.t()}
   def release_ref(ref, opts \\ []) do
     {_, _, _, runtime_opts} = split_opts(opts)
-    session_id = ref_field(ref, "session_id") || current_session_id()
+    wire_ref = normalize_ref(ref)
+    # Single source of truth: prioritize runtime_opts, then ref session, then context
+    session_id = resolve_session_id(runtime_opts, wire_ref)
     runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
       protocol_payload()
-      |> Map.put("ref", normalize_ref(ref))
+      |> Map.put("ref", wire_ref)
+      |> maybe_put_session_id(session_id)
 
     runtime_client().execute("snakebridge.release_ref", payload, runtime_opts)
     |> apply_error_mode()
@@ -654,6 +723,32 @@ defmodule SnakeBridge.Runtime do
 
     {kwargs, idempotent, List.wrap(extra_args), runtime_opts}
   end
+
+  # Session ID single source of truth: determine once, use everywhere
+  # Priority: runtime_opts override > ref session_id > context session > auto-session
+  @doc false
+  def resolve_session_id(runtime_opts, ref \\ nil) do
+    session_id_from_runtime_opts(runtime_opts) ||
+      session_id_from_ref(ref) ||
+      current_session_id()
+  end
+
+  defp session_id_from_runtime_opts(runtime_opts) when is_list(runtime_opts) do
+    Keyword.get(runtime_opts, :session_id)
+  end
+
+  defp session_id_from_runtime_opts(_), do: nil
+
+  defp session_id_from_ref(%SnakeBridge.Ref{session_id: id}) when is_binary(id), do: id
+  defp session_id_from_ref(%SnakeBridge.StreamRef{session_id: id}) when is_binary(id), do: id
+
+  defp session_id_from_ref(ref) when is_map(ref) do
+    if Map.has_key?(ref, "session_id") or Map.has_key?(ref, :session_id) do
+      ref_field(ref, "session_id")
+    end
+  end
+
+  defp session_id_from_ref(_), do: nil
 
   defp ensure_session_opt(runtime_opts, session_id) when is_binary(session_id) do
     cond do

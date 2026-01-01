@@ -24,11 +24,56 @@ defmodule SnakeBridge do
       {:ok, path} = SnakeBridge.call("pathlib", "Path", ["/tmp"])
       {:ok, exists?} = SnakeBridge.method(path, "exists", [])
 
-  ## Sessions
+  ## Sessions and Ref Lifecycle
 
   SnakeBridge automatically manages Python object sessions. Each Elixir process
   gets an isolated session, and refs are automatically cleaned up when the
   process terminates.
+
+  ### Key Rules
+
+  1. **Refs are session-scoped**: A ref is only valid within its session. Don't
+     pass refs between processes without ensuring they share a session.
+
+  2. **Process death triggers cleanup**: When an Elixir process dies, its session
+     is released and all associated Python objects are garbage collected.
+
+  3. **Auto-session per process**: By default, each process gets an auto-session
+     (prefixed with `auto_`). Refs created in one process cannot be used from
+     another without explicit session sharing.
+
+  4. **Explicit sessions for sharing**: Use `SessionContext.with_session/2` with
+     a shared `session_id` to allow multiple processes to access the same refs.
+
+  5. **Ref TTL**: Python ref TTL is disabled by default. Enable via
+     `SNAKEBRIDGE_REF_TTL_SECONDS` environment variable. When enabled, refs
+     not accessed within the TTL window are cleaned up automatically.
+
+  6. **Max refs limit**: Each session can hold up to 10,000 refs by default.
+     Excess refs are pruned oldest-first. Configure via `SNAKEBRIDGE_REF_MAX`.
+
+  ### Recommended Patterns
+
+      # Pattern 1: Single process, automatic cleanup
+      def process_data do
+        {:ok, df} = SnakeBridge.call("pandas", "read_csv", ["data.csv"])
+        {:ok, result} = SnakeBridge.method(df, "mean", [])
+        result  # df is cleaned up when this process exits
+      end
+
+      # Pattern 2: Explicit session for long-lived refs
+      def with_shared_session(session_id) do
+        SnakeBridge.SessionContext.with_session([session_id: session_id], fn ->
+          {:ok, model} = SnakeBridge.call("sklearn.linear_model", "LinearRegression", [])
+          # Model ref can be accessed by other processes using same session_id
+          model
+        end)
+      end
+
+      # Pattern 3: Release refs explicitly when done
+      {:ok, ref} = SnakeBridge.call("io", "StringIO", ["test"])
+      # ... use ref ...
+      SnakeBridge.release_ref(ref)  # Explicit cleanup
 
   For explicit session control, use `SnakeBridge.SessionContext.with_session/1`.
 
@@ -49,6 +94,42 @@ defmodule SnakeBridge do
   | atoms | tagged atom (decoded to string by default) |
   | `DateTime` | `datetime` |
   | `SnakeBridge.Ref` | Python object reference |
+
+  ## Advanced Features (Opt-In)
+
+  SnakeBridge includes optional compile-time features that are disabled by default:
+
+  ### Strict Mode
+
+  Enables compile-time verification of lock files and binding consistency.
+  Enable via `config :snakebridge, strict: true` or `SNAKEBRIDGE_STRICT=1`.
+
+  ### Lock File Verification
+
+  Run `mix snakebridge.verify` to check that your lock file matches the current
+  environment. Useful in CI/CD to catch hardware/package drift.
+
+  ### Wheel Selection
+
+  `SnakeBridge.WheelSelector` provides hardware-aware PyTorch wheel selection.
+  Call `WheelSelector.pytorch_variant/0` to get the appropriate CUDA/CPU variant.
+
+  ### Helper Packs
+
+  Built-in helpers are enabled by default. Disable with:
+
+      config :snakebridge, helper_pack_enabled: false
+
+  ### Environment Variables
+
+  | Variable | Default | Description |
+  |----------|---------|-------------|
+  | `SNAKEBRIDGE_STRICT` | `false` | Enable strict mode |
+  | `SNAKEBRIDGE_VERBOSE` | `false` | Verbose logging |
+  | `SNAKEBRIDGE_REF_TTL_SECONDS` | `0` | Ref TTL in seconds (0 = disabled) |
+  | `SNAKEBRIDGE_REF_MAX` | `10000` | Max refs per session |
+  | `SNAKEBRIDGE_STRICT_MODE` | `false` | Python strict mode (warns on ref accumulation) |
+  | `SNAKEBRIDGE_STRICT_MODE_THRESHOLD` | `1000` | Strict mode warning threshold |
   """
 
   require SnakeBridge.WithContext
@@ -284,10 +365,10 @@ defmodule SnakeBridge do
   ## Examples
 
       {:ok, obj} = SnakeBridge.call("some_module", "SomeClass", [])
-      :ok = SnakeBridge.set_attr(obj, "property", "new_value")
+      {:ok, _} = SnakeBridge.set_attr(obj, "property", "new_value")
   """
   @spec set_attr(Ref.t(), atom() | String.t(), term(), keyword()) ::
-          :ok | {:error, term()}
+          {:ok, term()} | {:error, term()}
   defdelegate set_attr(ref, attr, value, opts \\ []), to: Dynamic
 
   # ============================================================================
@@ -370,6 +451,58 @@ defmodule SnakeBridge do
   """
   @spec release_auto_session() :: :ok
   defdelegate release_auto_session(), to: Runtime
+
+  @doc """
+  Releases a Python object reference, freeing memory in the Python process.
+
+  Call this to explicitly release a ref when you're done with it, rather than
+  waiting for session cleanup or process termination.
+
+  ## Parameters
+
+  - `ref` - A `SnakeBridge.Ref` to release
+  - `opts` - Runtime options (optional)
+
+  ## Examples
+
+      {:ok, ref} = SnakeBridge.call("pathlib", "Path", ["/tmp"])
+      # ... use ref ...
+      :ok = SnakeBridge.release_ref(ref)
+
+  ## Notes
+
+  - After release, the ref is invalid and should not be used
+  - Releasing an already-released ref is a no-op
+  - For bulk cleanup, use `release_session/1` instead
+  """
+  @spec release_ref(Ref.t(), keyword()) :: :ok | {:error, term()}
+  defdelegate release_ref(ref, opts \\ []), to: Runtime
+
+  @doc """
+  Releases all Python object references associated with a session.
+
+  Use this for bulk cleanup of all refs in a session, rather than releasing
+  them individually.
+
+  ## Parameters
+
+  - `session_id` - The session ID to release
+  - `opts` - Runtime options (optional)
+
+  ## Examples
+
+      session_id = SnakeBridge.current_session()
+      # ... create many refs ...
+      :ok = SnakeBridge.release_session(session_id)
+
+  ## Notes
+
+  - After release, all refs from that session are invalid
+  - The session can still be reused for new calls
+  - For auto-sessions, prefer `release_auto_session/0`
+  """
+  @spec release_session(String.t(), keyword()) :: :ok | {:error, term()}
+  defdelegate release_session(session_id, opts \\ []), to: Runtime
 
   # ============================================================================
   # Ref Utilities

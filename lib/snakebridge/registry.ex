@@ -112,9 +112,7 @@ defmodule SnakeBridge.Registry do
   """
   @spec list_libraries() :: [library_name()]
   def list_libraries do
-    ensure_started()
-
-    Agent.get(__MODULE__, fn state ->
+    registry_get(fn state ->
       state
       |> Map.keys()
       |> Enum.sort()
@@ -136,8 +134,7 @@ defmodule SnakeBridge.Registry do
   """
   @spec get(library_name()) :: registry_entry() | nil
   def get(library_name) do
-    ensure_started()
-    Agent.get(__MODULE__, fn state -> Map.get(state, library_name) end)
+    registry_get(fn state -> Map.get(state, library_name) end)
   end
 
   @doc """
@@ -153,8 +150,7 @@ defmodule SnakeBridge.Registry do
   """
   @spec generated?(library_name()) :: boolean()
   def generated?(library_name) do
-    ensure_started()
-    Agent.get(__MODULE__, fn state -> Map.has_key?(state, library_name) end)
+    registry_get(fn state -> Map.has_key?(state, library_name) end)
   end
 
   @doc """
@@ -188,11 +184,9 @@ defmodule SnakeBridge.Registry do
   """
   @spec register(library_name(), map()) :: :ok | {:error, String.t()}
   def register(library_name, entry) when is_binary(library_name) and is_map(entry) do
-    ensure_started()
-
     case validate_entry(entry) do
       :ok ->
-        Agent.update(__MODULE__, fn state ->
+        registry_update(fn state ->
           Map.put(state, library_name, normalize_entry(entry))
         end)
 
@@ -215,9 +209,7 @@ defmodule SnakeBridge.Registry do
   """
   @spec unregister(library_name()) :: :ok
   def unregister(library_name) do
-    ensure_started()
-
-    Agent.update(__MODULE__, fn state ->
+    registry_update(fn state ->
       Map.delete(state, library_name)
     end)
 
@@ -234,9 +226,7 @@ defmodule SnakeBridge.Registry do
   """
   @spec clear() :: :ok
   def clear do
-    ensure_started()
-
-    Agent.update(__MODULE__, fn _state -> %{} end)
+    registry_update(fn _state -> %{} end)
 
     :ok
   end
@@ -258,8 +248,6 @@ defmodule SnakeBridge.Registry do
   """
   @spec save() :: :ok | {:error, term()}
   def save do
-    ensure_started()
-
     registry_path = get_registry_path()
 
     with :ok <- ensure_registry_dir(registry_path),
@@ -291,15 +279,13 @@ defmodule SnakeBridge.Registry do
   """
   @spec load() :: :ok | {:error, term()}
   def load do
-    ensure_started()
-
     registry_path = get_registry_path()
 
     case File.read(registry_path) do
       {:ok, content} ->
         with {:ok, data} <- Jason.decode(content),
              {:ok, libraries} <- parse_registry_data(data) do
-          Agent.update(__MODULE__, fn _state -> libraries end)
+          registry_update(fn _state -> libraries end)
           :ok
         else
           {:error, reason} = error ->
@@ -324,12 +310,22 @@ defmodule SnakeBridge.Registry do
   defp ensure_started do
     case Process.whereis(__MODULE__) do
       nil ->
-        # Start the agent if not already started
-        {:ok, _pid} = start_link()
-        :ok
+        start_registry()
 
-      _pid ->
-        :ok
+      pid ->
+        if Process.alive?(pid) do
+          :ok
+        else
+          start_registry()
+        end
+    end
+  end
+
+  defp start_registry do
+    case Agent.start(fn -> %{} end, name: __MODULE__) do
+      {:ok, _pid} -> :ok
+      {:error, {:already_started, _pid}} -> :ok
+      {:error, reason} -> raise "Failed to start registry: #{inspect(reason)}"
     end
   end
 
@@ -413,7 +409,7 @@ defmodule SnakeBridge.Registry do
   # Builds the registry data structure for JSON serialization
   defp build_registry_data do
     libraries =
-      Agent.get(__MODULE__, fn state ->
+      registry_get(fn state ->
         state
         |> Enum.map(fn {name, entry} ->
           {name, serialize_entry(entry)}
@@ -502,5 +498,29 @@ defmodule SnakeBridge.Registry do
 
   defp deserialize_entry(_entry) do
     {:error, "Entry must be a map"}
+  end
+
+  defp registry_get(fun) do
+    with_registry(fn -> Agent.get(__MODULE__, fun) end)
+  end
+
+  defp registry_update(fun) do
+    with_registry(fn -> Agent.update(__MODULE__, fun) end)
+  end
+
+  defp with_registry(fun) do
+    ensure_started()
+
+    try do
+      fun.()
+    catch
+      :exit, {:noproc, _} ->
+        start_registry()
+        fun.()
+
+      :exit, :noproc ->
+        start_registry()
+        fun.()
+    end
   end
 end

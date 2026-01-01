@@ -16,7 +16,7 @@ Add to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:snakebridge, "~> 0.7.5",
+    {:snakebridge, "~> 0.7.6",
       libraries: [
         {:numpy, "1.26.0"},
         {:pandas, version: "2.0.0", include: ["DataFrame", "read_csv"]}
@@ -396,7 +396,7 @@ config :snakebridge,
 
 ```elixir
 # mix.exs
-{:snakebridge, "~> 0.7.5",
+{:snakebridge, "~> 0.7.6",
   libraries: [
     # Simple: name and version
     {:numpy, "1.26.0"},
@@ -503,6 +503,64 @@ SnakeBridge is a compile-time code generator:
 4. **Lock**: Record environment for reproducibility
 
 Runtime calls delegate to [Snakepit](https://hex.pm/packages/snakepit).
+
+## Cross-Cutting Contract (Snakepit + Snakebridge)
+
+### Wire Format for JSON Any Payloads
+
+SnakeBridge uses a **custom gRPC Any convention**: `Any.value` contains raw UTF-8 JSON bytes (not protobuf-packed), with `type_url` set to `type.googleapis.com/google.protobuf.StringValue`.
+
+**Reserved payload fields** (present in every call):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `protocol_version` | int | Wire format version (currently `1`) |
+| `min_supported_version` | int | Minimum accepted version (currently `1`) |
+| `session_id` | string | Ref lifecycle and routing scope |
+| `call_type` | string | `function`, `class`, `method`, `dynamic`, `get_attr`, `set_attr`, `module_attr`, `stream_next`, `helper` |
+| `library` | string | Library name (e.g., `numpy`) |
+| `python_module` | string | Full module path (e.g., `numpy.linalg`) |
+| `function` | string | Function/method/class name |
+| `args` | list | Positional arguments (encoded) |
+| `kwargs` | dict | Keyword arguments (encoded) |
+
+**Tagged type encoding** uses `__type__` and `__schema__` markers:
+
+| Stability | Types |
+|-----------|-------|
+| **Stable** | `atom`, `tuple`, `set`, `bytes`, `datetime`, `date`, `time`, `special_float`, `ref`, `dict` |
+| **Experimental** | `stream_ref`, `callback`, `complex` |
+
+### Protocol Versioning
+
+Compatibility is enforced **per-call** (not per-session). Both sides check:
+
+- Caller's `protocol_version` >= adapter's `MIN_SUPPORTED_VERSION`
+- Caller's `min_supported_version` <= adapter's `PROTOCOL_VERSION`
+
+**Strict by default**. To accept legacy payloads without version fields:
+
+```bash
+SNAKEBRIDGE_ALLOW_LEGACY_PROTOCOL=1
+```
+
+On mismatch, `SnakeBridgeProtocolError` includes all four version values for diagnostics.
+
+### Operational Defaults
+
+| Knob | Default | Config |
+|------|---------|--------|
+| gRPC max message size | 100 MB (send/receive) | Fixed |
+| Session TTL | 3600s (1 hour) | `SessionStore` |
+| Max sessions | 10,000 | `SessionStore` |
+| Request timeout | 30s | Per-call override |
+| Stream timeout | 5 min | Per-call override |
+| Pool size | `System.schedulers_online() * 2` | `:snakepit` config |
+| Heartbeat interval | 2s | HeartbeatConfig |
+| Heartbeat timeout | 10s | HeartbeatConfig |
+| Log level (Elixir) | `:error` | `config :snakepit, log_level:` |
+| Log level (Python) | `error` | `SNAKEPIT_LOG_LEVEL` |
+| Telemetry sampling | 1.0 (100%) | Runtime control |
 
 ## Requirements
 

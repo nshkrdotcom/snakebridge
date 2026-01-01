@@ -127,10 +127,12 @@ defmodule SnakeBridge.RuntimeContractTest do
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.release_ref",
                                                          payload,
                                                          _opts ->
+        # session_id is now included for consistency (single source of truth)
         assert payload == %{
                  "protocol_version" => 1,
                  "min_supported_version" => 1,
-                 "ref" => wire_ref
+                 "ref" => wire_ref,
+                 "session_id" => "session-1"
                }
 
         {:ok, :released}

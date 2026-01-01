@@ -22,6 +22,7 @@ defmodule SnakeBridge.ErrorTranslator do
 
   alias SnakeBridge.DynamicException
   alias SnakeBridge.Error.{DtypeMismatchError, OutOfMemoryError, ShapeMismatchError}
+  alias SnakeBridge.{InvalidRefError, RefNotFoundError, SessionMismatchError}
 
   # Mapping from normalized dtype strings to Elixir atoms
   @dtype_map %{
@@ -91,6 +92,9 @@ defmodule SnakeBridge.ErrorTranslator do
   @spec translate_message(String.t()) :: Exception.t() | nil
   def translate_message(message) when is_binary(message) do
     cond do
+      ref_not_found?(message) -> translate_ref_not_found(message)
+      session_mismatch?(message) -> translate_session_mismatch(message)
+      invalid_ref?(message) -> translate_invalid_ref(message)
       shape_mismatch?(message) -> translate_shape_error(message)
       oom_error?(message) -> translate_oom_error(message)
       dtype_mismatch?(message) -> translate_dtype_error(message)
@@ -179,6 +183,20 @@ defmodule SnakeBridge.ErrorTranslator do
       String.contains?(message, "type mismatch")
   end
 
+  # Ref lifecycle error detection patterns
+  defp ref_not_found?(message) do
+    String.contains?(message, "Unknown SnakeBridge reference")
+  end
+
+  defp session_mismatch?(message) do
+    String.contains?(message, "SnakeBridge reference session mismatch")
+  end
+
+  defp invalid_ref?(message) do
+    String.contains?(message, "Invalid SnakeBridge reference") or
+      String.contains?(message, "SnakeBridge reference missing id")
+  end
+
   # Translate shape errors
   defp translate_shape_error(message) do
     cond do
@@ -240,6 +258,48 @@ defmodule SnakeBridge.ErrorTranslator do
     {expected, got} = extract_dtype_info(message)
 
     DtypeMismatchError.new(expected, got, message: extract_core_message(message))
+  end
+
+  # Translate ref not found errors
+  defp translate_ref_not_found(message) do
+    ref_id = extract_ref_id(message)
+
+    RefNotFoundError.exception(
+      ref_id: ref_id,
+      message: message
+    )
+  end
+
+  # Translate session mismatch errors
+  defp translate_session_mismatch(message) do
+    SessionMismatchError.exception(message: message)
+  end
+
+  # Translate invalid ref errors
+  defp translate_invalid_ref(message) do
+    reason = extract_invalid_reason(message)
+
+    InvalidRefError.exception(
+      reason: reason,
+      message: message
+    )
+  end
+
+  # Extract ref ID from error message
+  defp extract_ref_id(message) do
+    case Regex.run(~r/reference[:\s]+['\"]?([a-zA-Z0-9_]+)['\"]?/i, message) do
+      [_, ref_id] -> ref_id
+      nil -> nil
+    end
+  end
+
+  # Extract invalid ref reason
+  defp extract_invalid_reason(message) do
+    cond do
+      String.contains?(message, "missing id") -> :missing_id
+      String.contains?(message, "payload") -> :invalid_format
+      true -> :unknown
+    end
   end
 
   # Device detection from error message

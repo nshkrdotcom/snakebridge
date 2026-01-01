@@ -54,6 +54,10 @@ htmlcov/
 /snakepit/
 /pythonLibs/
 
+# SnakeBridge generated registry (per-project artifact)
+priv/snakebridge/registry.json
+examples/*/priv/snakebridge/registry.json
+
 # Example projects (Elixir project artifacts)
 examples/*/_build/
 examples/*/deps/

@@ -63,7 +63,14 @@ defmodule SnakeBridge.WheelSelector.ConfigStrategy do
   def index_url_for_variant(nil), do: nil
 
   def index_url_for_variant(variant) do
-    "https://download.pytorch.org/whl/#{variant}"
+    base_url =
+      Application.get_env(
+        :snakebridge,
+        :pytorch_index_base_url,
+        "https://download.pytorch.org/whl/"
+      )
+
+    "#{String.trim_trailing(base_url, "/")}/#{variant}"
   end
 
   defp variant_package?(package) do
@@ -91,14 +98,25 @@ defmodule SnakeBridge.WheelSelector.ConfigStrategy do
   end
 
   defp cuda_variant_fallback(version) do
+    thresholds =
+      Application.get_env(:snakebridge, :cuda_thresholds, [
+        {"cu124", 124},
+        {"cu121", 120},
+        {"cu118", 117}
+      ])
+
     normalized = normalize_cuda_version(version)
 
     case Integer.parse(normalized || "") do
-      {value, _} when value >= 124 -> "cu124"
-      {value, _} when value >= 120 -> "cu121"
-      {value, _} when value >= 117 -> "cu118"
+      {value, _} -> find_matching_variant(thresholds, value)
       _ -> "cpu"
     end
+  end
+
+  defp find_matching_variant(thresholds, cuda_version) do
+    Enum.find_value(thresholds, "cpu", fn {variant, threshold} ->
+      if cuda_version >= threshold, do: variant
+    end)
   end
 
   defp normalize_cuda_version(version) when is_binary(version) do

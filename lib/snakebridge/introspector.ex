@@ -76,9 +76,14 @@ defmodule SnakeBridge.Introspector do
             {SnakeBridge.Config.Library.t() | map(), {:ok, list()} | {:error, term()}, String.t()}
           )
   def introspect_batch(libs_and_functions) when is_list(libs_and_functions) do
-    config = Application.get_env(:snakebridge, :introspector, [])
-    max_concurrency = Keyword.get(config, :max_concurrency, System.schedulers_online())
-    timeout = Keyword.get(config, :timeout, 30_000)
+    nested_config = Application.get_env(:snakebridge, :introspector, [])
+    default_timeout = Application.get_env(:snakebridge, :introspector_timeout, 30_000)
+
+    default_concurrency =
+      Application.get_env(:snakebridge, :introspector_max_concurrency, System.schedulers_online())
+
+    max_concurrency = Keyword.get(nested_config, :max_concurrency, default_concurrency)
+    timeout = Keyword.get(nested_config, :timeout, default_timeout)
 
     results =
       libs_and_functions

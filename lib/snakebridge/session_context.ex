@@ -94,12 +94,15 @@ defmodule SnakeBridge.SessionContext do
   """
   @spec create(keyword()) :: t()
   def create(opts \\ []) do
+    default_max_refs = Application.get_env(:snakebridge, :session_max_refs, 10_000)
+    default_ttl = Application.get_env(:snakebridge, :session_ttl_seconds, 3600)
+
     %__MODULE__{
       session_id: Keyword.get(opts, :session_id, generate_session_id()),
       owner_pid: Keyword.get(opts, :owner_pid, self()),
       created_at: System.system_time(:second),
-      max_refs: Keyword.get(opts, :max_refs, 10_000),
-      ttl_seconds: Keyword.get(opts, :ttl_seconds, 3600),
+      max_refs: Keyword.get(opts, :max_refs, default_max_refs),
+      ttl_seconds: Keyword.get(opts, :ttl_seconds, default_ttl),
       tags: Keyword.get(opts, :tags, %{})
     }
   end

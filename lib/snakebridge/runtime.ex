@@ -64,7 +64,11 @@ defmodule SnakeBridge.Runtime do
       base_payload(module, function, encoded_args, encoded_kwargs, idempotent)
       |> Map.put("session_id", session_id)
 
-    runtime_opts = ensure_session_opt(runtime_opts, session_id)
+    runtime_opts =
+      runtime_opts
+      |> apply_runtime_defaults(payload, :call)
+      |> ensure_session_opt(session_id)
+
     metadata = call_metadata(payload, module, function, "function")
 
     execute_with_telemetry(metadata, fn ->
@@ -91,22 +95,28 @@ defmodule SnakeBridge.Runtime do
     # Determine session_id ONCE - this is the single source of truth
     session_id = resolve_session_id(runtime_opts)
 
+    library = module_path |> String.split(".") |> List.first()
+
     payload =
       protocol_payload()
       |> Map.put("call_type", "dynamic")
       |> Map.put("module_path", module_path)
+      |> Map.put("library", library)
       |> Map.put("function", to_string(function))
       |> Map.put("args", encoded_args)
       |> Map.put("kwargs", encoded_kwargs)
       |> Map.put("idempotent", idempotent)
       |> maybe_put_session_id(session_id)
 
-    runtime_opts = ensure_session_opt(runtime_opts, session_id)
+    runtime_opts =
+      runtime_opts
+      |> apply_runtime_defaults(payload, :call)
+      |> ensure_session_opt(session_id)
 
     metadata = %{
       module: module_path,
       function: to_string(function),
-      library: module_path |> String.split(".") |> List.first(),
+      library: library,
       python_module: module_path,
       call_type: "dynamic"
     }
@@ -131,7 +141,11 @@ defmodule SnakeBridge.Runtime do
       helper_payload(helper, encoded_args, encoded_kwargs, false)
       |> Map.put("session_id", session_id)
 
-    runtime_opts = ensure_session_opt([], session_id)
+    runtime_opts =
+      []
+      |> apply_runtime_defaults(payload, :call)
+      |> ensure_session_opt(session_id)
+
     metadata = helper_metadata(helper)
 
     execute_with_telemetry(metadata, fn ->
@@ -152,7 +166,11 @@ defmodule SnakeBridge.Runtime do
       helper_payload(helper, encoded_args, encoded_kwargs, idempotent)
       |> Map.put("session_id", session_id)
 
-    runtime_opts = ensure_session_opt(runtime_opts, session_id)
+    runtime_opts =
+      runtime_opts
+      |> apply_runtime_defaults(payload, :call)
+      |> ensure_session_opt(session_id)
+
     metadata = helper_metadata(helper)
 
     execute_with_telemetry(metadata, fn ->
@@ -220,7 +238,11 @@ defmodule SnakeBridge.Runtime do
       base_payload(module, function, encoded_args, encoded_kwargs, idempotent)
       |> Map.put("session_id", session_id)
 
-    runtime_opts = ensure_session_opt(runtime_opts, session_id)
+    runtime_opts =
+      runtime_opts
+      |> apply_runtime_defaults(payload, :stream)
+      |> ensure_session_opt(session_id)
+
     metadata = call_metadata(payload, module, function, "stream")
     decode_callback = fn chunk -> callback.(Types.decode(chunk)) end
 
@@ -352,13 +374,24 @@ defmodule SnakeBridge.Runtime do
     wire_ref = SnakeBridge.StreamRef.to_wire_format(stream_ref)
     # Single source of truth: prioritize runtime_opts, then stream_ref session, then context
     session_id = resolve_session_id(runtime_opts, stream_ref)
-    runtime_opts = ensure_session_opt(runtime_opts, session_id)
+
+    library =
+      case stream_ref.library do
+        lib when is_binary(lib) and lib != "" -> lib
+        _ -> "unknown"
+      end
 
     payload =
       protocol_payload()
       |> Map.put("call_type", "stream_next")
       |> Map.put("stream_ref", wire_ref)
+      |> Map.put("library", library)
       |> maybe_put_session_id(session_id)
+
+    runtime_opts =
+      runtime_opts
+      |> apply_runtime_defaults(payload, :stream)
+      |> ensure_session_opt(session_id)
 
     result =
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
@@ -402,7 +435,11 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("class", python_class_name(module))
       |> Map.put("session_id", session_id)
 
-    runtime_opts = ensure_session_opt(runtime_opts, session_id)
+    runtime_opts =
+      runtime_opts
+      |> apply_runtime_defaults(payload, :call)
+      |> ensure_session_opt(session_id)
+
     metadata = call_metadata(payload, module, function, "class")
 
     execute_with_telemetry(metadata, fn ->
@@ -421,7 +458,6 @@ defmodule SnakeBridge.Runtime do
     wire_ref = normalize_ref(ref)
     # Single source of truth: prioritize runtime_opts, then ref session, then context
     session_id = resolve_session_id(runtime_opts, wire_ref)
-    runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
       wire_ref
@@ -429,6 +465,11 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("call_type", "method")
       |> Map.put("instance", wire_ref)
       |> Map.put("session_id", session_id)
+
+    runtime_opts =
+      runtime_opts
+      |> apply_runtime_defaults(payload, :call)
+      |> ensure_session_opt(session_id)
 
     metadata = ref_metadata(payload, function, "method")
 
@@ -465,7 +506,6 @@ defmodule SnakeBridge.Runtime do
     attr_name = to_string(attr)
     # Determine session_id ONCE using correct priority
     session_id = resolve_session_id(runtime_opts)
-    runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
       protocol_payload()
@@ -474,6 +514,11 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("library", library_from_module_path(module))
       |> Map.put("attr", attr_name)
       |> Map.put("session_id", session_id)
+
+    runtime_opts =
+      runtime_opts
+      |> apply_runtime_defaults(payload, :call)
+      |> ensure_session_opt(session_id)
 
     metadata = %{
       module: module,
@@ -504,7 +549,11 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("attr", to_string(attr))
       |> Map.put("session_id", session_id)
 
-    runtime_opts = ensure_session_opt(runtime_opts, session_id)
+    runtime_opts =
+      runtime_opts
+      |> apply_runtime_defaults(payload, :call)
+      |> ensure_session_opt(session_id)
+
     metadata = call_metadata(payload, module, attr, "module_attr")
 
     execute_with_telemetry(metadata, fn ->
@@ -529,7 +578,6 @@ defmodule SnakeBridge.Runtime do
     wire_ref = normalize_ref(ref)
     # Single source of truth: prioritize runtime_opts, then ref session, then context
     session_id = resolve_session_id(runtime_opts, wire_ref)
-    runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
       wire_ref
@@ -537,6 +585,11 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("call_type", "get_attr")
       |> Map.put("instance", wire_ref)
       |> Map.put("attr", to_string(attr))
+
+    runtime_opts =
+      runtime_opts
+      |> apply_runtime_defaults(payload, :call)
+      |> ensure_session_opt(session_id)
 
     metadata = ref_metadata(payload, attr, "get_attr")
 
@@ -579,7 +632,6 @@ defmodule SnakeBridge.Runtime do
     wire_ref = normalize_ref(ref)
     # Single source of truth: prioritize runtime_opts, then ref session, then context
     session_id = resolve_session_id(runtime_opts, wire_ref)
-    runtime_opts = ensure_session_opt(runtime_opts, session_id)
 
     payload =
       wire_ref
@@ -587,6 +639,11 @@ defmodule SnakeBridge.Runtime do
       |> Map.put("call_type", "set_attr")
       |> Map.put("instance", wire_ref)
       |> Map.put("attr", to_string(attr))
+
+    runtime_opts =
+      runtime_opts
+      |> apply_runtime_defaults(payload, :call)
+      |> ensure_session_opt(session_id)
 
     metadata = ref_metadata(payload, attr, "set_attr")
 
@@ -764,6 +821,70 @@ defmodule SnakeBridge.Runtime do
   end
 
   defp ensure_session_opt(runtime_opts, _session_id), do: runtime_opts
+
+  # ============================================================================
+  # Runtime Timeout Defaults
+  # ============================================================================
+
+  # Applies runtime timeout defaults to the given runtime options.
+  #
+  # This function merges profile-based timeouts with user-provided options,
+  # respecting the following priority (highest to lowest):
+  # 1. Explicit user-provided options (e.g., `timeout: 60_000`)
+  # 2. User-selected profile (via `timeout_profile:` or `profile:`)
+  # 3. Library-specific profile (from `runtime.library_profiles` config)
+  # 4. Default profile based on call kind (`:default` for calls, `:streaming` for streams)
+  @doc false
+  @spec apply_runtime_defaults(keyword() | nil, map(), atom()) :: keyword()
+  def apply_runtime_defaults(runtime_opts, payload, call_kind) do
+    runtime_opts = List.wrap(runtime_opts || [])
+    library = payload["library"]
+
+    profile = resolve_timeout_profile(runtime_opts, library, call_kind)
+    profile_opts = get_profile_opts(profile)
+
+    # Merge: profile defaults < user overrides
+    merged =
+      profile_opts
+      |> Keyword.merge(runtime_opts)
+
+    merged
+    |> Keyword.put_new(:timeout_profile, profile)
+    |> Keyword.put_new(:timeout, SnakeBridge.Defaults.runtime_default_timeout())
+    |> maybe_put_stream_defaults(call_kind)
+  end
+
+  defp resolve_timeout_profile(runtime_opts, library, call_kind) do
+    # Priority: explicit > library_profiles > global default
+    Keyword.get(runtime_opts, :timeout_profile) ||
+      Keyword.get(runtime_opts, :profile) ||
+      library_profile(library) ||
+      SnakeBridge.Defaults.runtime_timeout_profile(call_kind)
+  end
+
+  defp get_profile_opts(profile) do
+    SnakeBridge.Defaults.runtime_profiles()
+    |> Map.get(profile, [])
+  end
+
+  defp library_profile(nil), do: nil
+
+  defp library_profile(library) when is_binary(library) do
+    profiles = SnakeBridge.Defaults.runtime_library_profiles()
+
+    Map.get(profiles, library) ||
+      Map.get(profiles, String.to_existing_atom(library))
+  rescue
+    ArgumentError -> nil
+  end
+
+  defp library_profile(_), do: nil
+
+  defp maybe_put_stream_defaults(opts, :stream) do
+    Keyword.put_new(opts, :stream_timeout, SnakeBridge.Defaults.runtime_default_stream_timeout())
+  end
+
+  defp maybe_put_stream_defaults(opts, _), do: opts
 
   @doc false
   @spec normalize_args_opts(list(), keyword()) :: {list(), keyword()}

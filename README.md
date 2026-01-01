@@ -16,7 +16,7 @@ Add to your `mix.exs`:
 ```elixir
 def deps do
   [
-    {:snakebridge, "~> 0.7.6",
+    {:snakebridge, "~> 0.7.7",
       libraries: [
         {:numpy, "1.26.0"},
         {:pandas, version: "2.0.0", include: ["DataFrame", "read_csv"]}
@@ -396,7 +396,7 @@ config :snakebridge,
 
 ```elixir
 # mix.exs
-{:snakebridge, "~> 0.7.6",
+{:snakebridge, "~> 0.7.7",
   libraries: [
     # Simple: name and version
     {:numpy, "1.26.0"},
@@ -546,6 +546,68 @@ SNAKEBRIDGE_ALLOW_LEGACY_PROTOCOL=1
 
 On mismatch, `SnakeBridgeProtocolError` includes all four version values for diagnostics.
 
+### Timeouts and Profiles
+
+SnakeBridge provides configurable timeout defaults that are safer for ML/LLM workloads.
+
+#### Per-Call Timeout Override
+
+```elixir
+# Explicit timeout (10 minutes)
+Numpy.compute(data, __runtime__: [timeout: 600_000])
+
+# Use a named profile
+Transformers.generate(prompt, __runtime__: [timeout_profile: :ml_inference])
+
+# For streaming operations
+MyLib.stream_data(args, opts, callback, __runtime__: [stream_timeout: 3_600_000])
+```
+
+#### Built-in Timeout Profiles
+
+| Profile | Timeout | Stream Timeout | Use Case |
+|---------|---------|----------------|----------|
+| `:default` | 2 min | - | Regular function calls |
+| `:streaming` | 2 min | 30 min | Streaming operations |
+| `:ml_inference` | 10 min | 30 min | LLM/ML inference |
+| `:batch_job` | infinity | infinity | Long-running batch jobs |
+
+#### Global Configuration
+
+```elixir
+config :snakebridge,
+  runtime: [
+    # Default profile for all calls
+    timeout_profile: :default,
+
+    # Override defaults
+    default_timeout: 120_000,        # 2 minutes
+    default_stream_timeout: 1_800_000, # 30 minutes
+
+    # Per-library profile mapping
+    library_profiles: %{
+      "transformers" => :ml_inference,
+      "torch" => :batch_job
+    },
+
+    # Custom profiles
+    profiles: %{
+      default: [timeout: 120_000],
+      ml_inference: [timeout: 600_000, stream_timeout: 1_800_000],
+      batch_job: [timeout: :infinity, stream_timeout: :infinity]
+    }
+  ]
+```
+
+#### Escape Hatch
+
+Any other keys in `__runtime__` are forwarded directly to Snakepit:
+
+```elixir
+# Pass-through to Snakepit's advanced options
+MyLib.func(args, __runtime__: [timeout: 60_000, pool: :my_pool])
+```
+
 ### Operational Defaults
 
 | Knob | Default | Config |
@@ -553,8 +615,8 @@ On mismatch, `SnakeBridgeProtocolError` includes all four version values for dia
 | gRPC max message size | 100 MB (send/receive) | Fixed |
 | Session TTL | 3600s (1 hour) | `SessionStore` |
 | Max sessions | 10,000 | `SessionStore` |
-| Request timeout | 30s | Per-call override |
-| Stream timeout | 5 min | Per-call override |
+| Request timeout | 120s (2 min) | `runtime: [default_timeout:]` |
+| Stream timeout | 30 min | `runtime: [default_stream_timeout:]` |
 | Pool size | `System.schedulers_online() * 2` | `:snakepit` config |
 | Heartbeat interval | 2s | HeartbeatConfig |
 | Heartbeat timeout | 10s | HeartbeatConfig |
@@ -566,7 +628,7 @@ On mismatch, `SnakeBridgeProtocolError` includes all four version values for dia
 
 - Elixir ~> 1.14
 - Python 3.8+
-- Snakepit ~> 0.8.3
+- Snakepit ~> 0.8.7
 
 ## License
 

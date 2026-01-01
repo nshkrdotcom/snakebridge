@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.7] - 2025-12-31
+
+### Added
+- `SnakeBridge.Defaults` module centralizing all configurable values with documentation
+- Full configuration support for previously hardcoded values:
+  - `:introspector_timeout` - Introspection timeout in ms (default: 30,000)
+  - `:introspector_max_concurrency` - Max concurrent introspection tasks (default: `System.schedulers_online()`)
+  - `:pytorch_index_base_url` - PyTorch wheel index URL for private mirrors (default: `"https://download.pytorch.org/whl/"`)
+  - `:cuda_thresholds` - CUDA version to variant mapping, extensible for new CUDA versions
+  - `:session_max_refs` - Maximum refs per session (default: 10,000)
+  - `:session_ttl_seconds` - Session TTL in seconds (default: 3,600)
+
+### Changed
+- Introspector now supports both nested (`:introspector`) and flat key configuration for backwards compatibility
+- CUDA variant fallback logic now uses configurable thresholds instead of hardcoded guards
+- Session context defaults now read from application config, overridable per-call
+- **Runtime timeout architecture overhaul** - fixes the 30s gRPC deadline problem that broke LLM calls:
+  - New default timeout: 120s (2 minutes) instead of 30s
+  - New default stream timeout: 30 minutes instead of 5 minutes
+  - Profile-based timeout system with built-in profiles: `:default`, `:streaming`, `:ml_inference`, `:batch_job`
+  - Per-library profile mapping via `runtime: [library_profiles: %{"transformers" => :ml_inference}]`
+  - All runtime calls now apply timeout defaults via `apply_runtime_defaults/3`
+  - `__runtime__` is now a documented first-class feature (not an undocumented passthrough)
+  - Generated module docs now include Runtime Options section explaining timeout configuration
+
+### Runtime Timeout Architecture
+
+The new timeout system addresses the "30s gRPC deadline kills LLM calls" problem by:
+
+1. **Raising default timeout** from 30s to 120s (2 minutes)
+2. **Profile-based configuration** - select `:ml_inference` for 10-minute timeout, `:batch_job` for infinity
+3. **Per-call override** via `__runtime__: [timeout: X]` or `__runtime__: [timeout_profile: :ml_inference]`
+4. **Library-specific defaults** - configure `transformers` to always use `:ml_inference` profile
+5. **Streaming-aware** - streaming calls default to `:streaming` profile with 30-minute stream_timeout
+
+Example configuration:
+```elixir
+config :snakebridge,
+  runtime: [
+    timeout_profile: :default,
+    library_profiles: %{
+      "transformers" => :ml_inference,
+      "torch" => :batch_job
+    }
+  ]
+```
+
+Example per-call override:
+```elixir
+Transformers.generate(prompt, __runtime__: [timeout_profile: :ml_inference])
+Numpy.compute(data, __runtime__: [timeout: 600_000])
+```
+
 ## [0.7.6] - 2025-12-31
 
 ### Added

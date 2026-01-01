@@ -23,13 +23,15 @@ defmodule MyApp.MixProject do
       version: "1.0.0",
       elixir: "~> 1.14",
       deps: deps(),
-      python_deps: python_deps()  # Python libraries go here
+      python_deps: python_deps(),
+      # IMPORTANT: Add the snakebridge compiler for Python introspection
+      compilers: [:snakebridge] ++ Mix.compilers()
     ]
   end
 
   defp deps do
     [
-      {:snakebridge, "~> 0.7.9"}
+      {:snakebridge, "~> 0.7.10"}
     ]
   end
 
@@ -42,6 +44,11 @@ defmodule MyApp.MixProject do
   end
 end
 ```
+
+**Important:** The `compilers: [:snakebridge] ++ Mix.compilers()` line is required for:
+- Automatic Python package installation at compile time
+- Type introspection and wrapper generation
+- Keeping packages up-to-date when requirements change
 
 The `python_deps` function mirrors how `deps` works - a list of tuples with the library name,
 version, and optional configuration.
@@ -467,7 +474,7 @@ config :snakebridge,
   scan_exclude: ["lib/generated"],
 
   # Behavior
-  auto_install: :dev,      # :never | :dev | :always
+  auto_install: :dev_test, # :never | :dev | :dev_test | :always
   strict: false,           # or SNAKEBRIDGE_STRICT=1
   verbose: false,
   error_mode: :raw,        # :raw | :translated | :raise_translated
@@ -700,7 +707,21 @@ MyLib.func(args, __runtime__: [timeout: 60_000, pool: :my_pool])
 
 - Elixir ~> 1.14
 - Python 3.8+
-- Snakepit ~> 0.8.8
+- [uv](https://docs.astral.sh/uv/) - Fast Python package manager (required by snakepit)
+- Snakepit ~> 0.8.9
+
+### Installing uv
+
+```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Or via Homebrew
+brew install uv
+```
 
 ## License
 

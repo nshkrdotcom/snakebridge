@@ -56,7 +56,7 @@ defmodule SnakeBridge.Config do
 
   @type t :: %__MODULE__{
           libraries: [Library.t()],
-          auto_install: :never | :dev | :always,
+          auto_install: :never | :dev | :dev_test | :always,
           generated_dir: String.t(),
           metadata_dir: String.t(),
           helper_paths: [String.t()],
@@ -104,7 +104,7 @@ defmodule SnakeBridge.Config do
 
     %__MODULE__{
       libraries: parse_libraries(python_deps),
-      auto_install: Application.get_env(:snakebridge, :auto_install, :dev),
+      auto_install: Application.get_env(:snakebridge, :auto_install, :dev_test),
       generated_dir:
         Application.get_env(:snakebridge, :generated_dir, "lib/snakebridge_generated"),
       metadata_dir: Application.get_env(:snakebridge, :metadata_dir, ".snakebridge"),

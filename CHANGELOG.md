@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.10] - 2026-01-01
+
+### Changed
+- **auto_install default changed from `:dev` to `:dev_test`** - Python packages now auto-install during both `mix compile` and `mix test`, eliminating the need to run `mix snakebridge.setup` before running tests
+- Added `:dev_test` option for `auto_install` setting (matches both dev and test environments)
+- Environment variable `SNAKEBRIDGE_AUTO_INSTALL` now also accepts `dev_test` value
+- Updated all examples to use the new default
+
+### Fixed
+- First-run test experience - `mix test` now works out of the box without requiring `mix snakebridge.setup` first
+
 ## [0.7.9] - 2026-01-01
 
 ### Added

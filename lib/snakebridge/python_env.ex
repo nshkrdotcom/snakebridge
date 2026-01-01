@@ -106,6 +106,7 @@ defmodule SnakeBridge.PythonEnv do
       :never -> false
       :always -> true
       :dev -> Mix.env() == :dev
+      :dev_test -> Mix.env() in [:dev, :test]
     end
   end
 
@@ -114,8 +115,9 @@ defmodule SnakeBridge.PythonEnv do
       "never" -> :never
       "always" -> :always
       "dev" -> :dev
-      nil -> config.auto_install || :dev
-      _ -> config.auto_install || :dev
+      "dev_test" -> :dev_test
+      nil -> config.auto_install || :dev_test
+      _ -> config.auto_install || :dev_test
     end
   end
 

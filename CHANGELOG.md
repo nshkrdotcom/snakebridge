@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.8] - 2026-01-01
+
+### Changed
+- **Breaking**: Python library configuration now uses `python_deps` project key instead of dependency tuple options
+- This fixes the "unknown options: :libraries" error when installing from Hex
+- Configuration now mirrors how `deps/0` works with a parallel `python_deps/0` function
+- `generated_dir` and `metadata_dir` now read from Application config instead of dependency options
+
+### Migration
+
+Before (broken with Hex packages):
+```elixir
+def deps do
+  [{:snakebridge, "~> 0.7.7", libraries: [...]}]  # ERROR with Hex!
+end
+```
+
+After (works with all installation methods):
+```elixir
+def project do
+  [
+    app: :my_app,
+    deps: deps(),
+    python_deps: python_deps()
+  ]
+end
+
+defp deps do
+  [{:snakebridge, "~> 0.7.8"}]
+end
+
+defp python_deps do
+  [
+    {:numpy, "1.26.0"},
+    {:pandas, "2.0.0", include: ["DataFrame", "read_csv"]}
+  ]
+end
+```
+
 ## [0.7.7] - 2025-12-31
 
 ### Added
@@ -363,6 +402,9 @@ Numpy.compute(data, __runtime__: [timeout: 600_000])
 - Type system mapper
 - Basic code generation
 
+[0.7.8]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.7...v0.7.8
+[0.7.7]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.6...v0.7.7
+[0.7.6]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.5...v0.7.6
 [0.7.5]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.4...v0.7.5
 [0.7.4]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.2...v0.7.3

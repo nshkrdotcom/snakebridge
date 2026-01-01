@@ -8,6 +8,7 @@ defmodule ProofPipeline.MixProject do
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      python_deps: python_deps(),
       compilers: [:snakebridge] ++ Mix.compilers()
     ]
   end
@@ -20,18 +21,16 @@ defmodule ProofPipeline.MixProject do
 
   defp deps do
     [
-      {:snakebridge,
-       path: "../..",
-       libraries: [
-         sympy: [version: "~> 1.12", module_name: Sympy],
-         pylatexenc: [version: "~> 2.10", module_name: PyLatexEnc, submodules: true],
-         math_verify: [
-           version: "~> 0.1",
-           module_name: MathVerify,
-           pypi_package: "math-verify"
-         ]
-       ]},
+      {:snakebridge, path: "../.."},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false}
+    ]
+  end
+
+  defp python_deps do
+    [
+      {:sympy, "~> 1.12", module_name: Sympy},
+      {:pylatexenc, "~> 2.10", module_name: PyLatexEnc, submodules: true},
+      {:math_verify, "~> 0.1", module_name: MathVerify, pypi_package: "math-verify"}
     ]
   end
 end

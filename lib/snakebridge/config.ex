@@ -74,26 +74,40 @@ defmodule SnakeBridge.Config do
         }
 
   @doc """
-  Load config from mix.exs dependency options and Application env.
+  Load config from mix.exs project config and Application env.
+
+  Python dependencies are specified via the `python_deps` key in your mix.exs project:
+
+      def project do
+        [
+          app: :my_app,
+          version: "1.0.0",
+          deps: deps(),
+          python_deps: python_deps()
+        ]
+      end
+
+      defp python_deps do
+        [
+          {:numpy, "1.26.0"},
+          {:pandas, "2.0.0", include: ["DataFrame", "read_csv"]}
+        ]
+      end
+
+  This approach mirrors how `deps/0` works and is compatible with all installation
+  methods (Hex, path, git).
   """
   @spec load() :: t()
   def load do
-    deps = Mix.Project.config()[:deps] || []
-
-    opts =
-      deps
-      |> Enum.find_value([], fn
-        {:snakebridge, opts} when is_list(opts) -> opts
-        {:snakebridge, _req, opts} when is_list(opts) -> opts
-        _ -> nil
-      end)
-      |> List.wrap()
+    project_config = Mix.Project.config()
+    python_deps = project_config[:python_deps] || []
 
     %__MODULE__{
-      libraries: parse_libraries(Keyword.get(opts, :libraries, [])),
+      libraries: parse_libraries(python_deps),
       auto_install: Application.get_env(:snakebridge, :auto_install, :dev),
-      generated_dir: Keyword.get(opts, :generated_dir, "lib/snakebridge_generated"),
-      metadata_dir: Keyword.get(opts, :metadata_dir, ".snakebridge"),
+      generated_dir:
+        Application.get_env(:snakebridge, :generated_dir, "lib/snakebridge_generated"),
+      metadata_dir: Application.get_env(:snakebridge, :metadata_dir, ".snakebridge"),
       helper_paths: Application.get_env(:snakebridge, :helper_paths, ["priv/python/helpers"]),
       helper_pack_enabled: Application.get_env(:snakebridge, :helper_pack_enabled, true),
       helper_allowlist: Application.get_env(:snakebridge, :helper_allowlist, :all),
@@ -114,19 +128,29 @@ defmodule SnakeBridge.Config do
     Enum.map(libraries, &parse_library/1)
   end
 
+  # 3-tuple: {:numpy, "1.26.0", include: ["array"], submodules: true}
+  defp parse_library({name, version, opts})
+       when (is_binary(version) or version == :stdlib) and is_list(opts) do
+    build_library(name, version, opts)
+  end
+
+  # 2-tuple with version: {:numpy, "1.26.0"} or {:math, :stdlib}
   defp parse_library({name, version}) when is_binary(version) or version == :stdlib do
     build_library(name, version, [])
   end
 
+  # 2-tuple with opts (legacy): {:numpy, version: "1.26.0", include: [...]}
   defp parse_library({name, opts}) when is_list(opts) do
     version = Keyword.get(opts, :version)
     build_library(name, version, opts)
   end
 
+  # Atom only: :math (stdlib, no version)
   defp parse_library(name) when is_atom(name) do
     build_library(name, nil, [])
   end
 
+  # String only: "math" (stdlib, no version)
   defp parse_library(name) when is_binary(name) do
     build_library(String.to_atom(name), nil, [])
   end

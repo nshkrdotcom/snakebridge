@@ -8,6 +8,7 @@ defmodule StrictModeExample.MixProject do
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      python_deps: python_deps(),
       compilers: [:snakebridge] ++ Mix.compilers()
     ]
   end
@@ -20,16 +21,16 @@ defmodule StrictModeExample.MixProject do
 
   defp deps do
     [
-      {:snakebridge,
-       path: "../..",
-       libraries: [
-         strict_mode: [
-           version: :stdlib,
-           python_name: "strict_mode_example",
-           module_name: StrictModeExample,
-           include: ["add", "multiply"]
-         ]
-       ]}
+      {:snakebridge, path: "../.."}
+    ]
+  end
+
+  defp python_deps do
+    [
+      {:strict_mode, :stdlib,
+       python_name: "strict_mode_example",
+       module_name: StrictModeExample,
+       include: ["add", "multiply"]}
     ]
   end
 end

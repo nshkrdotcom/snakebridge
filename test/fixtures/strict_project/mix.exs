@@ -6,7 +6,8 @@ defmodule StrictProject.MixProject do
       app: :strict_project,
       version: "0.1.0",
       elixir: "~> 1.14",
-      deps: deps()
+      deps: deps(),
+      python_deps: python_deps()
     ]
   end
 
@@ -18,11 +19,13 @@ defmodule StrictProject.MixProject do
 
   defp deps do
     [
-      {:snakebridge,
-       path: "../../..",
-       libraries: [
-         numpy: [version: "~> 1.26", module_name: Numpy]
-       ]}
+      {:snakebridge, path: "../../.."}
+    ]
+  end
+
+  defp python_deps do
+    [
+      {:numpy, "~> 1.26", module_name: Numpy}
     ]
   end
 end

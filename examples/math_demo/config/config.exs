@@ -1,6 +1,6 @@
 import Config
 
-# SnakeBridge v3 reads libraries from mix.exs dependency options.
+# SnakeBridge reads Python libraries from the `python_deps` project key in mix.exs.
 # This file only configures compile-time behavior.
 path_sep =
   case :os.type() do

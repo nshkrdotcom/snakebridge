@@ -8,6 +8,7 @@ defmodule StreamingExample.MixProject do
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      python_deps: python_deps(),
       compilers: [:snakebridge] ++ Mix.compilers()
     ]
   end
@@ -20,17 +21,17 @@ defmodule StreamingExample.MixProject do
 
   defp deps do
     [
-      {:snakebridge,
-       path: "../..",
-       libraries: [
-         streaming: [
-           version: :stdlib,
-           python_name: "streaming_example",
-           module_name: Streaming,
-           streaming: ["generate"],
-           include: ["generate"]
-         ]
-       ]}
+      {:snakebridge, path: "../.."}
+    ]
+  end
+
+  defp python_deps do
+    [
+      {:streaming, :stdlib,
+       python_name: "streaming_example",
+       module_name: Streaming,
+       streaming: ["generate"],
+       include: ["generate"]}
     ]
   end
 end

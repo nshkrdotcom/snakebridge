@@ -8,8 +8,7 @@ defmodule MathDemo.MixProject do
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-
-      # Add SnakeBridge compiler - this is the key line!
+      python_deps: python_deps(),
       compilers: [:snakebridge] ++ Mix.compilers()
     ]
   end
@@ -22,10 +21,15 @@ defmodule MathDemo.MixProject do
 
   defp deps do
     [
-      # In a real project, you'd use: {:snakebridge, "~> 0.5.0", libraries: [...]}
-      # For this example, we reference the parent directory
-      {:snakebridge, path: "../..", libraries: [json: :stdlib, math: :stdlib]},
+      {:snakebridge, path: "../.."},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false}
+    ]
+  end
+
+  defp python_deps do
+    [
+      {:json, :stdlib},
+      {:math, :stdlib}
     ]
   end
 end

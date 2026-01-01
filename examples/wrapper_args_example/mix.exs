@@ -8,6 +8,7 @@ defmodule WrapperArgsExample.MixProject do
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      python_deps: python_deps(),
       compilers: [:snakebridge] ++ Mix.compilers()
     ]
   end
@@ -20,16 +21,16 @@ defmodule WrapperArgsExample.MixProject do
 
   defp deps do
     [
-      {:snakebridge,
-       path: "../..",
-       libraries: [
-         wrapper_args: [
-           version: :stdlib,
-           python_name: "wrapper_args_example",
-           module_name: WrapperArgs,
-           include: ["mean", "join_values"]
-         ]
-       ]}
+      {:snakebridge, path: "../.."}
+    ]
+  end
+
+  defp python_deps do
+    [
+      {:wrapper_args, :stdlib,
+       python_name: "wrapper_args_example",
+       module_name: WrapperArgs,
+       include: ["mean", "join_values"]}
     ]
   end
 end

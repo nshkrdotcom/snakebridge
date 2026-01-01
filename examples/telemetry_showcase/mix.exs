@@ -8,8 +8,7 @@ defmodule TelemetryShowcase.MixProject do
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-
-      # Add SnakeBridge compiler
+      python_deps: python_deps(),
       compilers: [:snakebridge] ++ Mix.compilers()
     ]
   end
@@ -22,10 +21,15 @@ defmodule TelemetryShowcase.MixProject do
 
   defp deps do
     [
-      # SnakeBridge with math library for demo (snakepit comes transitively)
-      {:snakebridge, path: "../..", libraries: [math: :stdlib, json: :stdlib]},
-      # Telemetry (transitive, but explicit for the showcase)
+      {:snakebridge, path: "../.."},
       {:telemetry, "~> 1.2"}
+    ]
+  end
+
+  defp python_deps do
+    [
+      {:math, :stdlib},
+      {:json, :stdlib}
     ]
   end
 end

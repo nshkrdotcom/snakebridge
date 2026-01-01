@@ -18,7 +18,7 @@ clean up on exit (prevents orphan warnings on subsequent runs).
 ## What Happens
 
 1. `mix compile` runs the SnakeBridge pre-pass.
-2. Libraries are read from `mix.exs` dependency options.
+2. Python libraries are read from the `python_deps` project key in `mix.exs`.
 3. SnakeBridge scans, introspects, and generates modules under `lib/snakebridge_generated/`.
 4. Generated source, manifest, and lock are committed to git.
 
@@ -64,7 +64,7 @@ iex> MathDemo.compute_sample()
 
 | File | Purpose |
 |------|---------|
-| `mix.exs` | Declares SnakeBridge libraries in deps |
+| `mix.exs` | Declares Python libraries via `python_deps` |
 | `config/config.exs` | Compile-time options only |
 | `lib/snakebridge_generated/*.ex` | Generated bindings (committed) |
 | `.snakebridge/manifest.json` | Symbol manifest (committed) |

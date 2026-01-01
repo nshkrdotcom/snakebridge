@@ -8,6 +8,7 @@ defmodule ClassResolutionExample.MixProject do
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      python_deps: python_deps(),
       compilers: [:snakebridge] ++ Mix.compilers()
     ]
   end
@@ -20,34 +21,19 @@ defmodule ClassResolutionExample.MixProject do
 
   defp deps do
     [
-      {:snakebridge, path: "../..", libraries: libraries()},
+      {:snakebridge, path: "../.."},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false}
     ]
   end
 
-  defp libraries do
+  defp python_deps do
     base = [
-      math: [
-        version: :stdlib,
-        python_name: "math",
-        module_name: Math
-      ],
-      pathlib: [
-        version: :stdlib,
-        python_name: "pathlib",
-        module_name: Pathlib
-      ]
+      {:math, :stdlib, python_name: "math", module_name: Math},
+      {:pathlib, :stdlib, python_name: "pathlib", module_name: Pathlib}
     ]
 
     if System.get_env("SNAKEBRIDGE_EXAMPLE_NUMPY") == "1" do
-      base ++
-        [
-          numpy: [
-            version: :stdlib,
-            python_name: "numpy",
-            module_name: Numpy
-          ]
-        ]
+      base ++ [{:numpy, :stdlib, python_name: "numpy", module_name: Numpy}]
     else
       base
     end

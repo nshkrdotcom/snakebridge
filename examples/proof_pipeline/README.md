@@ -56,7 +56,7 @@ iex> ProofPipeline.run(ProofPipeline.sample_input())
 
 | File | Purpose |
 |------|---------|
-| `mix.exs` | Declares SnakeBridge libraries in deps |
+| `mix.exs` | Declares Python libraries via `python_deps` |
 | `lib/proof_pipeline.ex` | Pipeline logic |
 | `lib/demo.ex` | Demo script |
 | `lib/snakebridge_generated/*.ex` | Generated bindings |

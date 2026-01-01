@@ -8,6 +8,7 @@ defmodule ClassConstructorExample.MixProject do
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      python_deps: python_deps(),
       compilers: [:snakebridge] ++ Mix.compilers()
     ]
   end
@@ -20,16 +21,16 @@ defmodule ClassConstructorExample.MixProject do
 
   defp deps do
     [
-      {:snakebridge,
-       path: "../..",
-       libraries: [
-         class_constructor: [
-           version: :stdlib,
-           python_name: "class_constructor_example",
-           module_name: ClassConstructor,
-           include: ["EmptyClass", "Point", "Config"]
-         ]
-       ]}
+      {:snakebridge, path: "../.."}
+    ]
+  end
+
+  defp python_deps do
+    [
+      {:class_constructor, :stdlib,
+       python_name: "class_constructor_example",
+       module_name: ClassConstructor,
+       include: ["EmptyClass", "Point", "Config"]}
     ]
   end
 end

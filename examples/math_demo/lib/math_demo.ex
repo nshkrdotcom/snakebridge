@@ -3,7 +3,7 @@ defmodule MathDemo do
   Demonstrates SnakeBridge v3 discovery APIs and generated layout.
 
   This example shows how to:
-  1. Declare libraries in mix.exs dependency options
+  1. Declare Python libraries via `python_deps` in mix.exs
   2. Inspect generated modules under lib/snakebridge_generated
   3. Use discovery helpers like __functions__/0, __classes__/0, and __search__/1
   4. Execute runtime calls via Snakepit-backed functions

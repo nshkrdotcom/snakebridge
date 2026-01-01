@@ -11,19 +11,40 @@ Compile-time generator for type-safe Elixir bindings to Python libraries.
 
 ## Installation
 
-Add to your `mix.exs`:
+Add SnakeBridge to your dependencies and configure Python libraries in your `mix.exs`:
 
 ```elixir
-def deps do
-  [
-    {:snakebridge, "~> 0.7.7",
-      libraries: [
-        {:numpy, "1.26.0"},
-        {:pandas, version: "2.0.0", include: ["DataFrame", "read_csv"]}
-      ]}
-  ]
+defmodule MyApp.MixProject do
+  use Mix.Project
+
+  def project do
+    [
+      app: :my_app,
+      version: "1.0.0",
+      elixir: "~> 1.14",
+      deps: deps(),
+      python_deps: python_deps()  # Python libraries go here
+    ]
+  end
+
+  defp deps do
+    [
+      {:snakebridge, "~> 0.7.8"}
+    ]
+  end
+
+  # Define Python dependencies just like Elixir deps
+  defp python_deps do
+    [
+      {:numpy, "1.26.0"},
+      {:pandas, "2.0.0", include: ["DataFrame", "read_csv"]}
+    ]
+  end
 end
 ```
+
+The `python_deps` function mirrors how `deps` works - a list of tuples with the library name,
+version, and optional configuration.
 
 ## Quick Start
 
@@ -394,31 +415,49 @@ config :snakebridge,
 
 ## Configuration
 
+### Python Dependencies (mix.exs)
+
 ```elixir
-# mix.exs
-{:snakebridge, "~> 0.7.7",
-  libraries: [
+def project do
+  [
+    app: :my_app,
+    deps: deps(),
+    python_deps: python_deps()
+  ]
+end
+
+defp python_deps do
+  [
     # Simple: name and version
     {:numpy, "1.26.0"},
 
-    # Full options
-    {:pandas,
-      version: "2.0.0",
+    # With options (3-tuple)
+    {:pandas, "2.0.0",
       pypi_package: "pandas",
       extras: ["sql", "excel"],      # pip extras
       include: ["DataFrame", "read_csv", "read_json"],
       exclude: ["testing"],
       streaming: ["read_csv_chunked"],
-      submodules: true}
-  ],
-  generated_dir: "lib/python_bindings",
-  metadata_dir: ".snakebridge",
-  scan_paths: ["lib"],               # Paths to scan for usage
-  scan_exclude: ["lib/generated"]    # Patterns to exclude
-}
+      submodules: true},
 
-# config/config.exs
+    # Standard library (no version needed)
+    {:json, :stdlib},
+    {:math, :stdlib}
+  ]
+end
+```
+
+### Application Config (config/config.exs)
+
+```elixir
 config :snakebridge,
+  # Paths
+  generated_dir: "lib/snakebridge_generated",
+  metadata_dir: ".snakebridge",
+  scan_paths: ["lib"],
+  scan_exclude: ["lib/generated"],
+
+  # Behavior
   auto_install: :dev,      # :never | :dev | :always
   strict: false,           # or SNAKEBRIDGE_STRICT=1
   verbose: false,

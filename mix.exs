@@ -42,8 +42,8 @@ defmodule SnakeBridge.MixProject do
   defp deps do
     [
       # Core - Python bridge
-      # {:snakepit, "~> 0.9.0"},
-      {:snakepit, path: "../snakepit"},
+      {:snakepit, "~> 0.9.0"},
+
       # JSON encoding
       {:jason, "~> 1.4"},
       # Telemetry

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.0] - 2026-01-01
+## [0.8.0] - 2026-01-02
 
 ### Added
 - `SnakeBridge.run_as_script/2` wrapper with safe defaults for Snakepit 0.9.0 exit semantics.
@@ -20,11 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Clarified script shutdown behavior to avoid unintended VM stops in embedded usage.
+- Examples runner now starts applications during `mix run` so session tracking is available.
 
 ### Internal
 - Added `supertester` 0.4.0 for robust test infrastructure.
 - Refactored flaky `Process.sleep` calls to use polling-based `eventually/2` helper.
 - Test files now use proper process monitoring and message passing for synchronization.
+- Split runtime responsibilities into Runtime.Payload, Runtime.SessionResolver, and Runtime.Streamer.
+- Extracted compiler flow into Compiler.Pipeline and Compiler.IntrospectionRunner; Mix task now delegates.
+- Split generator rendering into Generator.Function and Generator.Class with the Generator module coordinating output.
 
 ## [0.7.10] - 2026-01-01
 

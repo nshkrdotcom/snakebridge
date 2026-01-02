@@ -7,7 +7,7 @@ defmodule Demo do
   - `Dynamic.call/4` vs `SnakeBridge.method/4`
   - `Dynamic.get_attr/3` vs `SnakeBridge.attr/3`
 
-  Run with: mix run -e Demo.run
+  Run with: mix run --no-start -e Demo.run
   """
 
   alias SnakeBridge.Dynamic

@@ -7,7 +7,7 @@ defmodule Demo do
   - Auto-sessions (NEW in v0.8.4)
   - Session cleanup and isolation
 
-  Run with: mix run -e Demo.run
+  Run with: mix run --no-start -e Demo.run
   """
 
   alias SnakeBridge.Dynamic

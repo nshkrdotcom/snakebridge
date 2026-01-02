@@ -2,7 +2,7 @@ defmodule Demo do
   @moduledoc """
   SnakeBridge Error Translation Demo - Shows how ML errors get translated.
 
-  Run with: mix run -e Demo.run
+  Run with: mix run --no-start -e Demo.run
 
   This demo showcases SnakeBridge's error translation capabilities:
     1. Shape mismatch errors (tensor operations)

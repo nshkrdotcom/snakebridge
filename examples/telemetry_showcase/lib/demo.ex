@@ -8,7 +8,7 @@ defmodule Demo do
   3. Multiple concurrent calls showing event interleaving
   4. Aggregate metrics at the end
 
-  Run with: mix run -e Demo.run
+  Run with: mix run --no-start -e Demo.run
   """
 
   alias TelemetryShowcase.TelemetryHandler

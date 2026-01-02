@@ -191,7 +191,7 @@ run_example() {
     echo -e "${YELLOW}Running demo...${NC}"
     echo ""
 
-    if mix run -e "Demo.run" 2>&1; then
+    if mix run --no-start -e "Demo.run" 2>&1; then
         local example_end=$(date +%s)
         local example_duration=$((example_end - example_start))
         EXAMPLE_RESULTS+=("0")

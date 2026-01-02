@@ -20,7 +20,7 @@ defmodule Demo do
   - `SnakeBridge.current_session/0` - Get current session ID
   - `SnakeBridge.release_auto_session/0` - Clean up session
 
-  Run with: mix run -e Demo.run
+  Run with: mix run --no-start -e Demo.run
   """
 
   alias SnakeBridge.Examples

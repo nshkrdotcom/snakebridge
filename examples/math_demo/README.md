@@ -9,7 +9,7 @@ and live runtime calls via Snakepit.
 cd examples/math_demo
 mix deps.get
 mix compile
-mix run -e Demo.run
+mix run --no-start -e Demo.run
 ```
 
 This demo wraps execution in `SnakeBridge.run_as_script/2` to ensure Python workers

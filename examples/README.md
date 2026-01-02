@@ -22,15 +22,15 @@ Run all examples:
 Or run individual examples:
 
 ```bash
-cd basic && mix run -e Demo.run
-cd math_demo && mix run -e Demo.run
-cd wrapper_args_example && mix run -e Demo.run
-cd signature_showcase && mix run -e Demo.run
-cd class_constructor_example && mix run -e Demo.run
-cd streaming_example && mix run -e Demo.run
-cd strict_mode_example && mix run -e Demo.run
-cd python_idioms_example && mix run -e Demo.run
-cd universal_ffi_example && mix run -e Demo.run
+cd basic && mix run --no-start -e Demo.run
+cd math_demo && mix run --no-start -e Demo.run
+cd wrapper_args_example && mix run --no-start -e Demo.run
+cd signature_showcase && mix run --no-start -e Demo.run
+cd class_constructor_example && mix run --no-start -e Demo.run
+cd streaming_example && mix run --no-start -e Demo.run
+cd strict_mode_example && mix run --no-start -e Demo.run
+cd python_idioms_example && mix run --no-start -e Demo.run
+cd universal_ffi_example && mix run --no-start -e Demo.run
 # etc.
 ```
 

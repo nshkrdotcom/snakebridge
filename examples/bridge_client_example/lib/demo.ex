@@ -1,6 +1,6 @@
 defmodule Demo do
   @moduledoc """
-  Run with: mix run -e Demo.run
+  Run with: mix run --no-start -e Demo.run
   """
 
   alias SnakeBridge.Examples

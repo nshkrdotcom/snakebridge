@@ -14,7 +14,7 @@ The demo runs the live pipeline and requires Python libraries installed.
 cd examples/proof_pipeline
 mix deps.get
 mix compile
-mix run -e Demo.run
+mix run --no-start -e Demo.run
 ```
 
 The first compile auto-installs the Python runtime and packages (managed via uv).

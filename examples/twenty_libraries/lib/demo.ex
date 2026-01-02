@@ -2,7 +2,7 @@ defmodule Demo do
   @moduledoc """
   Demonstrates calling 20 different Python standard libraries over gRPC.
 
-  Run with: mix run -e Demo.run
+  Run with: mix run --no-start -e Demo.run
   """
 
   alias SnakeBridge.Examples

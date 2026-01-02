@@ -152,7 +152,23 @@ defmodule SnakeBridge do
   """
   @spec run_as_script((-> any()), keyword()) :: any() | {:error, term()}
   def run_as_script(fun, opts \\ []) when is_function(fun, 0) do
-    Snakepit.run_as_script(fun, ScriptOptions.resolve(opts))
+    Snakepit.run_as_script(
+      fn ->
+        ensure_started!()
+        fun.()
+      end,
+      ScriptOptions.resolve(opts)
+    )
+  end
+
+  defp ensure_started! do
+    case Application.ensure_all_started(:snakebridge) do
+      {:ok, _} ->
+        :ok
+
+      {:error, {app, reason}} ->
+        raise "Failed to start #{app}: #{inspect(reason)}"
+    end
   end
 
   # ============================================================================

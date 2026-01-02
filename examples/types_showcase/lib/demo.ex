@@ -9,7 +9,7 @@ defmodule Demo do
     - The value returned to Elixir
     - The Elixir type of the result
 
-  Run with: mix run -e Demo.run
+  Run with: mix run --no-start -e Demo.run
   """
 
   alias SnakeBridge.Examples

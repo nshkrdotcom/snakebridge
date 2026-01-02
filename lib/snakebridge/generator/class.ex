@@ -1,0 +1,325 @@
+defmodule SnakeBridge.Generator.Class do
+  @moduledoc false
+
+  alias SnakeBridge.Generator
+
+  @spec render_class(map(), SnakeBridge.Config.Library.t()) :: String.t()
+  def render_class(class_info, library) do
+    class_name = Generator.class_name(class_info)
+    python_module = Generator.class_python_module(class_info, library)
+    module_name = Generator.class_module_name(class_info, library)
+    relative_module = Generator.relative_module_name(library, module_name)
+
+    methods = class_info["methods"] || []
+    attrs = class_info["attributes"] || []
+
+    init_method = Enum.find(methods, fn method -> method["name"] == "__init__" end)
+    init_params = if init_method, do: init_method["parameters"] || [], else: []
+    plan = Generator.build_params(init_params, init_method || %{})
+    param_names = Enum.map(plan.required, & &1.name)
+    args_name = Generator.extra_args_name(param_names)
+
+    constructor =
+      if plan.is_variadic do
+        render_variadic_constructor(plan, args_name)
+      else
+        render_constructor(plan, args_name)
+      end
+
+    methods_source =
+      methods
+      |> Enum.reject(fn method -> method["name"] == "__init__" end)
+      |> Enum.map_join("\n\n", &render_method/1)
+
+    attrs_source =
+      attrs
+      |> Enum.map_join("\n\n", &render_attribute/1)
+
+    """
+      defmodule #{relative_module} do
+        def __snakebridge_python_name__, do: "#{python_module}"
+        def __snakebridge_python_class__, do: "#{class_name}"
+        def __snakebridge_library__, do: "#{library.python_name}"
+        @opaque t :: SnakeBridge.Ref.t()
+
+    #{Generator.indent(constructor, 4)}
+
+    #{Generator.indent(methods_source, 4)}
+
+    #{Generator.indent(attrs_source, 4)}
+      end
+    """
+  end
+
+  defp render_constructor(plan, args_name) do
+    param_names = Enum.map(plan.required, & &1.name)
+    args = Generator.args_expr(param_names, plan.has_args, args_name)
+
+    param_list = Generator.param_list(param_names, plan.has_args, plan.has_opts, args_name)
+
+    call = "SnakeBridge.Runtime.call_class(__MODULE__, :__init__, #{args}, opts)"
+
+    spec_args =
+      plan.required
+      |> Enum.map(&Generator.param_type_spec/1)
+      |> Generator.maybe_add_args_spec(plan.has_args)
+      |> Kernel.++(["keyword()"])
+
+    spec_args_str = Enum.join(spec_args, ", ")
+    normalize = Generator.normalize_args_line(plan.has_args, args_name, 10)
+    kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 10)
+
+    """
+        @spec new(#{spec_args_str}) :: {:ok, SnakeBridge.Ref.t()} | {:error, Snakepit.Error.t()}
+        def new(#{param_list}) do
+    #{normalize}#{kw_validation}          #{call}
+        end
+    """
+  end
+
+  defp render_method(%{"name" => "__init__"}), do: ""
+  defp render_method(%{name: "__init__"}), do: ""
+
+  defp render_method(info) do
+    python_name = info["python_name"] || info["name"] || info[:name] || ""
+    name_info = resolve_method_name(info, python_name)
+    do_render_method(name_info, info)
+  end
+
+  defp resolve_method_name(info, python_name) do
+    case info["elixir_name"] || info[:elixir_name] do
+      elixir_name when is_binary(elixir_name) -> {elixir_name, python_name}
+      _ -> Generator.sanitize_method_name(python_name)
+    end
+  end
+
+  defp do_render_method(nil, _info), do: ""
+
+  defp do_render_method({name, python_name}, info) do
+    params = info["parameters"] || []
+    plan = Generator.build_params(params, info)
+    return_type = info["return_type"] || %{"type" => "any"}
+    render_method_body(name, python_name, plan, return_type)
+  end
+
+  defp render_method_body(name, python_name, %{is_variadic: true}, return_type) do
+    render_variadic_method(name, python_name, return_type)
+  end
+
+  defp render_method_body(name, python_name, plan, return_type) do
+    param_names = Enum.map(plan.required, & &1.name)
+    args_name = Generator.extra_args_name(param_names)
+    spec = Generator.method_spec(name, plan.required, plan.has_args, return_type)
+    call = Generator.runtime_method_call(name, python_name, param_names, plan.has_args, args_name)
+    normalize = Generator.normalize_args_line(plan.has_args, args_name, 10)
+    kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 10)
+
+    """
+        #{spec}
+        def #{name}(ref#{Generator.method_param_suffix(param_names, plan.has_args, plan.has_opts, args_name)}) do
+    #{normalize}#{kw_validation}          #{call}
+        end
+    """
+  end
+
+  defp render_attribute(attr) do
+    """
+        @spec #{attr}(SnakeBridge.Ref.t()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+        def #{attr}(ref) do
+          SnakeBridge.Runtime.get_attr(ref, :#{attr})
+        end
+    """
+  end
+
+  defp render_variadic_constructor(_plan, _args_name) do
+    max_arity = Generator.variadic_max_arity()
+    specs = variadic_specs("new", max_arity, "SnakeBridge.Ref.t()")
+    clauses = variadic_constructor_clauses(max_arity)
+
+    """
+        #{specs}
+    #{Generator.indent(clauses, 8)}
+    """
+  end
+
+  defp render_variadic_method(name, python_name, return_type) do
+    max_arity = Generator.variadic_max_arity()
+    return_spec = Generator.type_spec_string(return_type)
+    specs = variadic_method_specs(name, max_arity, return_spec)
+    clauses = variadic_method_clauses(name, python_name, max_arity)
+
+    """
+        #{specs}
+    #{Generator.indent(clauses, 8)}
+    """
+  end
+
+  defp variadic_specs(name, max_arity, return_spec) do
+    Enum.map_join(0..max_arity, "\n", fn arity ->
+      args = variadic_term_args(arity)
+      variadic_spec_pair(name, args, return_spec)
+    end)
+  end
+
+  defp variadic_term_args(0), do: []
+  defp variadic_term_args(arity), do: Enum.map(1..arity, fn _ -> "term()" end)
+
+  defp variadic_spec_pair(name, args, return_spec) do
+    spec_no_opts =
+      "@spec #{name}(#{Enum.join(args, ", ")}) :: {:ok, #{return_spec}} | {:error, Snakepit.Error.t()}"
+
+    spec_with_opts =
+      "@spec #{name}(#{Enum.join(args ++ ["keyword()"], ", ")}) :: {:ok, #{return_spec}} | {:error, Snakepit.Error.t()}"
+
+    spec_no_opts <> "\n" <> spec_with_opts
+  end
+
+  defp variadic_method_specs(name, max_arity, return_spec) do
+    Enum.map_join(0..max_arity, "\n", fn arity ->
+      args = ["SnakeBridge.Ref.t()" | variadic_term_args(arity)]
+      variadic_spec_pair(name, args, return_spec)
+    end)
+  end
+
+  defp variadic_constructor_clauses(max_arity) do
+    Enum.map_join(0..max_arity, "\n\n", fn arity ->
+      args = variadic_args(arity)
+      args_list = variadic_args_list(args)
+      build_variadic_constructor_clause(arity, args, args_list)
+    end)
+  end
+
+  defp build_variadic_constructor_clause(0, args, args_list) do
+    no_args_clause =
+      variadic_constructor_no_opts_clause(variadic_param_list(args), args_list)
+
+    opts_clause =
+      variadic_constructor_opts_clause(
+        variadic_param_list_with_opts(args),
+        args_list
+      )
+
+    no_args_clause <> "\n\n" <> opts_clause
+  end
+
+  defp build_variadic_constructor_clause(_arity, args, args_list) do
+    positional_clause =
+      variadic_constructor_no_opts_clause(variadic_param_list(args), args_list)
+
+    opts_clause =
+      variadic_constructor_opts_clause(
+        variadic_param_list_with_opts(args),
+        args_list
+      )
+
+    positional_clause <> "\n\n" <> opts_clause
+  end
+
+  defp variadic_method_clauses(name, python_name, max_arity) do
+    Enum.map_join(0..max_arity, "\n\n", fn arity ->
+      args = variadic_args(arity)
+      args_list = variadic_args_list(args)
+      build_variadic_method_clause(name, python_name, arity, args, args_list)
+    end)
+  end
+
+  defp build_variadic_method_clause(name, python_name, 0, args, args_list) do
+    no_args_clause =
+      variadic_method_no_opts_clause(
+        name,
+        python_name,
+        variadic_method_param_list(args),
+        args_list
+      )
+
+    opts_clause =
+      variadic_method_opts_clause(
+        name,
+        python_name,
+        variadic_method_param_list_with_opts(args),
+        args_list
+      )
+
+    no_args_clause <> "\n\n" <> opts_clause
+  end
+
+  defp build_variadic_method_clause(name, python_name, _arity, args, args_list) do
+    positional_clause =
+      variadic_method_no_opts_clause(
+        name,
+        python_name,
+        variadic_method_param_list(args),
+        args_list
+      )
+
+    opts_clause =
+      variadic_method_opts_clause(
+        name,
+        python_name,
+        variadic_method_param_list_with_opts(args),
+        args_list
+      )
+
+    positional_clause <> "\n\n" <> opts_clause
+  end
+
+  defp variadic_constructor_no_opts_clause(params, args_list) do
+    call = "SnakeBridge.Runtime.call_class(__MODULE__, :__init__, #{args_list}, [])"
+
+    """
+    def new(#{params}) do
+      #{call}
+    end
+    """
+  end
+
+  defp variadic_constructor_opts_clause(params, args_list) do
+    call = "SnakeBridge.Runtime.call_class(__MODULE__, :__init__, #{args_list}, opts)"
+
+    """
+    def new(#{params}) when #{Generator.opts_guard()} do
+      #{call}
+    end
+    """
+  end
+
+  defp variadic_method_no_opts_clause(name, python_name, params, args_list) do
+    call =
+      "SnakeBridge.Runtime.call_method(ref, #{Generator.function_ref(name, python_name)}, #{args_list}, [])"
+
+    """
+    def #{name}(#{params}) do
+      #{call}
+    end
+    """
+  end
+
+  defp variadic_method_opts_clause(name, python_name, params, args_list) do
+    call =
+      "SnakeBridge.Runtime.call_method(ref, #{Generator.function_ref(name, python_name)}, #{args_list}, opts)"
+
+    """
+    def #{name}(#{params}) when #{Generator.opts_guard()} do
+      #{call}
+    end
+    """
+  end
+
+  defp variadic_args(arity) when is_integer(arity) and arity > 0 do
+    Enum.map(1..arity, &"arg#{&1}")
+  end
+
+  defp variadic_args(_arity), do: []
+
+  defp variadic_args_list([]), do: "[]"
+  defp variadic_args_list(args), do: "[" <> Enum.join(args, ", ") <> "]"
+
+  defp variadic_param_list([]), do: ""
+  defp variadic_param_list(args), do: Enum.join(args, ", ")
+
+  defp variadic_param_list_with_opts([]), do: "opts"
+  defp variadic_param_list_with_opts(args), do: Enum.join(args ++ ["opts"], ", ")
+
+  defp variadic_method_param_list(args), do: Enum.join(["ref" | args], ", ")
+  defp variadic_method_param_list_with_opts(args), do: Enum.join(["ref" | args] ++ ["opts"], ", ")
+end

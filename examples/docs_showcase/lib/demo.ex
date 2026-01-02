@@ -2,7 +2,7 @@ defmodule Demo do
   @moduledoc """
   Documentation Showcase Demo - Shows how Python docstrings are parsed and rendered.
 
-  Run with: mix run -e Demo.run
+  Run with: mix run --no-start -e Demo.run
   """
 
   alias SnakeBridge.Docs.RstParser

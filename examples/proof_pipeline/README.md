@@ -18,8 +18,10 @@ mix run -e Demo.run
 ```
 
 The first compile auto-installs the Python runtime and packages (managed via uv).
-This demo wraps execution in `Snakepit.run_as_script/2` so Python workers are
-cleaned up when the script exits.
+This demo wraps execution in `SnakeBridge.run_as_script/2` so Python workers are
+cleaned up when the script exits. Defaults are `exit_mode: :auto` and
+`stop_mode: :if_started`; set `SNAKEPIT_SCRIPT_EXIT` to override exit behavior
+when no explicit options are provided.
 
 ## What It Does
 

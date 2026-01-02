@@ -109,6 +109,7 @@ defmodule SnakeBridge.Generator do
     """
     |> Code.format_string!()
     |> IO.iodata_to_binary()
+    |> ensure_final_newline()
   end
 
   @spec generate_library(SnakeBridge.Config.Library.t(), list(), list(), SnakeBridge.Config.t()) ::
@@ -163,6 +164,15 @@ defmodule SnakeBridge.Generator do
       exception ->
         File.rm(temp_path)
         reraise exception, __STACKTRACE__
+    end
+  end
+
+  @doc false
+  def ensure_final_newline(content) when is_binary(content) do
+    if String.ends_with?(content, "\n") do
+      content
+    else
+      content <> "\n"
     end
   end
 

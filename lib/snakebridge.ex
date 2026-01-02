@@ -134,7 +134,26 @@ defmodule SnakeBridge do
 
   require SnakeBridge.WithContext
 
-  alias SnakeBridge.{Bytes, Dynamic, Ref, Runtime}
+  alias SnakeBridge.{Bytes, Dynamic, Ref, Runtime, ScriptOptions}
+
+  # ============================================================================
+  # Script Execution
+  # ============================================================================
+
+  @doc """
+  Runs a function as a script with Snakepit lifecycle management.
+
+  Defaults:
+  - `exit_mode: :auto` (only when no exit options/env vars are set)
+  - `stop_mode: :if_started`
+
+  `exit_mode` can also be controlled via `SNAKEPIT_SCRIPT_EXIT` when no
+  exit options are provided.
+  """
+  @spec run_as_script((-> any()), keyword()) :: any() | {:error, term()}
+  def run_as_script(fun, opts \\ []) when is_function(fun, 0) do
+    Snakepit.run_as_script(fun, ScriptOptions.resolve(opts))
+  end
 
   # ============================================================================
   # Universal FFI API

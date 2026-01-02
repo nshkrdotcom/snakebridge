@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.7.10"
+  @version "0.8.0"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -42,7 +42,8 @@ defmodule SnakeBridge.MixProject do
   defp deps do
     [
       # Core - Python bridge
-      {:snakepit, "~> 0.8.9"},
+      # {:snakepit, "~> 0.9.0"},
+      {:snakepit, path: "../snakepit"},
       # JSON encoding
       {:jason, "~> 1.4"},
       # Telemetry
@@ -53,7 +54,8 @@ defmodule SnakeBridge.MixProject do
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:mox, "~> 1.1", only: :test}
+      {:mox, "~> 1.1", only: :test},
+      {:supertester, "~> 0.4.0", only: :test}
     ]
   end
 

@@ -12,8 +12,10 @@ mix compile
 mix run -e Demo.run
 ```
 
-This demo wraps execution in `Snakepit.run_as_script/2` to ensure Python workers
-clean up on exit (prevents orphan warnings on subsequent runs).
+This demo wraps execution in `SnakeBridge.run_as_script/2` to ensure Python workers
+clean up on exit (prevents orphan warnings on subsequent runs). Defaults are
+`exit_mode: :auto` and `stop_mode: :if_started`; set `SNAKEPIT_SCRIPT_EXIT` to
+override exit behavior when no explicit options are provided.
 
 ## What Happens
 

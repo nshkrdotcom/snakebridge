@@ -32,12 +32,12 @@ from typing import Any, Dict, List, Tuple, Optional
 
 # Import the SnakeBridge type encoding system
 try:
-    from snakebridge_types import decode, encode, encode_error
+    from snakebridge_types import decode, encode, encode_error, _is_generator_or_iterator
 except ImportError:
     # If running as a script, try relative import
     import os
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from snakebridge_types import decode, encode, encode_error
+    from snakebridge_types import decode, encode, encode_error, _is_generator_or_iterator
 
 try:
     from snakepit_bridge import telemetry as snakepit_telemetry
@@ -538,6 +538,35 @@ def encode_result(result: Any, session_id: str, python_module: str, library: str
     return encoded
 
 
+def _is_streamable(value: Any) -> bool:
+    if _is_generator_or_iterator(value):
+        return True
+    if hasattr(value, "__iter__"):
+        if isinstance(value, (str, bytes, bytearray, list, tuple, dict, set, frozenset)):
+            return False
+        # Prefer regular refs for context managers (e.g. file objects)
+        if hasattr(value, "__enter__") and hasattr(value, "__exit__"):
+            return False
+        return True
+    return False
+
+
+def _dynamic_stream_iterator(
+    result: Any,
+    session_id: str,
+    python_module: str,
+    library: str,
+):
+    if _is_streamable(result):
+        iterator = result
+        if not hasattr(iterator, "__next__") and hasattr(iterator, "__iter__"):
+            iterator = iter(iterator)
+        for item in iterator:
+            yield encode_result(item, session_id, python_module, library)
+    else:
+        yield encode_result(result, session_id, python_module, library)
+
+
 def _is_json_safe(value: Any) -> bool:
     """
     Verify a value is safe to serialize as JSON.
@@ -888,7 +917,7 @@ class SnakeBridgeAdapter:
         function = arguments.get("function")
         args = arguments.get("args") or []
         kwargs = arguments.get("kwargs") or {}
-        if call_type == "dynamic" and not python_module:
+        if call_type in ("dynamic", "dynamic_stream") and not python_module:
             python_module = module_path
         library = arguments.get("library") or (python_module.split(".")[0] if python_module else None)
         if call_type not in ("helper", "stream_next") and not python_module:
@@ -925,6 +954,15 @@ class SnakeBridgeAdapter:
                     return encode_result(item, session_id, python_module, library)
                 except StopIteration:
                     return {"__type__": "stop_iteration"}
+
+            if call_type == "dynamic_stream":
+                module_path = arguments.get("module_path") or python_module
+                if not module_path:
+                    raise ValueError("snakebridge.call requires module_path for dynamic calls")
+                mod = _import_module(module_path)
+                func = getattr(mod, function)
+                result = func(*decoded_args, **decoded_kwargs)
+                return _dynamic_stream_iterator(result, session_id, module_path, library)
 
             if call_type == "dynamic":
                 module_path = arguments.get("module_path") or python_module

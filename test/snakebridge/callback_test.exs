@@ -52,11 +52,18 @@ defmodule SnakeBridge.CallbackTest do
             flunk("callback id not received")
         end
 
+      ref = Process.monitor(owner)
       Process.exit(owner, :kill)
-      Process.sleep(100)
+      assert_receive {:DOWN, ^ref, :process, ^owner, :killed}, 1000
 
-      assert {:error, :callback_not_found} =
-               SnakeBridge.CallbackRegistry.invoke(callback_id, [5])
+      # Wait for callback cleanup using eventually
+      assert SnakeBridge.TestHelpers.eventually(
+               fn ->
+                 {:error, :callback_not_found} ==
+                   SnakeBridge.CallbackRegistry.invoke(callback_id, [5])
+               end,
+               timeout: 1000
+             )
     end
   end
 end

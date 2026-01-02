@@ -226,7 +226,7 @@ This is the canonical reference for Universal FFI usage - the "escape hatch" for
 
 - Elixir 1.14+
 - Python 3.10+
-- Snakepit 0.8.0+
+- Snakepit 0.9.0+
 
 ## License
 

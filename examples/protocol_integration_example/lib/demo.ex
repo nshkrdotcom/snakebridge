@@ -8,7 +8,7 @@ defmodule Demo do
   alias SnakeBridge.SessionContext
 
   def run do
-    Snakepit.run_as_script(fn ->
+    SnakeBridge.run_as_script(fn ->
       Examples.reset_failures()
 
       IO.puts("Protocol Integration Example")

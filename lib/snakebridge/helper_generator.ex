@@ -21,6 +21,7 @@ defmodule SnakeBridge.HelperGenerator do
     """
     |> Code.format_string!()
     |> IO.iodata_to_binary()
+    |> SnakeBridge.Generator.ensure_final_newline()
   end
 
   @spec generate_helpers(list(), SnakeBridge.Config.t()) :: :ok

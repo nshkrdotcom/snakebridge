@@ -21,8 +21,6 @@ defmodule SnakeBridge.Generator.WriteIfChangedTest do
 
       # Write initial content
       File.write!(path, content)
-      # Small delay to ensure mtime would change if rewritten
-      Process.sleep(10)
 
       result = Generator.write_if_changed(path, content)
 

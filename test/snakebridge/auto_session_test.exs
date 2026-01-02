@@ -195,8 +195,9 @@ defmodule SnakeBridge.AutoSessionTest do
       # Ensure process dictionary is cleared
       assert Process.get(:snakebridge_auto_session) == nil
 
-      # Wait 1ms to ensure different timestamp
-      Process.sleep(1)
+      # Minimal delay to ensure timestamp differs for new session ID
+      # This is required because session IDs include monotonic time
+      :timer.sleep(1)
 
       {:ok, _} = SnakeBridge.Runtime.call_dynamic("math", "sqrt", [9])
       new = SnakeBridge.Runtime.current_session()

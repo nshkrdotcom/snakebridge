@@ -118,9 +118,12 @@ defmodule Mix.Tasks.Snakebridge.VerifyTest do
 
       File.write!(@lock_file, Jason.encode!(lock))
 
-      assert_raise Mix.Error, fn ->
-        Verify.run(["--strict"])
-      end
+      _output =
+        capture_io(:stderr, fn ->
+          assert_raise Mix.Error, fn ->
+            Verify.run(["--strict"])
+          end
+        end)
     end
 
     test "prints hardware info with --verbose flag" do

@@ -18,7 +18,7 @@ defmodule Demo do
     # Start the telemetry handler agent
     {:ok, _pid} = TelemetryHandler.start_link()
 
-    Snakepit.run_as_script(fn ->
+    SnakeBridge.run_as_script(fn ->
       Examples.reset_failures()
 
       # Attach telemetry handlers AFTER Snakepit startup.

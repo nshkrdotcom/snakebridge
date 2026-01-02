@@ -31,7 +31,7 @@ defmodule MyApp.MixProject do
 
   defp deps do
     [
-      {:snakebridge, "~> 0.7.10"}
+      {:snakebridge, "~> 0.8.0"}
     ]
   end
 
@@ -395,6 +395,10 @@ Compile events:
 Runtime events (forwarded from Snakepit):
 - `[:snakebridge, :runtime, :call, :start|:stop|:exception]`
 
+Script shutdown events (forwarded from Snakepit when attached):
+- `[:snakebridge, :script, :shutdown, :start|:stop|:cleanup|:exit]`
+Enable via `SnakeBridge.Telemetry.ScriptShutdownForwarder.attach()`.
+
 Telemetry metadata schema:
 - Compile events include `library`, `phase`, and `details`.
 - Runtime events include `library`, `function`, and `call_type`.
@@ -553,6 +557,25 @@ cd examples/strict_mode_example && mix run -e Demo.run
 cd examples/universal_ffi_example && mix run -e Demo.run  # Universal FFI showcase
 ```
 
+## Script Execution
+
+For scripts and Mix tasks, use `SnakeBridge.run_as_script/2` for safe defaults:
+
+```elixir
+SnakeBridge.run_as_script(fn ->
+  {:ok, result} = SnakeBridge.call("math", "sqrt", [16])
+  IO.inspect(result)
+end)
+```
+
+Defaults are `exit_mode: :auto` and `stop_mode: :if_started`. For embedded usage,
+use `exit_mode: :none` and `stop_mode: :never` to avoid stopping the host VM.
+
+You can also set `SNAKEPIT_SCRIPT_EXIT` to `none|halt|stop|auto` when no explicit
+options are provided. `SNAKEPIT_SCRIPT_HALT` is legacy and deprecated.
+
+Warning: `exit_mode: :halt` or `:stop` terminates the entire VM.
+
 ## Direct Runtime API
 
 For dynamic calls when module/function names aren't known at compile time:
@@ -708,7 +731,7 @@ MyLib.func(args, __runtime__: [timeout: 60_000, pool: :my_pool])
 - Elixir ~> 1.14
 - Python 3.8+
 - [uv](https://docs.astral.sh/uv/) - Fast Python package manager (required by snakepit)
-- Snakepit ~> 0.8.9
+- Snakepit ~> 0.9.0
 
 ### Installing uv
 

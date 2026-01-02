@@ -12,7 +12,7 @@ defmodule Demo do
   def run do
     configure_snakepit()
 
-    Snakepit.run_as_script(fn ->
+    SnakeBridge.run_as_script(fn ->
       Examples.reset_failures()
 
       IO.puts("Bridge Client Example")

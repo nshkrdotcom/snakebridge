@@ -11,7 +11,7 @@ defmodule Demo do
   Run the complete 20-library demonstration.
   """
   def run do
-    Snakepit.run_as_script(fn ->
+    SnakeBridge.run_as_script(fn ->
       Examples.reset_failures()
 
       print_header()

@@ -133,14 +133,16 @@ defmodule SnakeBridge.EndToEndTest do
       # Verify session exists
       assert SessionManager.session_exists?(session_id)
 
-      # Kill the owner process
+      # Kill the owner process and wait for it to die
+      ref = Process.monitor(owner)
       Process.exit(owner, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^owner, :killed}, 1000
 
-      # Wait for cleanup
-      Process.sleep(200)
-
-      # Session should be cleaned up
-      refute SessionManager.session_exists?(session_id)
+      # Session should be cleaned up - use eventually to avoid flaky timing
+      assert SnakeBridge.TestHelpers.eventually(
+               fn -> not SessionManager.session_exists?(session_id) end,
+               timeout: 1000
+             )
     end
   end
 

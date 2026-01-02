@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-01-01
+
+### Added
+- `SnakeBridge.run_as_script/2` wrapper with safe defaults for Snakepit 0.9.0 exit semantics.
+- Script shutdown telemetry forwarder for `[:snakepit, :script, :shutdown, ...]` events.
+- Integration tests covering script exit behavior and embedded usage.
+
+### Changed
+- Examples now use `SnakeBridge.run_as_script/2` instead of calling Snakepit directly.
+- Docs updated to describe `exit_mode`/`stop_mode` defaults and `SNAKEPIT_SCRIPT_EXIT`.
+
+### Fixed
+- Clarified script shutdown behavior to avoid unintended VM stops in embedded usage.
+
+### Internal
+- Added `supertester` 0.4.0 for robust test infrastructure.
+- Refactored flaky `Process.sleep` calls to use polling-based `eventually/2` helper.
+- Test files now use proper process monitoring and message passing for synchronization.
+
 ## [0.7.10] - 2026-01-01
 
 ### Changed

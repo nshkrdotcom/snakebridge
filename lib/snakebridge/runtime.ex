@@ -283,13 +283,90 @@ defmodule SnakeBridge.Runtime do
           {:ok, :done} | {:error, term()}
   def stream_dynamic(module_path, function, args, opts, callback)
       when is_binary(module_path) and is_function(callback, 1) do
+    {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
+    encoded_args = encode_args(args ++ extra_args)
+    encoded_kwargs = encode_kwargs(kwargs)
+    session_id = resolve_session_id(runtime_opts)
+    library = module_path |> String.split(".") |> List.first()
+
+    payload =
+      protocol_payload()
+      |> Map.put("call_type", "dynamic_stream")
+      |> Map.put("module_path", module_path)
+      |> Map.put("library", library)
+      |> Map.put("function", to_string(function))
+      |> Map.put("args", encoded_args)
+      |> Map.put("kwargs", encoded_kwargs)
+      |> Map.put("idempotent", idempotent)
+      |> maybe_put_session_id(session_id)
+
+    runtime_opts =
+      runtime_opts
+      |> apply_runtime_defaults(payload, :stream)
+      |> ensure_session_opt(session_id)
+
+    metadata = %{
+      module: module_path,
+      function: to_string(function),
+      library: library,
+      python_module: module_path,
+      call_type: "dynamic_stream"
+    }
+
+    caller = self()
+    stream_ref = make_ref()
+
+    {:ok, pid} =
+      Task.start(fn ->
+        stream_result =
+          execute_with_telemetry(metadata, fn ->
+            runtime_client().execute_stream(
+              "snakebridge.stream",
+              payload,
+              fn chunk -> send(caller, {stream_ref, :chunk, chunk}) end,
+              runtime_opts
+            )
+          end)
+          |> apply_error_mode()
+
+        send(caller, {stream_ref, :done, stream_result})
+      end)
+
+    monitor_ref = Process.monitor(pid)
+    result = consume_stream_chunks(stream_ref, monitor_ref, callback)
+
+    case result do
+      :ok ->
+        {:ok, :done}
+
+      {:error, %Snakepit.Error{category: :validation, message: message}} = error ->
+        if is_binary(message) and String.contains?(message, "Streaming not supported") do
+          stream_dynamic_legacy(module_path, function, args, opts, callback)
+        else
+          error
+        end
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp stream_iteration_opts(runtime_opts, ref) do
+    runtime_opts = List.wrap(runtime_opts || [])
+    session_id = resolve_session_id(runtime_opts, ref)
+    [__runtime__: ensure_session_opt(runtime_opts, session_id)]
+  end
+
+  defp stream_dynamic_legacy(module_path, function, args, opts, callback) do
+    {_kwargs, _idempotent, _extra_args, runtime_opts} = split_opts(opts)
+
     case call_dynamic(module_path, function, args, opts) do
       {:ok, %SnakeBridge.StreamRef{} = stream_ref} ->
-        stream_iterate(stream_ref, callback, [])
+        stream_iterate(stream_ref, callback, stream_iteration_opts(runtime_opts, stream_ref))
 
       {:ok, %SnakeBridge.Ref{} = ref} ->
         # Try to iterate if it's an iterator
-        stream_iterate_ref(ref, callback, [])
+        stream_iterate_ref(ref, callback, stream_iteration_opts(runtime_opts, ref))
 
       {:ok, other} ->
         # Not a stream/iterator - return as single value
@@ -298,6 +375,45 @@ defmodule SnakeBridge.Runtime do
 
       error ->
         error
+    end
+  end
+
+  defp decode_stream_chunk(chunk) when is_map(chunk) do
+    payload = Map.drop(chunk, ["is_final", "_metadata"])
+
+    cond do
+      payload == %{} ->
+        :skip
+
+      Map.has_key?(payload, "__type__") ->
+        {:ok, Types.decode(payload)}
+
+      Map.has_key?(payload, "data") and map_size(payload) == 1 ->
+        {:ok, Types.decode(payload["data"])}
+
+      true ->
+        {:ok, Types.decode(payload)}
+    end
+  end
+
+  defp decode_stream_chunk(chunk), do: {:ok, Types.decode(chunk)}
+
+  defp consume_stream_chunks(stream_ref, monitor_ref, callback) do
+    receive do
+      {^stream_ref, :chunk, chunk} ->
+        case decode_stream_chunk(chunk) do
+          :skip -> :ok
+          {:ok, value} -> callback.(value)
+        end
+
+        consume_stream_chunks(stream_ref, monitor_ref, callback)
+
+      {^stream_ref, :done, result} ->
+        Process.demonitor(monitor_ref, [:flush])
+        result
+
+      {:DOWN, ^monitor_ref, :process, _pid, reason} ->
+        {:error, reason}
     end
   end
 

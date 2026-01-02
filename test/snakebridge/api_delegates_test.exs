@@ -20,4 +20,14 @@ defmodule SnakeBridge.ApiDelegatesTest do
       assert function_exported?(SnakeBridge, :release_session, 2)
     end
   end
+
+  describe "run_as_script/1,2 delegates" do
+    test "run_as_script/1 is accessible from SnakeBridge module" do
+      assert function_exported?(SnakeBridge, :run_as_script, 1)
+    end
+
+    test "run_as_script/2 is accessible from SnakeBridge module" do
+      assert function_exported?(SnakeBridge, :run_as_script, 2)
+    end
+  end
 end

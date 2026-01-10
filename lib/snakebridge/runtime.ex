@@ -13,6 +13,7 @@ defmodule SnakeBridge.Runtime do
   @type function_name :: atom() | String.t()
   @type args :: list()
   @type opts :: keyword()
+  @type error_reason :: Snakepit.Error.t() | Exception.t()
 
   @doc """
   Call a Python function.
@@ -35,7 +36,7 @@ defmodule SnakeBridge.Runtime do
 
   """
   @spec call(module_ref() | String.t(), function_name() | String.t(), args(), opts()) ::
-          {:ok, term()} | {:error, Snakepit.Error.t()}
+          {:ok, term()} | {:error, error_reason()}
   def call(module, function, args \\ [], opts \\ [])
 
   # String module path - delegate to dynamic
@@ -77,7 +78,7 @@ defmodule SnakeBridge.Runtime do
   scanned during compilation.
   """
   @spec call_dynamic(String.t(), function_name(), args(), opts()) ::
-          {:ok, term()} | {:error, Snakepit.Error.t()}
+          {:ok, term()} | {:error, error_reason()}
   def call_dynamic(module_path, function, args \\ [], opts \\ []) when is_binary(module_path) do
     {args, opts} = normalize_args_opts(args, opts)
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
@@ -207,7 +208,7 @@ defmodule SnakeBridge.Runtime do
   """
   @spec stream(module_ref() | String.t(), function_name() | String.t(), args(), opts(), (term() ->
                                                                                            any())) ::
-          :ok | {:ok, :done} | {:error, Snakepit.Error.t()}
+          :ok | {:ok, :done} | {:error, error_reason()}
   defdelegate stream(module, function, args \\ [], opts \\ [], callback), to: Streamer
 
   @doc """
@@ -243,7 +244,7 @@ defmodule SnakeBridge.Runtime do
   see the performance note on `stream_dynamic/5`.
   """
   @spec stream_next(SnakeBridge.StreamRef.t(), opts()) ::
-          {:ok, term()} | {:error, :stop_iteration} | {:error, Snakepit.Error.t()}
+          {:ok, term()} | {:error, :stop_iteration} | {:error, error_reason()}
   def stream_next(stream_ref, opts \\ []) do
     {_args, opts} = normalize_args_opts([], opts)
     {_, _, _, runtime_opts} = split_opts(opts)
@@ -297,7 +298,7 @@ defmodule SnakeBridge.Runtime do
   end
 
   @spec call_class(module_ref(), function_name(), args(), opts()) ::
-          {:ok, term()} | {:error, Snakepit.Error.t()}
+          {:ok, term()} | {:error, error_reason()}
   def call_class(module, function, args \\ [], opts \\ []) do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
     encoded_args = encode_args(args ++ extra_args)
@@ -327,7 +328,7 @@ defmodule SnakeBridge.Runtime do
   end
 
   @spec call_method(SnakeBridge.Ref.t() | map(), function_name(), args(), opts()) ::
-          {:ok, term()} | {:error, Snakepit.Error.t()}
+          {:ok, term()} | {:error, error_reason()}
   def call_method(ref, function, args \\ [], opts \\ []) do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
     encoded_args = encode_args(args ++ extra_args)
@@ -380,7 +381,7 @@ defmodule SnakeBridge.Runtime do
 
   """
   @spec get_module_attr(module_ref() | String.t(), atom() | String.t(), opts()) ::
-          {:ok, term()} | {:error, Snakepit.Error.t()}
+          {:ok, term()} | {:error, error_reason()}
   def get_module_attr(module, attr, opts \\ [])
 
   # String module path
@@ -447,7 +448,7 @@ defmodule SnakeBridge.Runtime do
   end
 
   @spec get_attr(SnakeBridge.Ref.t(), atom() | String.t(), opts()) ::
-          {:ok, term()} | {:error, Snakepit.Error.t()}
+          {:ok, term()} | {:error, error_reason()}
   def get_attr(ref, attr, opts \\ []) do
     {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
     encoded_kwargs = encode_kwargs(kwargs)
@@ -500,7 +501,7 @@ defmodule SnakeBridge.Runtime do
   end
 
   @spec set_attr(SnakeBridge.Ref.t(), atom() | String.t(), term(), opts()) ::
-          {:ok, term()} | {:error, Snakepit.Error.t()}
+          {:ok, term()} | {:error, error_reason()}
   def set_attr(ref, attr, value, opts \\ []) do
     {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
     encoded_kwargs = encode_kwargs(kwargs)
@@ -530,7 +531,7 @@ defmodule SnakeBridge.Runtime do
     |> decode_result()
   end
 
-  @spec release_ref(SnakeBridge.Ref.t(), opts()) :: :ok | {:error, Snakepit.Error.t()}
+  @spec release_ref(SnakeBridge.Ref.t(), opts()) :: :ok | {:error, error_reason()}
   def release_ref(ref, opts \\ []) do
     {_, _, _, runtime_opts} = split_opts(opts)
     wire_ref = normalize_ref(ref)
@@ -548,7 +549,7 @@ defmodule SnakeBridge.Runtime do
     |> normalize_release_result()
   end
 
-  @spec release_session(String.t(), opts()) :: :ok | {:error, Snakepit.Error.t()}
+  @spec release_session(String.t(), opts()) :: :ok | {:error, error_reason()}
   def release_session(session_id, opts \\ []) when is_binary(session_id) do
     {_, _, _, runtime_opts} = split_opts(opts)
     runtime_opts = ensure_session_opt(runtime_opts, session_id)

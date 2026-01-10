@@ -6,6 +6,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import snakepit_bridge_pb2 as pb2
+from google.protobuf import any_pb2
 
 from snakebridge_client import BridgeClient
 
@@ -52,6 +53,66 @@ class _FakeStub:
     def ExecuteTool(self, *args, **kwargs):
         self.execute_calls.append((args, kwargs))
         raise AssertionError("ExecuteTool should not be used for streaming")
+
+
+class _UnaryStub:
+    def __init__(self):
+        self.execute_calls = []
+
+    def ExecuteTool(self, request, metadata=None, timeout=None):
+        self.execute_calls.append((request, metadata, timeout))
+        return pb2.ExecuteToolResponse(
+            success=True,
+            result=any_pb2.Any(
+                type_url="type.googleapis.com/google.protobuf.StringValue",
+                value=b'"ok"',
+            ),
+        )
+
+
+def test_execute_tool_sets_request_metadata_and_correlation_header():
+    stub = _UnaryStub()
+    client = BridgeClient(stub=stub)
+
+    result = client.execute_tool(
+        "session-1",
+        "tool",
+        {"answer": 42},
+        request_metadata={"thread_sensitive": True, "extra": "1"},
+        correlation_id="cid-123",
+    )
+
+    assert result == "ok"
+    assert len(stub.execute_calls) == 1
+
+    request, call_md, _timeout = stub.execute_calls[0]
+    assert request.session_id == "session-1"
+    assert request.tool_name == "tool"
+    assert request.parameters["answer"].value == b"42"
+    assert request.metadata["correlation_id"] == "cid-123"
+    assert request.metadata["thread_sensitive"] == "True"
+    assert request.metadata["extra"] == "1"
+
+    assert any(
+        k == "x-snakepit-correlation-id" and v == "cid-123" for (k, v) in (call_md or [])
+    )
+
+
+def test_execute_tool_rejects_non_bytes_binary_parameters():
+    stub = _UnaryStub()
+    client = BridgeClient(stub=stub)
+
+    try:
+        client.execute_tool(
+            "s",
+            "t",
+            binary_parameters={"bad": "not-bytes"},
+            correlation_id="cid",
+        )
+    except TypeError as exc:
+        assert "binary_parameters" in str(exc)
+    else:
+        raise AssertionError("Expected TypeError for non-bytes binary_parameters")
 
 
 def test_execute_streaming_tool_uses_streaming_rpc_and_sets_correlation_header():

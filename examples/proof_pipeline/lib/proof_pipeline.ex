@@ -57,13 +57,15 @@ defmodule ProofPipeline do
 
   @spec run(input()) :: {:ok, map()} | {:error, term()}
   def run(%{student_latex: student, gold_latex: gold} = input) do
+    math_verify_runtime = [__runtime__: [thread_sensitive: true]]
+
     with {:ok, walker} <- PyLatexEnc.Latexwalker.LatexWalker.new(student),
          {:ok, nodes} <- PyLatexEnc.Latexwalker.LatexWalker.get_latex_nodes(walker),
          {:ok, expr} <- ProofPipeline.PythonParser.parse_expr(student),
          {:ok, simplified} <- Sympy.simplify(expr),
          {:ok, rendered} <- Sympy.latex(simplified),
-         {:ok, verdict} <- MathVerify.verify(gold, rendered),
-         {:ok, parsed} <- MathVerify.parse(rendered) do
+         {:ok, verdict} <- MathVerify.verify(gold, rendered, math_verify_runtime),
+         {:ok, parsed} <- MathVerify.parse(rendered, math_verify_runtime) do
       {:ok,
        %{
          input: input,

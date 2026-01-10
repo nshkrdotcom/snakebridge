@@ -39,7 +39,8 @@ defmodule SnakeBridge.Adapter do
   @doc """
   Calls a Python function with the given arguments using SnakeBridge.Runtime.
   """
-  @spec __python_call__(String.t(), list()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec __python_call__(String.t(), list()) ::
+          {:ok, term()} | {:error, SnakeBridge.Runtime.error_reason()}
   def __python_call__(func_name, args) do
     # Get the calling module to determine the Python module
     {module, _func, _arity} =

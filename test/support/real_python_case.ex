@@ -9,6 +9,7 @@ defmodule SnakeBridge.RealPythonCase do
   @pool_queue_timeout 20_000
   @worker_ready_poll_ms 100
   @configured_key {__MODULE__, :real_python_configured}
+  @python_key {__MODULE__, :real_python_python}
   @active_count_key {__MODULE__, :real_python_active}
   @original_env_key {__MODULE__, :real_python_original_env}
   @snakepit_env_keys [
@@ -24,8 +25,17 @@ defmodule SnakeBridge.RealPythonCase do
   using do
     quote do
       use ExUnit.Case, async: false
-      import SnakeBridge.RealPythonCase, only: [setup_real_python: 1]
+      import SnakeBridge.RealPythonCase, only: [setup_real_python: 1, ensure_pool_available: 1]
       setup_all :setup_real_python
+      setup :ensure_pool_available
+    end
+  end
+
+  def ensure_pool_available(_context) do
+    if pool_has_available_workers?() do
+      :ok
+    else
+      restart_snakepit_pool()
     end
   end
 
@@ -37,23 +47,26 @@ defmodule SnakeBridge.RealPythonCase do
 
     case ensure_real_python() do
       :ok -> context
-      {:skip, reason} -> %{context | skip: reason}
+      {:skip, reason} -> {:skip, reason}
     end
   end
 
   defp ensure_real_python do
     with {:ok, python} <- resolve_python(),
-         :ok <- ensure_python_deps(python) do
+         {:ok, python} <- ensure_python_deps(python) do
+      store_python_path(python)
       ensure_snakepit_pool(python)
     end
   end
 
   defp resolve_python do
     python =
-      Application.get_env(:snakepit, :python_executable) ||
+      System.get_env("SNAKEBRIDGE_TEST_PYTHON") ||
+        Application.get_env(:snakepit, :python_executable) ||
         System.get_env("SNAKEPIT_PYTHON") ||
         GRPCPython.executable_path() ||
-        System.find_executable("python3")
+        System.find_executable("python3") ||
+        System.find_executable("python")
 
     if is_binary(python) do
       {:ok, python}
@@ -65,12 +78,40 @@ defmodule SnakeBridge.RealPythonCase do
   defp ensure_python_deps(python) do
     env = [{"PYTHONPATH", build_pythonpath()}]
 
-    case System.cmd(python, ["-c", "import grpc, google.protobuf, snakebridge_adapter"], env: env) do
+    case System.cmd(python, ["-c", "import grpc, google.protobuf, snakebridge_adapter"],
+           env: env,
+           stderr_to_stdout: true
+         ) do
       {_output, 0} ->
-        :ok
+        {:ok, python}
 
       {output, _status} ->
-        {:skip, "python deps missing (grpc/protobuf/snakebridge_adapter): #{String.trim(output)}"}
+        if python_override?() do
+          {:skip,
+           "python deps missing in override (grpc/protobuf/snakebridge_adapter): #{String.trim(output)}"}
+        else
+          case ensure_snakepit_requirements() do
+            :ok ->
+              refreshed_python = GRPCPython.executable_path() || python
+
+              case System.cmd(
+                     refreshed_python,
+                     ["-c", "import grpc, google.protobuf, snakebridge_adapter"],
+                     env: env,
+                     stderr_to_stdout: true
+                   ) do
+                {_output, 0} ->
+                  {:ok, refreshed_python}
+
+                {retry_output, _status} ->
+                  {:skip,
+                   "python deps missing (grpc/protobuf/snakebridge_adapter): #{String.trim(retry_output)}"}
+              end
+
+            {:skip, reason} ->
+              {:skip, reason}
+          end
+        end
     end
   end
 
@@ -269,6 +310,98 @@ defmodule SnakeBridge.RealPythonCase do
     |> Enum.reject(&(&1 in [nil, ""]))
     |> Enum.uniq()
     |> Enum.join(path_sep)
+  end
+
+  defp python_override? do
+    System.get_env("SNAKEBRIDGE_TEST_PYTHON") ||
+      Application.get_env(:snakepit, :python_executable) ||
+      System.get_env("SNAKEPIT_PYTHON")
+  end
+
+  defp store_python_path(python) when is_binary(python) do
+    :persistent_term.put(@python_key, python)
+  end
+
+  defp stored_python_path do
+    :persistent_term.get(@python_key, nil)
+  end
+
+  defp pool_has_available_workers? do
+    case Process.whereis(Snakepit.Pool) do
+      nil ->
+        false
+
+      _pid ->
+        stats = Snakepit.Pool.get_stats(Snakepit.Pool)
+        Map.get(stats, :available, 0) > 0
+    end
+  rescue
+    _ -> false
+  catch
+    _, _ -> false
+  end
+
+  defp restart_snakepit_pool do
+    stop_snakepit_if_running()
+    clear_snakepit_configured()
+
+    python =
+      stored_python_path() ||
+        System.get_env("SNAKEBRIDGE_TEST_PYTHON") ||
+        Application.get_env(:snakepit, :python_executable) ||
+        System.get_env("SNAKEPIT_PYTHON") ||
+        GRPCPython.executable_path() ||
+        System.find_executable("python3") ||
+        System.find_executable("python")
+
+    case python do
+      nil ->
+        {:skip, "python3 not available"}
+
+      path ->
+        case ensure_python_deps(path) do
+          {:ok, resolved} ->
+            store_python_path(resolved)
+            ensure_snakepit_pool(resolved)
+
+          {:skip, reason} ->
+            {:skip, reason}
+        end
+    end
+  end
+
+  defp ensure_snakepit_requirements do
+    case snakepit_requirements_path() do
+      nil ->
+        {:skip, "snakepit requirements.txt not found; run mix snakepit.setup"}
+
+      path ->
+        try do
+          Snakepit.PythonPackages.ensure!({:file, path},
+            runner: SnakeBridge.PythonPackagesRunner,
+            quiet: true
+          )
+
+          :ok
+        rescue
+          error ->
+            {:skip, "snakepit python deps install failed: #{Exception.message(error)}"}
+        catch
+          :exit, reason ->
+            {:skip, "snakepit python deps install failed: #{inspect(reason)}"}
+        end
+    end
+  end
+
+  defp snakepit_requirements_path do
+    case :code.priv_dir(:snakepit) do
+      {:error, _} ->
+        nil
+
+      priv_dir ->
+        path = Path.join([to_string(priv_dir), "python", "requirements.txt"])
+        if File.exists?(path), do: path, else: nil
+    end
   end
 
   defp started_app?(app) do

@@ -35,6 +35,8 @@ defmodule Demo do
   end
 
   defp run_verbose_pipeline(%{student_latex: student, gold_latex: gold} = input) do
+    math_verify_runtime = [__runtime__: [thread_sensitive: true]]
+
     # Step 1: Create LatexWalker
     step("1. PyLatexEnc.Latexwalker.LatexWalker.new/1",
       module: "pylatexenc.latexwalker",
@@ -97,7 +99,7 @@ defmodule Demo do
                 args: [gold, rendered]
               )
 
-              verdict_result = MathVerify.verify(gold, rendered)
+              verdict_result = MathVerify.verify(gold, rendered, math_verify_runtime)
               print_result(verdict_result)
 
               with {:ok, verdict} <- verdict_result do
@@ -108,7 +110,7 @@ defmodule Demo do
                   args: [rendered]
                 )
 
-                parsed_result = MathVerify.parse(rendered)
+                parsed_result = MathVerify.parse(rendered, math_verify_runtime)
                 print_result(parsed_result)
 
                 with {:ok, parsed} <- parsed_result do

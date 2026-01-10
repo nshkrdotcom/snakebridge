@@ -13,7 +13,7 @@ defmodule SnakeBridge.Runtime.Streamer do
 
   @spec stream(module_ref() | String.t(), function_name() | String.t(), args(), opts(), (term() ->
                                                                                            any())) ::
-          :ok | {:ok, :done} | {:error, Snakepit.Error.t()}
+          :ok | {:ok, :done} | {:error, Runtime.error_reason()}
   def stream(module, function, args \\ [], opts \\ [], callback)
 
   def stream(module, function, args, opts, callback)
@@ -89,6 +89,8 @@ defmodule SnakeBridge.Runtime.Streamer do
     caller = self()
     stream_ref = make_ref()
 
+    chunk_callback = fn chunk -> send(caller, {stream_ref, :chunk, chunk}) end
+
     {:ok, pid} =
       Task.start(fn ->
         stream_result =
@@ -96,7 +98,7 @@ defmodule SnakeBridge.Runtime.Streamer do
             Runtime.runtime_client().execute_stream(
               "snakebridge.stream",
               payload,
-              fn chunk -> send(caller, {stream_ref, :chunk, chunk}) end,
+              chunk_callback,
               runtime_opts
             )
           end)

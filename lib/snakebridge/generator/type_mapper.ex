@@ -155,7 +155,7 @@ defmodule SnakeBridge.Generator.TypeMapper do
   defp map_optional_type(_), do: quote(do: term() | nil)
 
   @spec map_union_type(map()) :: Macro.t()
-  defp map_union_type(%{"types" => types}) when is_list(types) and length(types) > 0 do
+  defp map_union_type(%{"types" => types}) when is_list(types) and types != [] do
     type_specs = Enum.map(types, &to_spec/1)
 
     # Build union type using |

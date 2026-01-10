@@ -9,7 +9,6 @@ config :snakebridge,
 # Logger configuration for tests
 config :logger,
   level: :warning,
-  backends: [:console],
   compile_time_purge_matching: [
     [level_lower_than: :warning]
   ]

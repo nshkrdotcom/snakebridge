@@ -107,8 +107,8 @@ end
 defimpl Inspect, for: SnakeBridge.Ref do
   import Inspect.Algebra
 
-  alias SnakeBridge.Runtime
   alias SnakeBridge.Ref
+  alias SnakeBridge.Runtime
 
   def inspect(%Ref{} = ref, _opts) do
     case python_repr(ref) do
@@ -145,8 +145,8 @@ defimpl Inspect, for: SnakeBridge.Ref do
 end
 
 defimpl String.Chars, for: SnakeBridge.Ref do
-  alias SnakeBridge.Runtime
   alias SnakeBridge.Ref
+  alias SnakeBridge.Runtime
 
   def to_string(%Ref{} = ref) do
     case safe_call(ref, :__str__) do

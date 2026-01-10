@@ -7,7 +7,6 @@ config :snakebridge,
 # Logger configuration for development
 config :logger,
   level: :debug,
-  backends: [:console],
   compile_time_purge_matching: [
     [level_lower_than: :debug]
   ]

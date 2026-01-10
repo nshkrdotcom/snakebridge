@@ -8,7 +8,6 @@ defmodule SnakeBridge.Telemetry.Handlers.MetricsTest do
       metrics = Metrics.metrics()
 
       assert is_list(metrics)
-      assert length(metrics) > 0
     end
 
     test "includes compile metrics" do

@@ -117,7 +117,7 @@ defmodule SnakeBridge.Docs.RstParserTest do
 
       result = RstParser.parse(docstring)
 
-      assert length(result.examples) >= 1
+      assert result.examples != []
       assert hd(result.examples) =~ "func(1, 2)"
     end
 

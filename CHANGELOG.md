@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-01-09
+
+### Changed
+- Dev and test logger configs no longer pin `:console` as the only backend.
+- Example lockfiles now record Elixir 1.19.4.
+
+### Internal
+- Prefer direct list emptiness checks in generator, registry, and tests.
+- Reuse a shared streaming chunk callback for clarity.
+- Updated tooling/lockfile deps (supertester 0.5.1, credo 1.7.15, dialyxir 1.4.7, ex_doc 0.39.3, erlex 0.2.8).
+
 ## [0.8.0] - 2026-01-02
 
 ### Added

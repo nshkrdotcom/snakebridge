@@ -30,7 +30,7 @@
     "python_platform": "x86_64-pc-linux-gnu",
     "python_runtime_hash": "4933b6c4a8521fb3aa93856701e30b3ac2626d3c47ceb22965a3b0b422e85b44",
     "python_version": "3.12.3",
-    "snakebridge_version": "0.8.0"
+    "snakebridge_version": "0.8.1"
   },
   "libraries": {
     "math_verify": {
@@ -63,5 +63,5 @@
       "hash": null
     }
   },
-  "version": "0.8.0"
+  "version": "0.8.1"
 }

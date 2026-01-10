@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.8.0"
+  @version "0.8.1"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -10,6 +10,7 @@ defmodule SnakeBridge.MixProject do
       version: @version,
       elixir: "~> 1.14",
       elixirc_paths: elixirc_paths(Mix.env()),
+      test_ignore_filters: [~r{^test/fixtures/}],
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
@@ -42,7 +43,7 @@ defmodule SnakeBridge.MixProject do
   defp deps do
     [
       # Core - Python bridge
-      {:snakepit, "~> 0.9.0"},
+      {:snakepit, "~> 0.9.1"},
 
       # JSON encoding
       {:jason, "~> 1.4"},
@@ -55,7 +56,7 @@ defmodule SnakeBridge.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:mox, "~> 1.1", only: :test},
-      {:supertester, "~> 0.4.0", only: :test}
+      {:supertester, "~> 0.5.1", only: :test}
     ]
   end
 
@@ -92,12 +93,24 @@ defmodule SnakeBridge.MixProject do
   defp package do
     [
       name: "snakebridge",
-      files: ~w(lib priv .formatter.exs mix.exs README.md LICENSE CHANGELOG.md assets),
+      files:
+        ~w(lib priv/snakebridge priv/python .formatter.exs mix.exs README.md LICENSE CHANGELOG.md assets),
       exclude_patterns: [
         "priv/python/.pytest_cache",
-        "**/.pytest_cache",
+        "priv/snakebridge/.pytest_cache",
         "priv/python/__pycache__",
-        "**/__pycache__"
+        "priv/snakebridge/__pycache__",
+        "priv/python/*.pyc",
+        "priv/snakebridge/*.pyc",
+        "priv/python/*.egg-info",
+        "priv/snakebridge/*.egg-info",
+        "priv/python/*.bak",
+        "priv/snakebridge/*.bak"
+        # "priv/plts",
+        # "priv/data",
+        # "docs/archive",
+        # "priv/snakepit",
+        # "priv/snakepit/*"
       ],
       licenses: ["MIT"],
       links: %{

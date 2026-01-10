@@ -350,7 +350,7 @@ defmodule SnakeBridge.Registry do
       |> Enum.reject(fn field -> Map.has_key?(entry, field) end)
 
     cond do
-      length(missing_fields) > 0 ->
+      missing_fields != [] ->
         {:error, "Missing required fields: #{inspect(missing_fields)}"}
 
       not is_map(entry.stats) ->
@@ -367,7 +367,7 @@ defmodule SnakeBridge.Registry do
       @required_stat_fields
       |> Enum.reject(fn field -> Map.has_key?(stats, field) end)
 
-    if length(missing_stat_fields) > 0 do
+    if missing_stat_fields != [] do
       {:error, "Missing required stat fields: #{inspect(missing_stat_fields)}"}
     else
       :ok
@@ -461,7 +461,7 @@ defmodule SnakeBridge.Registry do
         _ -> false
       end)
 
-    if length(errors) > 0 do
+    if errors != [] do
       {:error, "Invalid entries: #{inspect(errors)}"}
     else
       {:ok, Enum.into(parsed, %{})}

@@ -237,7 +237,7 @@ defmodule SnakeBridge do
   def call!(module, function, args \\ [], opts \\ []) do
     case call(module, function, args, opts) do
       {:ok, result} -> result
-      {:error, error} -> raise error
+      {:error, error} -> raise_on_error(error)
     end
   end
 
@@ -275,7 +275,7 @@ defmodule SnakeBridge do
   def get!(module, attr, opts \\ []) do
     case get(module, attr, opts) do
       {:ok, result} -> result
-      {:error, error} -> raise error
+      {:error, error} -> raise_on_error(error)
     end
   end
 
@@ -350,7 +350,7 @@ defmodule SnakeBridge do
   def method!(ref, method, args \\ [], opts \\ []) do
     case method(ref, method, args, opts) do
       {:ok, result} -> result
-      {:error, error} -> raise error
+      {:error, error} -> raise_on_error(error)
     end
   end
 
@@ -383,8 +383,25 @@ defmodule SnakeBridge do
   def attr!(ref, attr, opts \\ []) do
     case attr(ref, attr, opts) do
       {:ok, result} -> result
-      {:error, error} -> raise error
+      {:error, error} -> raise_on_error(error)
     end
+  end
+
+  defp raise_on_error(error) do
+    cond do
+      exception?(error) ->
+        raise error
+
+      match?(%Snakepit.Error{}, error) ->
+        raise RuntimeError, message: to_string(error)
+
+      true ->
+        raise RuntimeError, message: "SnakeBridge error: #{inspect(error)}"
+    end
+  end
+
+  defp exception?(error) do
+    is_exception(error)
   end
 
   @doc """

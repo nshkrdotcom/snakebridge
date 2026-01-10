@@ -22,7 +22,7 @@ defmodule Mix.Tasks.Snakebridge.Setup do
         switches: [upgrade: :boolean, verbose: :boolean, check: :boolean]
       )
 
-    Mix.Task.run("loadpaths")
+    Mix.Task.run("loadconfig")
 
     config = SnakeBridge.Config.load()
     requirements = SnakeBridge.PythonEnv.derive_requirements(config.libraries)

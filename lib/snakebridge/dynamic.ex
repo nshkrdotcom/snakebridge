@@ -17,7 +17,7 @@ defmodule SnakeBridge.Dynamic do
   Calls a method on a Python object reference.
   """
   @spec call(ref(), atom() | String.t(), list(), opts()) ::
-          {:ok, term()} | {:error, Snakepit.Error.t()}
+          {:ok, term()} | {:error, Runtime.error_reason()}
   def call(ref, method, args \\ [], opts \\ []) do
     validate_ref!(ref)
     Runtime.call_method(ref, method, args, opts)
@@ -27,7 +27,7 @@ defmodule SnakeBridge.Dynamic do
   Gets an attribute from a Python object reference.
   """
   @spec get_attr(ref(), atom() | String.t(), opts()) ::
-          {:ok, term()} | {:error, Snakepit.Error.t()}
+          {:ok, term()} | {:error, Runtime.error_reason()}
   def get_attr(ref, attr, opts \\ []) do
     validate_ref!(ref)
     Runtime.get_attr(ref, attr, opts)
@@ -37,7 +37,7 @@ defmodule SnakeBridge.Dynamic do
   Sets an attribute on a Python object reference.
   """
   @spec set_attr(ref(), atom() | String.t(), term(), opts()) ::
-          {:ok, term()} | {:error, Snakepit.Error.t()}
+          {:ok, term()} | {:error, Runtime.error_reason()}
   def set_attr(ref, attr, value, opts \\ []) do
     validate_ref!(ref)
     Runtime.set_attr(ref, attr, value, opts)

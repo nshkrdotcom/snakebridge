@@ -31,7 +31,7 @@ defmodule MyApp.MixProject do
 
   defp deps do
     [
-      {:snakebridge, "~> 0.8.0"}
+      {:snakebridge, "~> 0.8.1"}
     ]
   end
 

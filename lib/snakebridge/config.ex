@@ -25,6 +25,12 @@ defmodule SnakeBridge.Config do
   defmodule Library do
     @moduledoc """
     Configuration struct for a single Python library binding.
+
+    ## Options
+
+    - `:generate` - Controls which symbols are generated:
+      - `:used` (default) - Only generate wrappers for symbols detected in your code
+      - `:all` - Generate wrappers for ALL public symbols in the Python module
     """
 
     defstruct [
@@ -37,8 +43,11 @@ defmodule SnakeBridge.Config do
       include: [],
       exclude: [],
       streaming: [],
-      submodules: false
+      submodules: false,
+      generate: :used
     ]
+
+    @type generate_mode :: :all | :used
 
     @type t :: %__MODULE__{
             name: atom(),
@@ -50,7 +59,8 @@ defmodule SnakeBridge.Config do
             include: [String.t()],
             exclude: [String.t()],
             streaming: [String.t()],
-            submodules: boolean()
+            submodules: boolean(),
+            generate: generate_mode()
           }
   end
 
@@ -159,6 +169,9 @@ defmodule SnakeBridge.Config do
     module_name = Keyword.get(opts, :module_name, default_module_name(name))
     python_name = Keyword.get(opts, :python_name, Atom.to_string(name))
     extras = Keyword.get(opts, :extras, [])
+    generate = Keyword.get(opts, :generate, :used)
+
+    validate_generate_option!(generate, name)
 
     %Library{
       name: name,
@@ -170,8 +183,23 @@ defmodule SnakeBridge.Config do
       include: Keyword.get(opts, :include, []),
       exclude: Keyword.get(opts, :exclude, []),
       streaming: Keyword.get(opts, :streaming, []),
-      submodules: Keyword.get(opts, :submodules, false)
+      submodules: Keyword.get(opts, :submodules, false),
+      generate: generate
     }
+  end
+
+  defp validate_generate_option!(generate, _name) when generate in [:all, :used], do: :ok
+
+  defp validate_generate_option!(invalid, name) do
+    raise ArgumentError, """
+    Invalid generate option for #{inspect(name)}: #{inspect(invalid)}
+
+    The generate option must be :all or :used.
+
+    Examples:
+      {:dspy, "2.6.5", generate: :all}   # Generate all public symbols
+      {:numpy, "1.26.0", generate: :used} # Only generate used symbols (default)
+    """
   end
 
   defp default_module_name(name) do

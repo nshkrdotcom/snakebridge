@@ -70,7 +70,7 @@ defmodule SnakeBridge.Generator.WrapperArgsTest do
 
       source = Generator.render_function(info, library)
 
-      assert source =~ "def mean(a, args \\\\ [], opts \\\\ [])"
+      assert source =~ "def mean(a, args, opts \\\\ [])"
       assert source =~ "{args, opts} = SnakeBridge.Runtime.normalize_args_opts(args, opts)"
       assert source =~ "SnakeBridge.Runtime.call(__MODULE__, :mean, [a] ++ List.wrap(args), opts)"
     end

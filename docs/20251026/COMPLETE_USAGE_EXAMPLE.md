@@ -615,6 +615,8 @@ defmodule MyApp.JsonIntegrationTest do
 
       session_id = "test_session_#{System.unique_integer()}"
 
+      # NOTE: Under load, use strict affinity (:strict_queue) to guarantee routing.
+      # Hint mode is best-effort and may fall back to a different worker.
       # All these calls should use the same Python worker
       results =
         Enum.map(1..10, fn i ->
@@ -953,7 +955,7 @@ iex> {:ok, decoded} = Json.loads(%{s: result})
 |-----------|------------|------------------|
 | Discovery | 100-500ms | ~10ms (cached) |
 | Module Generation | 5-20ms | 0ms (already loaded) |
-| Python Execution | 10-50ms | 5-20ms (session affinity) |
+| Python Execution | 10-50ms | 5-20ms (session affinity; strict recommended under load) |
 
 ### Throughput
 

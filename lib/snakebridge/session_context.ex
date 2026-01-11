@@ -35,7 +35,7 @@ defmodule SnakeBridge.SessionContext do
   ## Session Cleanup
 
   Sessions are automatically cleaned up when:
-  - The owning process dies (auto-sessions)
+  - All owning processes die (auto-sessions)
   - `SnakeBridge.Runtime.release_session/1` is called explicitly
   - Refs exceed TTL (SessionContext default: 1 hour) or max count (default 10,000)
 
@@ -135,7 +135,7 @@ defmodule SnakeBridge.SessionContext do
   Executes a function within a session context.
 
   The session is automatically registered and will be released
-  when the owner process dies.
+  when the last owner process dies.
   """
   @spec with_session((-> result)) :: result when result: term()
   def with_session(fun) when is_function(fun, 0) do
@@ -146,10 +146,7 @@ defmodule SnakeBridge.SessionContext do
   def with_session(opts, fun) when is_list(opts) and is_function(fun, 0) do
     context = create(opts)
 
-    case SnakeBridge.SessionManager.register_session(context.session_id, context.owner_pid) do
-      :ok -> :ok
-      {:error, :already_exists} -> :ok
-    end
+    :ok = SnakeBridge.SessionManager.register_session(context.session_id, context.owner_pid)
 
     ensure_snakepit_session(context.session_id)
 

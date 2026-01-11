@@ -175,7 +175,7 @@ defmodule SnakeBridge.Generator.TypeMapperTest do
   end
 
   describe "to_spec/1 with class types" do
-    test "maps class to module reference" do
+    test "falls back to term() without context" do
       python_type = %{
         "type" => "class",
         "name" => "MyClass"
@@ -183,19 +183,19 @@ defmodule SnakeBridge.Generator.TypeMapperTest do
 
       spec_ast = TypeMapper.to_spec(python_type)
 
-      assert Macro.to_string(spec_ast) == "MyClass.t()"
+      assert Macro.to_string(spec_ast) == "term()"
     end
 
-    test "maps class with module to nested module reference" do
+    test "falls back to term() for module-qualified class without context" do
       python_type = %{
         "type" => "class",
         "name" => "Tensor",
-        "module" => "torch"
+        "module" => "external"
       }
 
       spec_ast = TypeMapper.to_spec(python_type)
 
-      assert Macro.to_string(spec_ast) == "Torch.Tensor.t()"
+      assert Macro.to_string(spec_ast) == "term()"
     end
   end
 
@@ -245,61 +245,75 @@ defmodule SnakeBridge.Generator.TypeMapperTest do
     end
   end
 
-  describe "to_spec/1 with ML-specific types" do
-    test "maps numpy.ndarray to Numpy.NDArray.t()" do
-      python_type = %{"type" => "numpy.ndarray"}
-      spec_ast = TypeMapper.to_spec(python_type)
+  describe "to_spec/2 with class mapping context" do
+    test "maps class with module when context matches" do
+      context =
+        TypeMapper.build_context([
+          %{
+            "python_module" => "example",
+            "class" => "Prediction",
+            "module" => "Example.Prediction"
+          }
+        ])
 
-      assert Macro.to_string(spec_ast) == "Numpy.NDArray.t()"
+      python_type = %{"type" => "class", "name" => "Prediction", "module" => "example"}
+      spec_ast = TypeMapper.to_spec(python_type, context)
+
+      assert Macro.to_string(spec_ast) == "Example.Prediction.t()"
     end
 
-    test "maps numpy.dtype to Numpy.DType.t()" do
-      python_type = %{"type" => "numpy.dtype"}
-      spec_ast = TypeMapper.to_spec(python_type)
+    test "maps class by name when module is missing and unique" do
+      context =
+        TypeMapper.build_context([
+          %{
+            "python_module" => "example",
+            "class" => "Prediction",
+            "module" => "Example.Prediction"
+          }
+        ])
 
-      assert Macro.to_string(spec_ast) == "Numpy.DType.t()"
+      python_type = %{"type" => "class", "name" => "Prediction"}
+      spec_ast = TypeMapper.to_spec(python_type, context)
+
+      assert Macro.to_string(spec_ast) == "Example.Prediction.t()"
     end
 
-    test "maps torch.tensor to Torch.Tensor.t()" do
-      python_type = %{"type" => "torch.tensor"}
-      spec_ast = TypeMapper.to_spec(python_type)
+    test "falls back to term() when class name is ambiguous" do
+      context =
+        TypeMapper.build_context([
+          %{"python_module" => "a", "class" => "Prediction", "module" => "A.Prediction"},
+          %{"python_module" => "b", "class" => "Prediction", "module" => "B.Prediction"}
+        ])
 
-      assert Macro.to_string(spec_ast) == "Torch.Tensor.t()"
+      python_type = %{"type" => "class", "name" => "Prediction"}
+      spec_ast = TypeMapper.to_spec(python_type, context)
+
+      assert Macro.to_string(spec_ast) == "term()"
     end
 
-    test "maps torch.Tensor (capitalized) to Torch.Tensor.t()" do
-      python_type = %{"type" => "torch.Tensor"}
-      spec_ast = TypeMapper.to_spec(python_type)
+    test "maps qualified type string when context matches" do
+      context =
+        TypeMapper.build_context([
+          %{
+            "python_module" => "example",
+            "class" => "Prediction",
+            "module" => "Example.Prediction"
+          }
+        ])
 
-      assert Macro.to_string(spec_ast) == "Torch.Tensor.t()"
+      python_type = %{"type" => "example.Prediction"}
+      spec_ast = TypeMapper.to_spec(python_type, context)
+
+      assert Macro.to_string(spec_ast) == "Example.Prediction.t()"
     end
 
-    test "maps torch.dtype to Torch.DType.t()" do
-      python_type = %{"type" => "torch.dtype"}
-      spec_ast = TypeMapper.to_spec(python_type)
+    test "falls back to term() when class is not in context" do
+      context = TypeMapper.build_context([])
+      python_type = %{"type" => "class", "name" => "External", "module" => "external"}
 
-      assert Macro.to_string(spec_ast) == "Torch.DType.t()"
-    end
+      spec_ast = TypeMapper.to_spec(python_type, context)
 
-    test "maps pandas.dataframe to Pandas.DataFrame.t()" do
-      python_type = %{"type" => "pandas.dataframe"}
-      spec_ast = TypeMapper.to_spec(python_type)
-
-      assert Macro.to_string(spec_ast) == "Pandas.DataFrame.t()"
-    end
-
-    test "maps pandas.DataFrame (capitalized) to Pandas.DataFrame.t()" do
-      python_type = %{"type" => "pandas.DataFrame"}
-      spec_ast = TypeMapper.to_spec(python_type)
-
-      assert Macro.to_string(spec_ast) == "Pandas.DataFrame.t()"
-    end
-
-    test "maps pandas.series to Pandas.Series.t()" do
-      python_type = %{"type" => "pandas.series"}
-      spec_ast = TypeMapper.to_spec(python_type)
-
-      assert Macro.to_string(spec_ast) == "Pandas.Series.t()"
+      assert Macro.to_string(spec_ast) == "term()"
     end
   end
 

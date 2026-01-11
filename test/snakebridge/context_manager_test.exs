@@ -9,16 +9,8 @@ defmodule SnakeBridge.ContextManagerTest do
   setup :set_mox_from_context
 
   setup do
-    original = Application.get_env(:snakebridge, :runtime_client)
-    Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
-    on_exit(fn ->
-      if original do
-        Application.put_env(:snakebridge, :runtime_client, original)
-      else
-        Application.delete_env(:snakebridge, :runtime_client)
-      end
-    end)
+    restore = SnakeBridge.TestHelpers.put_runtime_client(SnakeBridge.RuntimeClientMock)
+    on_exit(restore)
 
     :ok
   end

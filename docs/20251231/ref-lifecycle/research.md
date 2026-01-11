@@ -11,7 +11,7 @@ SnakeBridge uses a **session-scoped Python object reference (ref) registry** key
 **Key Findings:**
 1. **No "ref not found" first-class error** - Invalid refs raise `KeyError` that's not translated to Elixir
 2. **TTL contradictions** - Docs claim 30min but code defaults to 0.0 (disabled)
-3. **Session affinity assumed but not enforced** - No explicit error for session mismatch
+3. **Session affinity defaults to hint** - Strict routing modes now exist, but hint mode can still fall back
 4. **Registry is single-threaded Python dict** - No distributed session support
 5. **Auto-session enabled** - Every Elixir process gets automatic session ID
 
@@ -338,7 +338,7 @@ end
 
 3. **Document TTL behavior accurately** - clarify that default is disabled, not 30 minutes
 
-4. **Add session affinity validation** - ensure refs are only used within their designated session
+4. **Add session affinity validation** - strict affinity helps, but ref mismatch errors should still be explicit
 
 5. **Implement ref lifecycle tests** covering error scenarios
 

@@ -26,4 +26,32 @@ if Code.ensure_loaded?(Mox) do
   Mox.defmock(SnakeBridge.PythonRunnerMock, for: SnakeBridge.PythonRunner)
 end
 
+instance_name =
+  Application.get_env(:snakepit, :instance_name) ||
+    System.get_env("SNAKEPIT_INSTANCE_NAME")
+
+if is_nil(instance_name) or instance_name == "" do
+  partition = System.get_env("MIX_TEST_PARTITION")
+  suffix = if partition in [nil, ""], do: "test", else: "test_p#{partition}"
+  Application.put_env(:snakepit, :instance_name, "snakebridge_#{suffix}")
+end
+
+instance_token =
+  Application.get_env(:snakepit, :instance_token) ||
+    System.get_env("SNAKEPIT_INSTANCE_TOKEN")
+
+if is_nil(instance_token) or instance_token == "" do
+  partition = System.get_env("MIX_TEST_PARTITION")
+  suffix = if partition in [nil, ""], do: "test", else: "test_p#{partition}"
+
+  run_id =
+    if Code.ensure_loaded?(Snakepit.RunID) and function_exported?(Snakepit.RunID, :generate, 0) do
+      Snakepit.RunID.generate()
+    else
+      Integer.to_string(System.unique_integer([:positive]))
+    end
+
+  Application.put_env(:snakepit, :instance_token, "snakebridge_#{suffix}_#{run_id}")
+end
+
 # Helper functions for tests are defined in test/support/test_helpers.ex

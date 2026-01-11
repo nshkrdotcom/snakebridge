@@ -1,6 +1,9 @@
 defmodule SnakeBridge.ScriptExitIntegrationTest do
   use ExUnit.Case, async: false
 
+  @moduletag :integration
+  @moduletag :real_python
+
   @script_path Path.expand("../support/scripts/script_exit.exs", __DIR__)
   @project_root Path.expand("../..", __DIR__)
 

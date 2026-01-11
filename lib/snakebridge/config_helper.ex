@@ -18,6 +18,16 @@ defmodule SnakeBridge.ConfigHelper do
       import Config
       SnakeBridge.ConfigHelper.configure_snakepit!()
 
+  Multi-pool configuration (with per-pool affinity):
+
+      import Config
+      SnakeBridge.ConfigHelper.configure_snakepit!(
+        pools: [
+          %{name: :hint_pool, pool_size: 2, affinity: :hint},
+          %{name: :strict_pool, pool_size: 2, affinity: :strict_queue}
+        ]
+      )
+
   ## How It Works
 
   The helper looks for a Python venv in these locations (in order):
@@ -43,12 +53,16 @@ defmodule SnakeBridge.ConfigHelper do
   Options:
   - `:pool_size` - Number of Python workers (default: 2)
   - `:venv_path` - Explicit path to venv directory
+  - `:affinity` - Snakepit session affinity mode (`:hint`, `:strict_queue`, `:strict_fail_fast`)
+  - `:pools` - Multi-pool config list (maps or keyword lists); defaults apply per pool
   """
   @spec snakepit_config(keyword()) :: keyword()
   def snakepit_config(opts \\ []) do
     python_executable = resolve_python_executable(opts)
     pythonpath = build_pythonpath(opts)
     pool_size = Keyword.get(opts, :pool_size, 2)
+    affinity = Keyword.get(opts, :affinity)
+    pools = Keyword.get(opts, :pools)
 
     adapter_env =
       if pythonpath do
@@ -57,15 +71,26 @@ defmodule SnakeBridge.ConfigHelper do
         %{}
       end
 
-    base_config = [
-      pooling_enabled: true,
-      adapter_module: Snakepit.Adapters.GRPCPython,
-      pool_config: %{
+    base_pool_config =
+      %{
         pool_size: pool_size,
         adapter_args: ["--adapter", "snakebridge_adapter.SnakeBridgeAdapter"],
         adapter_env: adapter_env
       }
+      |> maybe_put_affinity(affinity)
+
+    base_config = [
+      pooling_enabled: true,
+      adapter_module: Snakepit.Adapters.GRPCPython
     ]
+
+    base_config =
+      if is_list(pools) do
+        normalized_pools = normalize_pools(pools, base_pool_config, affinity)
+        Keyword.put(base_config, :pools, normalized_pools)
+      else
+        Keyword.put(base_config, :pool_config, base_pool_config)
+      end
 
     if python_executable do
       Keyword.put(base_config, :python_executable, python_executable)
@@ -212,6 +237,44 @@ defmodule SnakeBridge.ConfigHelper do
       root -> Path.join([root, "priv", "python"])
     end
   end
+
+  defp normalize_pools(pools, base_pool_config, affinity) do
+    Enum.map(pools, fn pool ->
+      pool =
+        pool
+        |> normalize_pool_input()
+        |> Map.put_new(:pool_size, base_pool_config.pool_size)
+        |> Map.put_new(:adapter_args, base_pool_config.adapter_args)
+        |> Map.put(
+          :adapter_env,
+          merge_adapter_env(base_pool_config.adapter_env, Map.get(pool, :adapter_env))
+        )
+
+      pool
+      |> maybe_put_affinity(affinity)
+    end)
+  end
+
+  defp normalize_pool_input(%{} = pool), do: pool
+  defp normalize_pool_input(pool) when is_list(pool), do: Map.new(pool)
+  defp normalize_pool_input(_), do: %{}
+
+  defp merge_adapter_env(base_env, nil), do: base_env
+
+  defp merge_adapter_env(base_env, env) when is_map(env) do
+    Map.merge(base_env, env)
+  end
+
+  defp merge_adapter_env(base_env, env) when is_list(env) do
+    Map.merge(base_env, Map.new(env))
+  end
+
+  defp merge_adapter_env(base_env, _env), do: base_env
+
+  defp maybe_put_affinity(pool_config, nil), do: pool_config
+
+  defp maybe_put_affinity(pool_config, affinity),
+    do: Map.put_new(pool_config, :affinity, affinity)
 
   defp snakebridge_root do
     case :code.priv_dir(:snakebridge) do

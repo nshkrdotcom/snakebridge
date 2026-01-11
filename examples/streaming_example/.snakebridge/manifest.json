@@ -3,32 +3,57 @@
   "symbols": {
     "Streaming.generate/1": {
       "docstring": "Generate either a full response or a stream of chunks.",
+      "elixir_name": "generate",
       "function": "generate",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 3,
+      "minimum_arity": 1,
       "module": "Streaming",
       "name": "generate",
+      "optional_keyword_only": [],
       "parameters": [
         {
           "kind": "POSITIONAL_OR_KEYWORD",
-          "name": "prompt"
+          "name": "prompt",
+          "type": {
+            "type": "any"
+          }
         },
         {
           "default": "False",
           "kind": "POSITIONAL_OR_KEYWORD",
-          "name": "stream"
+          "name": "stream",
+          "type": {
+            "type": "any"
+          }
         },
         {
           "default": "3",
           "kind": "POSITIONAL_OR_KEYWORD",
-          "name": "count"
+          "name": "count",
+          "type": {
+            "type": "any"
+          }
         },
         {
           "default": "0.01",
           "kind": "POSITIONAL_OR_KEYWORD",
-          "name": "delay"
+          "name": "delay",
+          "type": {
+            "type": "any"
+          }
         }
       ],
       "python_module": "streaming_example",
-      "return_annotation": null
+      "python_name": "generate",
+      "required_arity": 1,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true
     }
   },
   "version": "0.7.0"

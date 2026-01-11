@@ -2,8 +2,11 @@ defmodule SnakeBridge.SessionManager do
   @moduledoc """
   Manages Python session lifecycle with process monitoring.
 
-  Sessions are automatically released when their owner process dies,
+  Sessions are automatically released when all owner processes die,
   preventing memory leaks in long-running applications.
+
+  Cleanup logs are opt-in via config. Use
+  `config :snakebridge, session_cleanup_log_level: :debug` to enable.
   """
 
   use GenServer
@@ -19,10 +22,10 @@ defmodule SnakeBridge.SessionManager do
   end
 
   @doc """
-  Registers a new session with an owner process.
-  The session will be released when the owner dies.
+  Registers a session owner process.
+  The session will be released when the last owner dies.
   """
-  @spec register_session(session_id(), pid()) :: :ok | {:error, :already_exists}
+  @spec register_session(session_id(), pid()) :: :ok
   def register_session(session_id, owner_pid) do
     GenServer.call(__MODULE__, {:register_session, session_id, owner_pid})
   end
@@ -75,9 +78,9 @@ defmodule SnakeBridge.SessionManager do
   @impl true
   def init(_opts) do
     state = %{
-      # session_id => %{owner_pid, monitor_ref, refs, created_at}
+      # session_id => %{owners: %{pid => monitor_ref}, refs, created_at}
       sessions: %{},
-      # monitor_ref => session_id
+      # monitor_ref => {session_id, owner_pid}
       monitors: %{}
     }
 
@@ -86,25 +89,40 @@ defmodule SnakeBridge.SessionManager do
 
   @impl true
   def handle_call({:register_session, session_id, owner_pid}, _from, state) do
-    if Map.has_key?(state.sessions, session_id) do
-      {:reply, {:error, :already_exists}, state}
-    else
-      monitor_ref = Process.monitor(owner_pid)
+    case Map.get(state.sessions, session_id) do
+      nil ->
+        monitor_ref = Process.monitor(owner_pid)
 
-      session_data = %{
-        owner_pid: owner_pid,
-        monitor_ref: monitor_ref,
-        refs: [],
-        created_at: System.system_time(:second)
-      }
+        session_data = %{
+          owners: %{owner_pid => monitor_ref},
+          refs: [],
+          created_at: System.system_time(:second)
+        }
 
-      new_state = %{
-        state
-        | sessions: Map.put(state.sessions, session_id, session_data),
-          monitors: Map.put(state.monitors, monitor_ref, session_id)
-      }
+        new_state = %{
+          state
+          | sessions: Map.put(state.sessions, session_id, session_data),
+            monitors: Map.put(state.monitors, monitor_ref, {session_id, owner_pid})
+        }
 
-      {:reply, :ok, new_state}
+        {:reply, :ok, new_state}
+
+      session_data ->
+        if Map.has_key?(session_data.owners, owner_pid) do
+          {:reply, :ok, state}
+        else
+          monitor_ref = Process.monitor(owner_pid)
+          owners = Map.put(session_data.owners, owner_pid, monitor_ref)
+          updated_session = %{session_data | owners: owners}
+
+          new_state = %{
+            state
+            | sessions: Map.put(state.sessions, session_id, updated_session),
+              monitors: Map.put(state.monitors, monitor_ref, {session_id, owner_pid})
+          }
+
+          {:reply, :ok, new_state}
+        end
     end
   end
 
@@ -139,7 +157,7 @@ defmodule SnakeBridge.SessionManager do
 
   @impl true
   def handle_call({:release_session, session_id}, _from, state) do
-    new_state = do_release_session(state, session_id)
+    new_state = do_release_session(state, session_id, :manual)
     {:reply, :ok, new_state}
   end
 
@@ -149,39 +167,55 @@ defmodule SnakeBridge.SessionManager do
       nil ->
         {:reply, :ok, state}
 
-      %{monitor_ref: ref} ->
-        Process.demonitor(ref, [:flush])
-
-        new_state = %{
-          state
-          | sessions: Map.delete(state.sessions, session_id),
-            monitors: Map.delete(state.monitors, ref)
-        }
-
+      session_data ->
+        new_state = remove_session(state, session_id, session_data)
         {:reply, :ok, new_state}
     end
   end
 
   @impl true
-  def handle_info({:DOWN, monitor_ref, :process, _pid, _reason}, state) do
+  def handle_info({:DOWN, monitor_ref, :process, _pid, reason}, state) do
     case Map.get(state.monitors, monitor_ref) do
       nil ->
         {:noreply, state}
 
-      session_id ->
-        Logger.debug("Session owner died, releasing session: #{session_id}")
-        new_state = do_release_session(state, session_id)
+      {session_id, owner_pid} ->
+        state = %{state | monitors: Map.delete(state.monitors, monitor_ref)}
+        new_state = handle_owner_down(state, session_id, owner_pid, reason)
         {:noreply, new_state}
     end
   end
 
-  defp do_release_session(state, session_id) do
+  defp handle_owner_down(state, session_id, owner_pid, reason) do
     case Map.get(state.sessions, session_id) do
       nil ->
         state
 
       session_data ->
-        Process.demonitor(session_data.monitor_ref, [:flush])
+        owners = Map.delete(session_data.owners, owner_pid)
+        update_or_release_session(state, session_id, session_data, owners, reason)
+    end
+  end
+
+  defp update_or_release_session(state, session_id, _session_data, owners, reason)
+       when map_size(owners) == 0 do
+    do_release_session(state, session_id, reason)
+  end
+
+  defp update_or_release_session(state, session_id, session_data, owners, _reason) do
+    updated_session = %{session_data | owners: owners}
+    put_in(state.sessions[session_id], updated_session)
+  end
+
+  defp do_release_session(state, session_id, reason) do
+    case Map.get(state.sessions, session_id) do
+      nil ->
+        state
+
+      session_data ->
+        emit_session_cleanup(session_id, reason)
+        maybe_log_session_cleanup(session_id, reason)
+        new_state = remove_session(state, session_id, session_data)
 
         Task.start(fn ->
           try do
@@ -193,11 +227,39 @@ defmodule SnakeBridge.SessionManager do
           end
         end)
 
-        %{
-          state
-          | sessions: Map.delete(state.sessions, session_id),
-            monitors: Map.delete(state.monitors, session_data.monitor_ref)
-        }
+        new_state
+    end
+  end
+
+  defp remove_session(state, session_id, session_data) do
+    monitor_refs = Map.values(session_data.owners)
+    Enum.each(monitor_refs, &Process.demonitor(&1, [:flush]))
+
+    %{
+      state
+      | sessions: Map.delete(state.sessions, session_id),
+        monitors: Map.drop(state.monitors, monitor_refs)
+    }
+  end
+
+  defp emit_session_cleanup(session_id, reason) do
+    source = cleanup_source(reason)
+    SnakeBridge.Telemetry.session_cleanup(session_id, source, reason)
+  end
+
+  defp cleanup_source(:manual), do: :manual
+  defp cleanup_source(_reason), do: :owner_down
+
+  defp maybe_log_session_cleanup(session_id, reason) do
+    case Application.get_env(:snakebridge, :session_cleanup_log_level) do
+      level when level in [:debug, :info, :warning, :error] ->
+        Logger.log(level, "Releasing session #{session_id} (reason: #{inspect(reason)})")
+
+      true ->
+        Logger.debug("Releasing session #{session_id} (reason: #{inspect(reason)})")
+
+      _ ->
+        :ok
     end
   end
 end

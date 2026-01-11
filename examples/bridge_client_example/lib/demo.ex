@@ -7,7 +7,6 @@ defmodule Demo do
   alias Snakepit.Bridge.{SessionStore, ToolRegistry}
 
   @bridge_client_env "SNAKEBRIDGE_BRIDGE_CLIENT"
-  @grpc_address "localhost:50051"
 
   def run do
     configure_snakepit()
@@ -103,10 +102,12 @@ defmodule Demo do
       case ensure_python_deps(python) do
         :ok ->
           script_path = Path.expand("../priv/python/bridge_client_demo.py", __DIR__)
+          grpc_address = resolve_grpc_address()
 
           env = [
             {"PYTHONPATH", pythonpath()},
-            {"SNAKEPIT_GRPC_ADDR", @grpc_address},
+            {"SNAKEPIT_GRPC_ADDRESS", grpc_address},
+            {"SNAKEPIT_GRPC_ADDR", grpc_address},
             {"SNAKEPIT_SESSION_ID", session_id}
           ]
 
@@ -137,6 +138,24 @@ defmodule Demo do
     else
       {:error, String.trim(output)}
     end
+  end
+
+  defp resolve_grpc_address do
+    if Code.ensure_loaded?(Snakepit.GRPC.Listener) and
+         function_exported?(Snakepit.GRPC.Listener, :await_ready, 1) do
+      case Snakepit.GRPC.Listener.await_ready(5_000) do
+        {:ok, info} -> "#{info.host}:#{info.port}"
+        _ -> fallback_grpc_address()
+      end
+    else
+      fallback_grpc_address()
+    end
+  end
+
+  defp fallback_grpc_address do
+    System.get_env("SNAKEPIT_GRPC_ADDRESS") ||
+      System.get_env("SNAKEPIT_GRPC_ADDR") ||
+      "localhost:50051"
   end
 
   defp pythonpath do

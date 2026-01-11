@@ -7,6 +7,93 @@ defmodule SnakeBridge.Introspector do
 
   @type function_name :: atom() | String.t()
 
+  @doc """
+  Introspect an entire Python module to discover all public symbols.
+
+  This is used when `generate: :all` is specified for a library.
+  Unlike `introspect/2` which only inspects specific symbols, this
+  function discovers all public functions, classes, and attributes.
+
+  ## Options
+
+  - `:submodules` - List of submodule names to also introspect (e.g., ["linalg", "fft"])
+  - `:flat` - If true, use flat format (v2.0); otherwise use namespaced format (v2.1)
+
+  ## Examples
+
+      {:ok, result} = Introspector.introspect_module(library)
+      {:ok, result} = Introspector.introspect_module(library, submodules: ["linalg"])
+
+  """
+  @spec introspect_module(SnakeBridge.Config.Library.t() | map(), keyword()) ::
+          {:ok, map()} | {:error, term()}
+  def introspect_module(library, opts \\ []) do
+    start_time = System.monotonic_time()
+    library_label = library_label(library)
+    SnakeBridge.Telemetry.introspect_start(library_label, 0)
+    python_name = library_python_name(library)
+
+    args = [script_path(), "--module", python_name]
+
+    args =
+      case Keyword.get(opts, :submodules) do
+        nil ->
+          args
+
+        [] ->
+          args
+
+        submodules when is_list(submodules) ->
+          args ++ ["--submodules", Enum.join(submodules, ",")]
+      end
+
+    args = if Keyword.get(opts, :flat, false), do: args ++ ["--flat"], else: args
+
+    result =
+      case run_script(args, runner_opts()) do
+        {output, 0} -> parse_module_output(output)
+        {output, _status} -> handle_python_error(output, python_name)
+      end
+
+    {symbols, classes} =
+      case result do
+        {:ok, data} -> count_module_symbols(data)
+        _ -> {0, 0}
+      end
+
+    SnakeBridge.Telemetry.introspect_stop(
+      start_time,
+      library_label,
+      symbols,
+      classes,
+      System.monotonic_time() - start_time
+    )
+
+    result
+  end
+
+  defp parse_module_output(output) do
+    case Jason.decode(output) do
+      {:ok, %{"error" => error}} -> {:error, error}
+      {:ok, result} when is_map(result) -> {:ok, result}
+      {:error, _} -> {:error, {:json_parse, output}}
+    end
+  end
+
+  defp count_module_symbols(%{"namespaces" => namespaces}) when is_map(namespaces) do
+    Enum.reduce(namespaces, {0, 0}, fn {_ns, data}, {funcs, classes} ->
+      ns_funcs = length(data["functions"] || [])
+      ns_classes = length(data["classes"] || [])
+      {funcs + ns_funcs, classes + ns_classes}
+    end)
+  end
+
+  defp count_module_symbols(%{"functions" => funcs, "classes" => classes}) do
+    {length(funcs || []), length(classes || [])}
+  end
+
+  defp count_module_symbols(_), do: {0, 0}
+
   @spec introspect(SnakeBridge.Config.Library.t() | map(), [function_name()]) ::
           {:ok, map()} | {:error, term()}
   def introspect(library, functions) when is_list(functions) do
@@ -250,7 +337,50 @@ defmodule SnakeBridge.Introspector do
       |> Keyword.get(:env, %{})
       |> Enum.to_list()
 
-    runtime_env ++ extra_env ++ user_env
+    runtime_env
+    |> Kernel.++(extra_env)
+    |> Kernel.++(user_env)
+    |> maybe_add_pythonpath()
+  end
+
+  defp maybe_add_pythonpath(env) do
+    if Enum.any?(env, fn {key, _value} -> String.downcase(key) == "pythonpath" end) do
+      env
+    else
+      case default_pythonpath() do
+        nil -> env
+        pythonpath -> env ++ [{"PYTHONPATH", pythonpath}]
+      end
+    end
+  end
+
+  defp default_pythonpath do
+    path_sep = if match?({:win32, _}, :os.type()), do: ";", else: ":"
+    project_priv = project_priv_python()
+    snakebridge_priv = snakebridge_priv_python()
+
+    paths =
+      [System.get_env("PYTHONPATH"), project_priv, snakebridge_priv]
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.uniq()
+
+    if paths == [] do
+      nil
+    else
+      Enum.join(paths, path_sep)
+    end
+  end
+
+  defp project_priv_python do
+    path = Path.join(File.cwd!(), "priv/python")
+    if File.dir?(path), do: path, else: nil
+  end
+
+  defp snakebridge_priv_python do
+    case :code.priv_dir(:snakebridge) do
+      {:error, _} -> nil
+      priv_dir -> Path.join(to_string(priv_dir), "python")
+    end
   end
 
   defp maybe_put_opt(cmd_opts, key, opts) do

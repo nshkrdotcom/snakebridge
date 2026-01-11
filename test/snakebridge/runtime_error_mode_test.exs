@@ -7,22 +7,18 @@ defmodule SnakeBridge.RuntimeErrorModeTest do
   setup :set_mox_from_context
 
   setup do
-    original_runtime = Application.get_env(:snakebridge, :runtime_client)
+    restore = SnakeBridge.TestHelpers.put_runtime_client(SnakeBridge.RuntimeClientMock)
     original_error_mode = Application.get_env(:snakebridge, :error_mode)
 
     on_exit(fn ->
-      if original_runtime do
-        Application.put_env(:snakebridge, :runtime_client, original_runtime)
-      else
-        Application.delete_env(:snakebridge, :runtime_client)
-      end
-
       if is_nil(original_error_mode) do
         Application.delete_env(:snakebridge, :error_mode)
       else
         Application.put_env(:snakebridge, :error_mode, original_error_mode)
       end
     end)
+
+    on_exit(restore)
 
     :ok
   end
@@ -32,7 +28,6 @@ defmodule SnakeBridge.RuntimeErrorModeTest do
   end
 
   test "translated error_mode maps Python errors to structured errors" do
-    Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
     Application.put_env(:snakebridge, :error_mode, :translated)
 
     reason = %{
@@ -50,7 +45,6 @@ defmodule SnakeBridge.RuntimeErrorModeTest do
   end
 
   test "raise_translated error_mode raises for translated errors" do
-    Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
     Application.put_env(:snakebridge, :error_mode, :raise_translated)
 
     reason = %{
@@ -69,7 +63,6 @@ defmodule SnakeBridge.RuntimeErrorModeTest do
   end
 
   test "raise_translated error_mode raises for dynamic Python errors" do
-    Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
     Application.put_env(:snakebridge, :error_mode, :raise_translated)
 
     reason = %{message: "Unexpected value", python_type: "ValueError"}

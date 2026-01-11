@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-01-11
+
+### Added
+- **Pool name propagation for refs**: Refs now retain the originating `pool_name` when provided via `__runtime__: [pool_name: :my_pool]`
+  - `SnakeBridge.Ref` and `SnakeBridge.StreamRef` structs include a `pool_name` field
+  - Subsequent `get_attr`, `call_method`, `set_attr`, and stream operations automatically reuse the same pool
+  - Eliminates the need to pass `pool_name` on every ref operation
+- **`generate: :all` mode**: New library configuration option to generate wrappers for ALL public symbols in a Python module, not just those detected in your code
+  - Use `{:dspy, "2.6.5", generate: :all}` to generate complete bindings
+  - Supports `submodules` option for recursive module introspection
+  - Full module introspection via `Introspector.introspect_module/2`
+- **Context-aware type mapping**: `TypeMapper` now builds context from discovered classes and resolves type references to generated Elixir modules
+  - `TypeMapper.build_context/1` creates a mapping of Python classes to Elixir modules
+  - `TypeMapper.with_context/2` runs code with type resolution context
+  - `TypeMapper.to_spec/2` resolves class types when context is available
+- **Parsed docstring support**: `Generator.normalize_docstring/1` handles both raw strings and parsed docstring maps from full module introspection
+- **Multi-session example**: New `examples/multi_session_example` demonstrating concurrent isolated Python sessions - "multiple snakes in the pit"
+  - Concurrent sessions with `Task.async` and different session IDs
+  - State isolation between sessions
+  - Parallel processing pattern with `Task.async_stream`
+  - Session-scoped object lifetime management
+- **Multi-session documentation**: README now includes "Multiple Snakes in the Pit" section explaining concurrent session patterns for multi-tenant apps, A/B testing, and parallel workers
+- **Affinity modes in examples**: `multi_session_example` now demonstrates hint vs strict queue vs strict fail-fast under load, per-call overrides, tainted worker handling, and streaming with session-bound refs
+- **Affinity defaults example**: New `examples/affinity_defaults_example` for single-pool defaults and per-call overrides
+- **Session affinity guide**: Added `guides/SESSION_AFFINITY.md` with routing semantics, errors, and streaming guidance
+- **ConfigHelper affinity support**: `SnakeBridge.ConfigHelper` accepts `affinity` and `pools` to configure Snakepit routing defaults per pool
+
+### Changed
+- **Class methods now skip `self`/`cls` parameters**: Generated method signatures no longer include implicit Python instance/class parameters
+- **Method deduplication**: When introspection finds multiple signatures for the same method (e.g., `__getitem__` and `get` mapping to the same Elixir name), only one is generated
+- **Reserved word handling**: Parameter names that are Elixir reserved words (e.g., `and`, `or`, `not`) are now prefixed with `py_` (e.g., `py_and`)
+- **Variadic args signature**: Functions with both `*args` and `opts` no longer have conflicting defaults
+- **Session cleanup logging is opt-in**: Set `config :snakebridge, session_cleanup_log_level: :debug` to log cleanup events; cleanup also emits `[:snakebridge, :session, :cleanup]` telemetry
+
+### Removed
+- **Hardcoded ML type mappings**: Removed special-case handling for `numpy.ndarray`, `torch.Tensor`, `pandas.DataFrame`, etc. These now use the generic class type system with context-aware resolution
+
+### Fixed
+- `Inspect` and `String.Chars` protocol implementations for `SnakeBridge.Ref` now catch `:exit` errors in addition to exceptions, preventing crashes during ref inspection when the runtime is unavailable
+
+### Internal
+- Refactored `RealPythonCase` test support for cleaner Python dependency resolution
+- Added test coverage for `generate: :all`, context-aware type mapping, and self/cls parameter skipping
+- Added test coverage for pool_name propagation on ref operations
+- Bridge client example now dynamically resolves gRPC address via Snakepit's `await_ready/1` with fallback to `SNAKEPIT_GRPC_ADDRESS`/`SNAKEPIT_GRPC_ADDR` env vars
+- Python bridge client demo prefers `SNAKEPIT_GRPC_ADDRESS` over deprecated `SNAKEPIT_GRPC_ADDR`
+- Test helper auto-generates unique `instance_name` and `instance_token` for test isolation with parallel partition support
+
 ## [0.8.1] - 2026-01-09
 
 ### Changed
@@ -464,6 +512,11 @@ Numpy.compute(data, __runtime__: [timeout: 600_000])
 - Type system mapper
 - Basic code generation
 
+[0.8.2]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.1...v0.8.2
+[0.8.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.10...v0.8.0
+[0.7.10]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.9...v0.7.10
+[0.7.9]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.8...v0.7.9
 [0.7.8]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.7...v0.7.8
 [0.7.7]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.5...v0.7.6

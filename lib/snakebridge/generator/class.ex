@@ -15,6 +15,7 @@ defmodule SnakeBridge.Generator.Class do
 
     init_method = Enum.find(methods, fn method -> method["name"] == "__init__" end)
     init_params = if init_method, do: init_method["parameters"] || [], else: []
+    init_params = drop_self_param(init_params)
     plan = Generator.build_params(init_params, init_method || %{})
     param_names = Enum.map(plan.required, & &1.name)
     args_name = Generator.extra_args_name(param_names)
@@ -29,6 +30,7 @@ defmodule SnakeBridge.Generator.Class do
     methods_source =
       methods
       |> Enum.reject(fn method -> method["name"] == "__init__" end)
+      |> deduplicate_methods()
       |> Enum.map_join("\n\n", &render_method/1)
 
     attrs_source =
@@ -96,7 +98,11 @@ defmodule SnakeBridge.Generator.Class do
   defp do_render_method(nil, _info), do: ""
 
   defp do_render_method({name, python_name}, info) do
-    params = info["parameters"] || []
+    params =
+      info["parameters"]
+      |> List.wrap()
+      |> drop_self_param()
+
     plan = Generator.build_params(params, info)
     return_type = info["return_type"] || %{"type" => "any"}
     render_method_body(name, python_name, plan, return_type)
@@ -129,6 +135,47 @@ defmodule SnakeBridge.Generator.Class do
           SnakeBridge.Runtime.get_attr(ref, :#{attr})
         end
     """
+  end
+
+  defp drop_self_param(params) when is_list(params) do
+    Enum.reject(params, fn param ->
+      name = param["name"] || param[:name]
+      name in ["self", "cls"]
+    end)
+  end
+
+  # Deduplicate methods by their resolved Elixir name, preferring those with more parameters
+  # This handles cases where introspection finds multiple signatures for the same method
+  # AND cases where different Python methods map to the same Elixir name (e.g., __getitem__ -> get, get -> get)
+  defp deduplicate_methods(methods) do
+    methods
+    |> Enum.group_by(&method_group_key/1)
+    |> Enum.reject(fn {name, _} -> is_nil(name) end)
+    |> Enum.map(fn {_name, group} ->
+      # Keep the one with the most parameters (or most complex signature)
+      # Prefer the "real" method name over dunder methods when param counts are equal
+      Enum.max_by(group, &method_rank/1)
+    end)
+  end
+
+  defp method_group_key(method) do
+    python_name = method["python_name"] || method["name"] || method[:name] || ""
+
+    case resolve_method_name(method, python_name) do
+      {elixir_name, _python_name} -> elixir_name
+      nil -> nil
+    end
+  end
+
+  defp method_rank(method) do
+    params = method["parameters"] || method[:parameters] || []
+    python_name = method["name"] || method[:name] || ""
+    # Give slight preference to non-dunder methods
+    {length(params), if(dunder_method?(python_name), do: 0, else: 1)}
+  end
+
+  defp dunder_method?(python_name) do
+    String.starts_with?(python_name, "__") && String.ends_with?(python_name, "__")
   end
 
   defp render_variadic_constructor(_plan, _args_name) do

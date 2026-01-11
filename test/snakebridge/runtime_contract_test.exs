@@ -7,18 +7,12 @@ defmodule SnakeBridge.RuntimeContractTest do
   setup :set_mox_from_context
 
   setup do
-    original = Application.get_env(:snakebridge, :runtime_client)
+    restore = SnakeBridge.TestHelpers.put_runtime_client(SnakeBridge.RuntimeClientMock)
 
     # Clear auto-session for consistent test behavior
     SnakeBridge.Runtime.clear_auto_session()
 
-    on_exit(fn ->
-      if original do
-        Application.put_env(:snakebridge, :runtime_client, original)
-      else
-        Application.delete_env(:snakebridge, :runtime_client)
-      end
-    end)
+    on_exit(restore)
 
     :ok
   end
@@ -34,8 +28,6 @@ defmodule SnakeBridge.RuntimeContractTest do
 
   describe "call/4" do
     test "builds payload with required fields and uses runtime_client override" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", payload, _opts ->
         # Check core fields (session_id is now always present via auto-session)
         assert payload["protocol_version"] == 1
@@ -59,8 +51,6 @@ defmodule SnakeBridge.RuntimeContractTest do
 
   describe "call_class/4" do
     test "includes call_type and kwargs in payload" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", payload, _opts ->
         # Check core fields (session_id is now always present via auto-session)
         assert payload["protocol_version"] == 1
@@ -86,8 +76,6 @@ defmodule SnakeBridge.RuntimeContractTest do
 
   describe "stream/5" do
     test "routes through snakebridge.stream" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       expect(SnakeBridge.RuntimeClientMock, :execute_stream, fn "snakebridge.stream",
                                                                 payload,
                                                                 _cb,
@@ -110,8 +98,6 @@ defmodule SnakeBridge.RuntimeContractTest do
 
   describe "release_ref/2" do
     test "sends protocol payload and returns :ok" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       ref =
         SnakeBridge.Ref.from_wire_format(%{
           "__type__" => "ref",
@@ -144,8 +130,6 @@ defmodule SnakeBridge.RuntimeContractTest do
 
   describe "release_session/2" do
     test "sends protocol payload and returns :ok" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.release_session",
                                                          payload,
                                                          _opts ->

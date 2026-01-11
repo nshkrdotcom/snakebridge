@@ -8,6 +8,7 @@ defmodule SnakeBridge.StreamRef do
   defstruct [
     :ref_id,
     :session_id,
+    :pool_name,
     :stream_type,
     :python_module,
     :library,
@@ -17,6 +18,7 @@ defmodule SnakeBridge.StreamRef do
   @type t :: %__MODULE__{
           ref_id: String.t(),
           session_id: String.t(),
+          pool_name: String.t() | atom() | nil,
           stream_type: String.t(),
           python_module: String.t(),
           library: String.t(),
@@ -31,6 +33,7 @@ defmodule SnakeBridge.StreamRef do
     %__MODULE__{
       ref_id: map["id"],
       session_id: map["session_id"],
+      pool_name: map["pool_name"],
       stream_type: map["stream_type"] || "iterator",
       python_module: map["python_module"],
       library: map["library"],

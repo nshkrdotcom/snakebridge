@@ -31,7 +31,7 @@ defmodule MyApp.MixProject do
 
   defp deps do
     [
-      {:snakebridge, "~> 0.8.1"}
+      {:snakebridge, "~> 0.8.2"}
     ]
   end
 
@@ -88,12 +88,16 @@ SnakeBridge generates Elixir modules that wrap Python libraries:
 Numpy.mean([1, 2, 3])                      # Basic call
 Numpy.mean([1, 2, 3], axis: 0)             # With Python kwargs
 Numpy.mean([1, 2, 3], idempotent: true)    # With runtime flags
-Numpy.reshape([1, 2, 3, 4], [[2, 2]], order: "C") # Extra positional args list
+Numpy.reshape([1, 2, 3, 4], [[2, 2]], order: "C") # Optional kwargs in args slot
 ```
 
 All wrappers accept:
 - **Extra positional args**: `args` list appended after required parameters
 - **Keyword options**: `opts` for Python kwargs and runtime flags (`idempotent`, `__runtime__`)
+
+If a function has optional positional parameters, the generated wrapper includes an
+`args` list. Pass `[]` when you do not need extra positional args, or pass a keyword
+list directly as the `args` argument.
 
 ### Signature & Arity Model
 
@@ -201,6 +205,14 @@ and calls Python `release_session` when it dies. You can also release explicitly
 :ok = SnakeBridge.SessionManager.release_session(session_id)
 ```
 
+Session cleanup logs are opt-in. To enable them, set:
+
+```elixir
+config :snakebridge, session_cleanup_log_level: :debug
+```
+
+SnakeBridge also emits `[:snakebridge, :session, :cleanup]` telemetry events on cleanup.
+
 Pass explicit options with `SessionContext.with_session/2` when you need a
 custom session id or metadata:
 
@@ -214,6 +226,100 @@ end)
 Configuration options (environment variables):
 - `SNAKEBRIDGE_REF_TTL_SECONDS` (default `0`, disabled) to enable time-based cleanup
 - `SNAKEBRIDGE_REF_MAX` to cap in-memory refs per Python process
+
+### Session Affinity (Snakepit)
+
+SnakeBridge relies on Snakepit's session affinity to route calls with the same
+`session_id` to the same worker. By default, affinity is a **hint**: under load,
+Snakepit may route a session to a different worker, which can invalidate
+in-memory refs.
+
+For strict routing of stateful refs, configure affinity at the pool level or per call:
+
+```elixir
+# Pool default (recommended for stateful refs)
+SnakeBridge.ConfigHelper.configure_snakepit!(affinity: :strict_queue)
+
+# Per-call override
+SnakeBridge.call("pathlib", "Path", ["."],
+  __runtime__: [affinity: :strict_fail_fast]
+)
+```
+
+Strict modes:
+- `:strict_queue` — queue until the preferred worker is available
+- `:strict_fail_fast` — return `{:error, :worker_busy}` when the preferred worker is busy
+
+See `guides/SESSION_AFFINITY.md` for routing details, error semantics, and streaming guidance.
+
+### Multi-Session: Multiple Snakes in the Pit
+
+SnakeBridge supports running multiple **isolated Python sessions concurrently**.
+Each session maintains independent state - objects created in one session are
+invisible to others. This enables:
+
+- **Multi-tenant isolation**: Each user/tenant gets their own Python state
+- **Parallel processing**: Workers with isolated state, no cross-contamination
+- **A/B testing**: Different configurations running side-by-side
+- **Resource isolation**: Separate memory pools per session
+
+#### Concurrent Sessions
+
+```elixir
+# Two sessions running concurrently with independent state
+tasks = [
+  Task.async(fn ->
+    SessionContext.with_session(session_id: "tenant_a", fn ->
+      {:ok, ref} = SnakeBridge.call("collections", "Counter", [["a", "b", "a"]])
+      # This Counter exists only in tenant_a's session
+      SnakeBridge.Dynamic.call(ref, :most_common, [1])
+    end)
+  end),
+  Task.async(fn ->
+    SessionContext.with_session(session_id: "tenant_b", fn ->
+      {:ok, ref} = SnakeBridge.call("collections", "Counter", [["x", "y", "x"]])
+      # Completely isolated from tenant_a
+      SnakeBridge.Dynamic.call(ref, :most_common, [1])
+    end)
+  end)
+]
+
+[result_a, result_b] = Task.await_many(tasks)
+```
+
+#### Session Isolation Guarantee
+
+Objects (refs) are scoped to their session. A ref created in session A cannot
+be accessed from session B:
+
+```elixir
+ref_a = SessionContext.with_session(session_id: "session_a", fn ->
+  {:ok, ref} = SnakeBridge.call("pathlib", "Path", ["/data/a"])
+  ref  # ref.session_id == "session_a"
+end)
+
+# ref_a belongs to session_a - it carries its session_id
+IO.puts(ref_a.session_id)  # => "session_a"
+```
+
+#### Parallel Processing Pattern
+
+Process items in parallel with isolated sessions per worker:
+
+```elixir
+items
+|> Task.async_stream(fn item ->
+  SessionContext.with_session(session_id: "worker_#{item.id}", fn ->
+    # Each worker has fully isolated Python state
+    {:ok, result} = SnakeBridge.call("json", "dumps", [item.data])
+    result
+  end)
+end, max_concurrency: System.schedulers_online())
+|> Enum.map(fn {:ok, result} -> result end)
+```
+
+See `examples/multi_session_example` for complete working code demonstrating
+multi-session patterns and affinity modes under load.
 
 ### Streaming Functions
 
@@ -508,11 +614,35 @@ This replaces ~30 lines of manual configuration and automatically:
 - Configures the snakebridge adapter
 - Sets up PYTHONPATH with snakepit and snakebridge priv directories
 
-For custom pool sizes or explicit venv paths:
+For custom pool sizes, affinity defaults, or explicit venv paths:
 
 ```elixir
-SnakeBridge.ConfigHelper.configure_snakepit!(pool_size: 4, venv_path: "/path/to/venv")
+SnakeBridge.ConfigHelper.configure_snakepit!(
+  pool_size: 4,
+  affinity: :strict_queue,
+  venv_path: "/path/to/venv"
+)
 ```
+
+For multi-pool setups with per-pool affinity:
+
+```elixir
+SnakeBridge.ConfigHelper.configure_snakepit!(
+  pools: [
+    %{name: :hint_pool, pool_size: 2, affinity: :hint},
+    %{name: :strict_pool, pool_size: 2, affinity: :strict_queue}
+  ]
+)
+```
+
+Select a pool per call with `pool_name` in `__runtime__`:
+
+```elixir
+SnakeBridge.call("math", "sqrt", [16], __runtime__: [pool_name: :strict_pool])
+```
+
+Refs retain the originating `pool_name` when provided, so subsequent
+`get_attr`/`call_method` calls reuse the same pool even if you omit `pool_name`.
 
 Python adapter ref lifecycle (environment variables):
 
@@ -554,6 +684,8 @@ cd examples/wrapper_args_example && mix run -e Demo.run
 cd examples/class_constructor_example && mix run -e Demo.run
 cd examples/streaming_example && mix run -e Demo.run
 cd examples/strict_mode_example && mix run -e Demo.run
+cd examples/multi_session_example && mix run -e Demo.run
+cd examples/affinity_defaults_example && mix run -e Demo.run
 cd examples/universal_ffi_example && mix run -e Demo.run  # Universal FFI showcase
 ```
 
@@ -707,7 +839,7 @@ Any other keys in `__runtime__` are forwarded directly to Snakepit:
 
 ```elixir
 # Pass-through to Snakepit's advanced options
-MyLib.func(args, __runtime__: [timeout: 60_000, pool: :my_pool])
+MyLib.func(args, __runtime__: [timeout: 60_000, pool_name: :my_pool, affinity: :strict_queue])
 ```
 
 ### Operational Defaults
@@ -731,7 +863,7 @@ MyLib.func(args, __runtime__: [timeout: 60_000, pool: :my_pool])
 - Elixir ~> 1.14
 - Python 3.8+
 - [uv](https://docs.astral.sh/uv/) - Fast Python package manager (required by snakepit)
-- Snakepit ~> 0.9.0
+- Snakepit ~> 0.9.2
 
 ### Installing uv
 

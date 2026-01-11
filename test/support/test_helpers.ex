@@ -5,6 +5,7 @@ defmodule SnakeBridge.TestHelpers do
 
   @default_timeout 1000
   @default_interval 10
+  @runtime_client_key :snakebridge_runtime_client
 
   @doc """
   Polls a condition function until it returns true or timeout is reached.
@@ -96,5 +97,34 @@ defmodule SnakeBridge.TestHelpers do
       "description" => Keyword.get(opts, :description, "Test library"),
       "functions" => functions
     }
+  end
+
+  @doc """
+  Sets a per-process runtime client override and returns a restore function.
+  """
+  def put_runtime_client(client) do
+    previous = Process.get(@runtime_client_key)
+    Process.put(@runtime_client_key, client)
+
+    fn ->
+      if is_nil(previous) do
+        Process.delete(@runtime_client_key)
+      else
+        Process.put(@runtime_client_key, previous)
+      end
+    end
+  end
+
+  @doc """
+  Runs a function with a per-process runtime client override.
+  """
+  def with_runtime_client(client, fun) when is_function(fun, 0) do
+    restore = put_runtime_client(client)
+
+    try do
+      fun.()
+    after
+      restore.()
+    end
   end
 end

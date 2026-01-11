@@ -187,7 +187,7 @@ defmodule SnakeBridge do
   - `args` - List of positional arguments (default: `[]`)
   - `opts` - Keyword arguments passed to Python, plus:
     - `:idempotent` - Mark call as cacheable (default: `false`)
-    - `:__runtime__` - Pass-through options to Snakepit
+    - `:__runtime__` - Pass-through options to Snakepit (e.g., `:timeout`, `:pool_name`, `:affinity`)
 
   ## Examples
 
@@ -500,6 +500,7 @@ defmodule SnakeBridge do
   - This releases all refs in the current process's auto-session
   - A new session is created automatically on the next Python call
   - Use `SessionContext.with_session/1` for more fine-grained control
+  - Cleanup logs are opt-in via `config :snakebridge, session_cleanup_log_level: :debug`
   """
   @spec release_auto_session() :: :ok
   defdelegate release_auto_session(), to: Runtime

@@ -7,15 +7,8 @@ defmodule SnakeBridge.AutoSessionTest do
   setup :set_mox_from_context
 
   setup do
-    original = Application.get_env(:snakebridge, :runtime_client)
-
-    on_exit(fn ->
-      if original do
-        Application.put_env(:snakebridge, :runtime_client, original)
-      else
-        Application.delete_env(:snakebridge, :runtime_client)
-      end
-    end)
+    restore = SnakeBridge.TestHelpers.put_runtime_client(SnakeBridge.RuntimeClientMock)
+    on_exit(restore)
 
     # Clear any existing auto-session
     SnakeBridge.Runtime.clear_auto_session()
@@ -25,8 +18,6 @@ defmodule SnakeBridge.AutoSessionTest do
 
   describe "auto session creation" do
     test "creates session on first Python call" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", payload, _opts ->
         # Verify session_id is present and starts with "auto_"
         assert Map.has_key?(payload, "session_id")
@@ -42,8 +33,6 @@ defmodule SnakeBridge.AutoSessionTest do
     end
 
     test "reuses session for subsequent calls" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       expect(SnakeBridge.RuntimeClientMock, :execute, 2, fn "snakebridge.call", payload, _opts ->
         send(self(), {:session_id, payload["session_id"]})
         {:ok, 2.0}
@@ -60,8 +49,6 @@ defmodule SnakeBridge.AutoSessionTest do
     end
 
     test "explicit session overrides auto-session" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       # First call with auto-session
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", payload, _opts ->
         send(self(), {:auto_session, payload["session_id"]})
@@ -84,8 +71,6 @@ defmodule SnakeBridge.AutoSessionTest do
     end
 
     test "auto-session ID contains PID and timestamp" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", _payload, _opts ->
         {:ok, 2.0}
       end)
@@ -105,8 +90,6 @@ defmodule SnakeBridge.AutoSessionTest do
 
   describe "process isolation" do
     test "different processes get different sessions" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       # Allow calls from multiple processes
       stub(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", _payload, _opts ->
         {:ok, 2.0}
@@ -117,8 +100,10 @@ defmodule SnakeBridge.AutoSessionTest do
 
       session_2 =
         Task.async(fn ->
-          {:ok, _} = SnakeBridge.Runtime.call_dynamic("math", "sqrt", [9])
-          SnakeBridge.Runtime.current_session()
+          SnakeBridge.TestHelpers.with_runtime_client(SnakeBridge.RuntimeClientMock, fn ->
+            {:ok, _} = SnakeBridge.Runtime.call_dynamic("math", "sqrt", [9])
+            SnakeBridge.Runtime.current_session()
+          end)
         end)
         |> Task.await()
 
@@ -126,8 +111,6 @@ defmodule SnakeBridge.AutoSessionTest do
     end
 
     test "parallel processes each get unique sessions" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       stub(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", _payload, _opts ->
         {:ok, 2.0}
       end)
@@ -135,8 +118,10 @@ defmodule SnakeBridge.AutoSessionTest do
       tasks =
         for _ <- 1..5 do
           Task.async(fn ->
-            {:ok, _} = SnakeBridge.Runtime.call_dynamic("math", "sqrt", [4])
-            SnakeBridge.Runtime.current_session()
+            SnakeBridge.TestHelpers.with_runtime_client(SnakeBridge.RuntimeClientMock, fn ->
+              {:ok, _} = SnakeBridge.Runtime.call_dynamic("math", "sqrt", [4])
+              SnakeBridge.Runtime.current_session()
+            end)
           end)
         end
 
@@ -149,8 +134,6 @@ defmodule SnakeBridge.AutoSessionTest do
 
   describe "session cleanup" do
     test "clear_auto_session removes from process dictionary" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", _payload, _opts ->
         {:ok, 2.0}
       end)
@@ -162,8 +145,6 @@ defmodule SnakeBridge.AutoSessionTest do
     end
 
     test "clear_auto_session returns :ok" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", _payload, _opts ->
         {:ok, 2.0}
       end)
@@ -178,8 +159,6 @@ defmodule SnakeBridge.AutoSessionTest do
     end
 
     test "release_auto_session creates new session on next call" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       # First call creates session, then release creates a new one on second call
       expect(SnakeBridge.RuntimeClientMock, :execute, 3, fn action, _payload, _opts ->
         case action do
@@ -205,8 +184,6 @@ defmodule SnakeBridge.AutoSessionTest do
     end
 
     test "release_auto_session clears process dictionary" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       expect(SnakeBridge.RuntimeClientMock, :execute, 2, fn action, _payload, _opts ->
         case action do
           "snakebridge.call" -> {:ok, 2.0}
@@ -227,8 +204,6 @@ defmodule SnakeBridge.AutoSessionTest do
 
   describe "session manager integration" do
     test "auto-session is registered with SessionManager" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", _payload, _opts ->
         {:ok, 2.0}
       end)
@@ -240,8 +215,6 @@ defmodule SnakeBridge.AutoSessionTest do
     end
 
     test "release_auto_session unregisters from SessionManager" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       expect(SnakeBridge.RuntimeClientMock, :execute, 2, fn action, _payload, _opts ->
         case action do
           "snakebridge.call" -> {:ok, 2.0}
@@ -258,8 +231,6 @@ defmodule SnakeBridge.AutoSessionTest do
     end
 
     test "SessionManager tracks session state" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", _payload, _opts ->
         {:ok, 2.0}
       end)
@@ -270,7 +241,7 @@ defmodule SnakeBridge.AutoSessionTest do
       state = :sys.get_state(SnakeBridge.SessionManager)
       assert Map.has_key?(state.sessions, session_id)
       session_data = state.sessions[session_id]
-      assert session_data.owner_pid == self()
+      assert Map.has_key?(session_data.owners, self())
     end
   end
 
@@ -283,8 +254,6 @@ defmodule SnakeBridge.AutoSessionTest do
     end
 
     test "call_dynamic includes session_id in payload" do
-      Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
       expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", payload, _opts ->
         assert Map.has_key?(payload, "session_id")
         assert is_binary(payload["session_id"])

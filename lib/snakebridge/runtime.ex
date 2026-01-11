@@ -9,6 +9,8 @@ defmodule SnakeBridge.Runtime do
   alias SnakeBridge.Runtime.{Payload, SessionResolver, Streamer}
   alias SnakeBridge.Types
 
+  @runtime_client_key :snakebridge_runtime_client
+
   @type module_ref :: module()
   @type function_name :: atom() | String.t()
   @type args :: list()
@@ -23,7 +25,7 @@ defmodule SnakeBridge.Runtime do
   - `module` - Either a generated SnakeBridge module atom OR a Python module path string
   - `function` - Function name (atom or string)
   - `args` - Positional arguments (list)
-  - `opts` - Options including kwargs, :idempotent, :__runtime__
+  - `opts` - Options including kwargs, :idempotent, :__runtime__ (e.g., `:pool_name`, `:affinity`)
 
   ## Examples
 
@@ -68,7 +70,7 @@ defmodule SnakeBridge.Runtime do
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> apply_error_mode()
-    |> decode_result()
+    |> decode_result(runtime_opts)
   end
 
   @doc """
@@ -118,7 +120,7 @@ defmodule SnakeBridge.Runtime do
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> apply_error_mode()
-    |> decode_result()
+    |> decode_result(runtime_opts)
   end
 
   @spec call_helper(String.t(), args(), opts() | map()) :: {:ok, term()} | {:error, term()}
@@ -145,7 +147,7 @@ defmodule SnakeBridge.Runtime do
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> classify_helper_result(helper)
-    |> decode_result()
+    |> decode_result(runtime_opts)
   end
 
   def call_helper(helper, args, opts) when is_list(opts) do
@@ -170,7 +172,7 @@ defmodule SnakeBridge.Runtime do
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> classify_helper_result(helper)
-    |> decode_result()
+    |> decode_result(runtime_opts)
   end
 
   @doc """
@@ -248,6 +250,7 @@ defmodule SnakeBridge.Runtime do
   def stream_next(stream_ref, opts \\ []) do
     {_args, opts} = normalize_args_opts([], opts)
     {_, _, _, runtime_opts} = split_opts(opts)
+    runtime_opts = maybe_put_pool_name_from_ref(runtime_opts, stream_ref)
 
     wire_ref = SnakeBridge.StreamRef.to_wire_format(stream_ref)
     # Single source of truth: prioritize runtime_opts, then stream_ref session, then context
@@ -280,7 +283,7 @@ defmodule SnakeBridge.Runtime do
         {:error, :stop_iteration}
 
       {:ok, value} ->
-        {:ok, Types.decode(value)}
+        {:ok, decode_value(value, runtime_opts)}
 
       error ->
         error
@@ -293,6 +296,10 @@ defmodule SnakeBridge.Runtime do
   @spec stream_len(SnakeBridge.StreamRef.t(), opts()) ::
           {:ok, non_neg_integer()} | {:error, term()}
   def stream_len(stream_ref, opts \\ []) do
+    {_args, opts} = normalize_args_opts([], opts)
+    {_, _, _, runtime_opts} = split_opts(opts)
+    runtime_opts = maybe_put_pool_name_from_ref(runtime_opts, stream_ref)
+    opts = Keyword.put(opts, :__runtime__, runtime_opts)
     wire_ref = SnakeBridge.StreamRef.to_wire_format(stream_ref)
     call_method(wire_ref, :__len__, [], opts)
   end
@@ -324,13 +331,14 @@ defmodule SnakeBridge.Runtime do
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> apply_error_mode()
-    |> decode_result()
+    |> decode_result(runtime_opts)
   end
 
   @spec call_method(SnakeBridge.Ref.t() | map(), function_name(), args(), opts()) ::
           {:ok, term()} | {:error, error_reason()}
   def call_method(ref, function, args \\ [], opts \\ []) do
     {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
+    runtime_opts = maybe_put_pool_name_from_ref(runtime_opts, ref)
     encoded_args = encode_args(args ++ extra_args)
     encoded_kwargs = encode_kwargs(kwargs)
     wire_ref = normalize_ref(ref)
@@ -361,7 +369,7 @@ defmodule SnakeBridge.Runtime do
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> apply_error_mode()
-    |> decode_result()
+    |> decode_result(runtime_opts)
   end
 
   @doc """
@@ -416,7 +424,7 @@ defmodule SnakeBridge.Runtime do
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> apply_error_mode()
-    |> decode_result()
+    |> decode_result(runtime_opts)
   end
 
   # Atom module - existing behavior
@@ -444,13 +452,14 @@ defmodule SnakeBridge.Runtime do
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> apply_error_mode()
-    |> decode_result()
+    |> decode_result(runtime_opts)
   end
 
   @spec get_attr(SnakeBridge.Ref.t(), atom() | String.t(), opts()) ::
           {:ok, term()} | {:error, error_reason()}
   def get_attr(ref, attr, opts \\ []) do
     {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
+    runtime_opts = maybe_put_pool_name_from_ref(runtime_opts, ref)
     encoded_kwargs = encode_kwargs(kwargs)
     wire_ref = normalize_ref(ref)
     # Single source of truth: prioritize runtime_opts, then ref session, then context
@@ -474,7 +483,7 @@ defmodule SnakeBridge.Runtime do
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> apply_error_mode()
-    |> decode_result()
+    |> decode_result(runtime_opts)
   end
 
   @doc false
@@ -504,6 +513,7 @@ defmodule SnakeBridge.Runtime do
           {:ok, term()} | {:error, error_reason()}
   def set_attr(ref, attr, value, opts \\ []) do
     {kwargs, idempotent, _extra_args, runtime_opts} = split_opts(opts)
+    runtime_opts = maybe_put_pool_name_from_ref(runtime_opts, ref)
     encoded_kwargs = encode_kwargs(kwargs)
     encoded_args = encode_args([value])
     wire_ref = normalize_ref(ref)
@@ -528,7 +538,7 @@ defmodule SnakeBridge.Runtime do
       runtime_client().execute("snakebridge.call", payload, runtime_opts)
     end)
     |> apply_error_mode()
-    |> decode_result()
+    |> decode_result(runtime_opts)
   end
 
   @spec release_ref(SnakeBridge.Ref.t(), opts()) :: :ok | {:error, error_reason()}
@@ -565,7 +575,8 @@ defmodule SnakeBridge.Runtime do
 
   @doc false
   def runtime_client do
-    Application.get_env(:snakebridge, :runtime_client, Snakepit)
+    Process.get(@runtime_client_key) ||
+      Application.get_env(:snakebridge, :runtime_client, Snakepit)
   end
 
   @doc false
@@ -828,8 +839,56 @@ defmodule SnakeBridge.Runtime do
     Enum.into(map, %{}, fn {key, value} -> {to_string(key), value} end)
   end
 
-  defp decode_result({:ok, value}), do: {:ok, Types.decode(value)}
-  defp decode_result(result), do: result
+  defp decode_result({:ok, value}, runtime_opts), do: {:ok, decode_value(value, runtime_opts)}
+  defp decode_result(result, _runtime_opts), do: result
+
+  defp decode_value(value, runtime_opts) do
+    value
+    |> Types.decode()
+    |> maybe_attach_pool_name(runtime_opts)
+  end
+
+  defp maybe_attach_pool_name(value, runtime_opts) do
+    pool_name =
+      runtime_opts
+      |> runtime_pool_name()
+      |> normalize_pool_name()
+
+    if is_nil(pool_name) do
+      value
+    else
+      attach_pool_name(value, pool_name)
+    end
+  end
+
+  defp attach_pool_name(%SnakeBridge.Ref{} = ref, pool_name) do
+    %{ref | pool_name: pool_name}
+  end
+
+  defp attach_pool_name(%SnakeBridge.StreamRef{} = ref, pool_name) do
+    %{ref | pool_name: pool_name}
+  end
+
+  defp attach_pool_name(value, pool_name) when is_list(value) do
+    Enum.map(value, &attach_pool_name(&1, pool_name))
+  end
+
+  defp attach_pool_name(value, pool_name) when is_tuple(value) do
+    value
+    |> Tuple.to_list()
+    |> Enum.map(&attach_pool_name(&1, pool_name))
+    |> List.to_tuple()
+  end
+
+  defp attach_pool_name(%{} = value, pool_name) do
+    if is_struct(value) do
+      value
+    else
+      Map.new(value, fn {key, item} -> {key, attach_pool_name(item, pool_name)} end)
+    end
+  end
+
+  defp attach_pool_name(other, _pool_name), do: other
 
   @doc false
   def apply_error_mode({:error, reason}) do
@@ -902,6 +961,52 @@ defmodule SnakeBridge.Runtime do
   defp error_mode do
     Application.get_env(:snakebridge, :error_mode, :raw)
   end
+
+  defp maybe_put_pool_name_from_ref(runtime_opts, ref) when is_list(runtime_opts) do
+    if runtime_pool_name(runtime_opts) do
+      runtime_opts
+    else
+      case ref_pool_name(ref) |> normalize_pool_name() do
+        nil -> runtime_opts
+        pool_name -> Keyword.put(runtime_opts, :pool_name, pool_name)
+      end
+    end
+  end
+
+  defp maybe_put_pool_name_from_ref(runtime_opts, _ref), do: runtime_opts
+
+  defp runtime_pool_name(runtime_opts) when is_list(runtime_opts) do
+    case Keyword.fetch(runtime_opts, :pool_name) do
+      {:ok, value} ->
+        value
+
+      :error ->
+        case List.keyfind(runtime_opts, "pool_name", 0) do
+          {"pool_name", value} -> value
+          _ -> nil
+        end
+    end
+  end
+
+  defp runtime_pool_name(runtime_opts) when is_map(runtime_opts) do
+    Map.get(runtime_opts, :pool_name) || Map.get(runtime_opts, "pool_name")
+  end
+
+  defp runtime_pool_name(_), do: nil
+
+  defp ref_pool_name(%SnakeBridge.Ref{pool_name: pool_name}), do: pool_name
+  defp ref_pool_name(%SnakeBridge.StreamRef{pool_name: pool_name}), do: pool_name
+
+  defp ref_pool_name(%{} = ref) do
+    Map.get(ref, :pool_name) || Map.get(ref, "pool_name")
+  end
+
+  defp ref_pool_name(_), do: nil
+
+  defp normalize_pool_name(nil), do: nil
+  defp normalize_pool_name(name) when is_atom(name), do: Atom.to_string(name)
+  defp normalize_pool_name(name) when is_binary(name) and name != "", do: name
+  defp normalize_pool_name(_), do: nil
 
   defp normalize_ref(%SnakeBridge.Ref{} = ref), do: SnakeBridge.Ref.to_wire_format(ref)
 

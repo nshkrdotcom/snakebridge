@@ -155,21 +155,6 @@ def type_to_dict(t: Any) -> Dict[str, Any]:
     if inspect.isclass(t):
         name = t.__name__
         module = t.__module__
-        type_name = name.lower()
-
-        if "numpy" in module and "ndarray" in type_name:
-            return {"type": "numpy.ndarray"}
-        if "numpy" in module and "dtype" in type_name:
-            return {"type": "numpy.dtype"}
-        if "torch" in module and "tensor" in name:
-            return {"type": "torch.Tensor"}
-        if "torch" in module and "dtype" in type_name:
-            return {"type": "torch.dtype"}
-        if "pandas" in module and "dataframe" in type_name:
-            return {"type": "pandas.DataFrame"}
-        if "pandas" in module and "series" in type_name:
-            return {"type": "pandas.Series"}
-
         return {"type": "class", "name": name, "module": module}
 
     # Fallback to string representation

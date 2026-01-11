@@ -7,7 +7,7 @@ defmodule SnakeBridge.RuntimeHelperTest do
   setup :set_mox_from_context
 
   setup do
-    original_runtime = Application.get_env(:snakebridge, :runtime_client)
+    restore = SnakeBridge.TestHelpers.put_runtime_client(SnakeBridge.RuntimeClientMock)
     original_helpers = Application.get_env(:snakebridge, :helper_paths)
     original_pack = Application.get_env(:snakebridge, :helper_pack_enabled)
     original_allowlist = Application.get_env(:snakebridge, :helper_allowlist)
@@ -16,12 +16,6 @@ defmodule SnakeBridge.RuntimeHelperTest do
     SnakeBridge.Runtime.clear_auto_session()
 
     on_exit(fn ->
-      if original_runtime do
-        Application.put_env(:snakebridge, :runtime_client, original_runtime)
-      else
-        Application.delete_env(:snakebridge, :runtime_client)
-      end
-
       if is_nil(original_helpers) do
         Application.delete_env(:snakebridge, :helper_paths)
       else
@@ -41,11 +35,12 @@ defmodule SnakeBridge.RuntimeHelperTest do
       end
     end)
 
+    on_exit(restore)
+
     :ok
   end
 
   test "call_helper builds helper payload with config" do
-    Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
     helper_path = Path.expand("priv/python/helpers")
     Application.put_env(:snakebridge, :helper_paths, [helper_path])
     Application.put_env(:snakebridge, :helper_pack_enabled, false)
@@ -80,8 +75,6 @@ defmodule SnakeBridge.RuntimeHelperTest do
   end
 
   test "call_helper maps missing helper errors" do
-    Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
     expect(SnakeBridge.RuntimeClientMock, :execute, fn _tool, _payload, _opts ->
       {:error,
        %Snakepit.Error.PythonException{
@@ -95,8 +88,6 @@ defmodule SnakeBridge.RuntimeHelperTest do
   end
 
   test "call_helper raises for non-serializable arguments" do
-    Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
-
     # With the new SerializationError behavior, encoding raises immediately
     # before the mock is even called
     assert_raise SnakeBridge.SerializationError, fn ->

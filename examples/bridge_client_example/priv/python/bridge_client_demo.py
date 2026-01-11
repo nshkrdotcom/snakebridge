@@ -11,7 +11,9 @@ from snakebridge_client import BridgeClient
 
 
 def main() -> int:
-    address = os.environ.get("SNAKEPIT_GRPC_ADDR", "localhost:50051")
+    address = os.environ.get("SNAKEPIT_GRPC_ADDRESS") or os.environ.get(
+        "SNAKEPIT_GRPC_ADDR", "localhost:50051"
+    )
     session_id = os.environ.get("SNAKEPIT_SESSION_ID")
     if not session_id:
         print("SNAKEPIT_SESSION_ID is required", file=sys.stderr)

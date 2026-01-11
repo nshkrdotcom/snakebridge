@@ -55,6 +55,34 @@ defmodule SnakeBridge.Generator.ClassConstructorTest do
       assert source =~ "call_class(__MODULE__, :__init__, [x, y]"
     end
 
+    test "class __init__ skips self parameter" do
+      class_info = %{
+        "name" => "Widget",
+        "python_module" => "mylib",
+        "methods" => [
+          %{
+            "name" => "__init__",
+            "parameters" => [
+              %{"name" => "self", "kind" => "POSITIONAL_OR_KEYWORD"},
+              %{"name" => "value", "kind" => "POSITIONAL_OR_KEYWORD"}
+            ]
+          }
+        ],
+        "attributes" => []
+      }
+
+      library = %SnakeBridge.Config.Library{
+        name: :mylib,
+        python_name: "mylib",
+        module_name: Mylib
+      }
+
+      source = Generator.render_class(class_info, library)
+
+      assert source =~ "def new(value"
+      refute source =~ "def new(self"
+    end
+
     test "class with optional __init__ args generates new with opts" do
       class_info = %{
         "name" => "Config",
@@ -79,7 +107,7 @@ defmodule SnakeBridge.Generator.ClassConstructorTest do
 
       source = Generator.render_class(class_info, library)
 
-      assert source =~ "def new(path, args \\\\ [], opts \\\\ [])"
+      assert source =~ "def new(path, args, opts \\\\ [])"
       assert source =~ "call_class(__MODULE__, :__init__, [path] ++ List.wrap(args), opts)"
     end
   end

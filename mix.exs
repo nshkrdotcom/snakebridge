@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.8.1"
+  @version "0.8.2"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -43,7 +43,7 @@ defmodule SnakeBridge.MixProject do
   defp deps do
     [
       # Core - Python bridge
-      {:snakepit, "~> 0.9.1"},
+      {:snakepit, "~> 0.10.1"},
 
       # JSON encoding
       {:jason, "~> 1.4"},
@@ -68,7 +68,22 @@ defmodule SnakeBridge.MixProject do
       source_url: @source_url,
       assets: %{"assets" => "assets"},
       logo: "assets/snakebridge.svg",
-      extras: ["README.md", "CHANGELOG.md", "LICENSE"],
+      extras: [
+        "README.md",
+        "CHANGELOG.md",
+        "LICENSE",
+        {"guides/SESSION_AFFINITY.md", [title: "Session Affinity", filename: "session-affinity"]},
+        # Examples
+        {"examples/README.md", [title: "Examples Overview", filename: "examples-overview"]},
+        {"examples/math_demo/README.md", [title: "Math Demo", filename: "example-math-demo"]},
+        {"examples/proof_pipeline/README.md",
+         [title: "Proof Pipeline", filename: "example-proof-pipeline"]}
+      ],
+      groups_for_extras: [
+        Introduction: ~w(readme changelog license),
+        Guides: ~w(session-affinity),
+        Examples: ~w(examples-overview example-math-demo example-proof-pipeline)
+      ],
       groups_for_modules: [
         Core: [
           SnakeBridge,

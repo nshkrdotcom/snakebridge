@@ -27,20 +27,13 @@ defmodule SnakeBridge.SessionConsistencyTest do
   end
 
   setup do
-    original = Application.get_env(:snakebridge, :runtime_client)
-    Application.put_env(:snakebridge, :runtime_client, SnakeBridge.RuntimeClientMock)
+    restore = SnakeBridge.TestHelpers.put_runtime_client(SnakeBridge.RuntimeClientMock)
 
     # Clear any existing session context
     SnakeBridge.Runtime.clear_auto_session()
     SnakeBridge.SessionContext.clear_current()
 
-    on_exit(fn ->
-      if original do
-        Application.put_env(:snakebridge, :runtime_client, original)
-      else
-        Application.delete_env(:snakebridge, :runtime_client)
-      end
-    end)
+    on_exit(restore)
 
     :ok
   end
@@ -308,6 +301,46 @@ defmodule SnakeBridge.SessionConsistencyTest do
       SnakeBridge.SessionContext.with_session([session_id: context_session], fn ->
         {:ok, _} = SnakeBridge.Runtime.call_method(ref, :method, [])
       end)
+    end
+  end
+
+  describe "pool_name propagation for ref operations" do
+    test "ref captures pool_name and get_attr reuses it when runtime opts omit pool_name" do
+      pool_name = :optimizer_pool
+      session_id = "pool_session_1"
+
+      expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", payload, opts ->
+        assert Keyword.get(opts, :pool_name) == pool_name
+        assert payload["session_id"] == session_id
+
+        {:ok,
+         %{
+           "__type__" => "ref",
+           "__schema__" => 1,
+           "id" => "ref-1",
+           "session_id" => session_id,
+           "python_module" => "builtins",
+           "library" => "builtins"
+         }}
+      end)
+
+      {:ok, ref} =
+        SnakeBridge.Runtime.call_dynamic(
+          "builtins",
+          "object",
+          [],
+          __runtime__: [session_id: session_id, pool_name: pool_name]
+        )
+
+      assert ref.pool_name == "optimizer_pool"
+
+      expect(SnakeBridge.RuntimeClientMock, :execute, fn "snakebridge.call", payload, opts ->
+        assert Keyword.get(opts, :pool_name) == "optimizer_pool"
+        assert payload["session_id"] == session_id
+        {:ok, "value"}
+      end)
+
+      assert {:ok, "value"} = SnakeBridge.Runtime.get_attr(ref, "name")
     end
   end
 end

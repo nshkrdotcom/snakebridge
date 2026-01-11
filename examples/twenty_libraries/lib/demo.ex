@@ -27,7 +27,7 @@ defmodule Demo do
     IO.puts("""
 
     ╔════════════════════════════════════════════════════════════╗
-    ║  SnakeBridge: 20 Python Libraries Over gRPC               ║
+    ║  SnakeBridge: 20 Python Libraries Over gRPC                ║
     ╚════════════════════════════════════════════════════════════╝
     """)
   end

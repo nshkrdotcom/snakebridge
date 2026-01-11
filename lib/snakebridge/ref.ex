@@ -13,6 +13,7 @@ defmodule SnakeBridge.Ref do
   @type t :: %__MODULE__{
           id: String.t(),
           session_id: String.t(),
+          pool_name: String.t() | atom() | nil,
           python_module: String.t() | nil,
           library: String.t() | nil,
           type_name: String.t() | nil,
@@ -22,6 +23,7 @@ defmodule SnakeBridge.Ref do
   defstruct [
     :id,
     :session_id,
+    :pool_name,
     :python_module,
     :library,
     :type_name,
@@ -41,6 +43,7 @@ defmodule SnakeBridge.Ref do
     %__MODULE__{
       id: get_wire_field(map, ["id", "ref_id"]),
       session_id: get_wire_field(map, ["session_id"]),
+      pool_name: get_wire_field(map, ["pool_name"]),
       python_module: get_wire_field(map, ["python_module"]),
       library: get_wire_field(map, ["library"]),
       type_name: get_wire_field(map, ["type_name", "__type_name__"]),
@@ -141,6 +144,8 @@ defimpl Inspect, for: SnakeBridge.Ref do
     Runtime.call_method(ref, method, [])
   rescue
     exception -> {:error, exception}
+  catch
+    :exit, reason -> {:error, {:exit, reason}}
   end
 end
 
@@ -159,6 +164,8 @@ defimpl String.Chars, for: SnakeBridge.Ref do
     Runtime.call_method(ref, method, [])
   rescue
     exception -> {:error, exception}
+  catch
+    :exit, reason -> {:error, {:exit, reason}}
   end
 end
 

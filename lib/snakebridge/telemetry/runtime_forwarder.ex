@@ -47,7 +47,7 @@ defmodule SnakeBridge.Telemetry.RuntimeForwarder do
     :telemetry.attach_many(
       @handler_id,
       @events,
-      &handle_event/4,
+      &__MODULE__.handle_event/4,
       %{}
     )
   end

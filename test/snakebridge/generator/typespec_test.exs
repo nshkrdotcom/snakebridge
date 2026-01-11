@@ -67,4 +67,64 @@ defmodule SnakeBridge.Generator.TypespecTest do
     assert source =~
              "@spec sum(list(integer()), keyword()) :: {:ok, integer()} | {:error, Snakepit.Error.t()}"
   end
+
+  test "generated class methods skip self parameter" do
+    library = %SnakeBridge.Config.Library{
+      name: :mylib,
+      python_name: "mylib",
+      module_name: Mylib
+    }
+
+    classes = [
+      %{
+        "name" => "Thing",
+        "python_module" => "mylib",
+        "methods" => [
+          %{
+            "name" => "do_it",
+            "parameters" => [
+              %{"name" => "self", "kind" => "POSITIONAL_OR_KEYWORD"},
+              %{"name" => "value", "kind" => "POSITIONAL_OR_KEYWORD"}
+            ]
+          }
+        ],
+        "attributes" => []
+      }
+    ]
+
+    source = SnakeBridge.Generator.render_library(library, [], classes, version: "3.0.0")
+
+    assert source =~ "def do_it(ref, value"
+    refute source =~ "def do_it(ref, self"
+  end
+
+  test "generated class methods skip cls parameter" do
+    library = %SnakeBridge.Config.Library{
+      name: :mylib,
+      python_name: "mylib",
+      module_name: Mylib
+    }
+
+    classes = [
+      %{
+        "name" => "Builder",
+        "python_module" => "mylib",
+        "methods" => [
+          %{
+            "name" => "build",
+            "parameters" => [
+              %{"name" => "cls", "kind" => "POSITIONAL_OR_KEYWORD"},
+              %{"name" => "value", "kind" => "POSITIONAL_OR_KEYWORD"}
+            ]
+          }
+        ],
+        "attributes" => []
+      }
+    ]
+
+    source = SnakeBridge.Generator.render_library(library, [], classes, version: "3.0.0")
+
+    assert source =~ "def build(ref, value"
+    refute source =~ "def build(ref, cls"
+  end
 end

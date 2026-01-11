@@ -252,6 +252,8 @@ EXAMPLES=(
     "class_constructor_example"
     "dynamic_dispatch_example"
     "session_lifecycle_example"
+    "affinity_defaults_example"
+    "multi_session_example"
     "python_idioms_example"
     "protocol_integration_example"
     "streaming_example"

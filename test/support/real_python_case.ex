@@ -75,44 +75,68 @@ defmodule SnakeBridge.RealPythonCase do
     end
   end
 
+  defp resolve_python_with_cache do
+    case stored_python_path() do
+      nil -> resolve_python()
+      python -> {:ok, python}
+    end
+  end
+
   defp ensure_python_deps(python) do
     env = [{"PYTHONPATH", build_pythonpath()}]
 
+    case check_python_deps(python, env) do
+      :ok ->
+        {:ok, python}
+
+      {:error, output} ->
+        handle_missing_python_deps(python, env, output)
+    end
+  end
+
+  defp check_python_deps(python, env) do
     case System.cmd(python, ["-c", "import grpc, google.protobuf, snakebridge_adapter"],
            env: env,
            stderr_to_stdout: true
          ) do
-      {_output, 0} ->
-        {:ok, python}
-
-      {output, _status} ->
-        if python_override?() do
-          {:skip,
-           "python deps missing in override (grpc/protobuf/snakebridge_adapter): #{String.trim(output)}"}
-        else
-          case ensure_snakepit_requirements() do
-            :ok ->
-              refreshed_python = GRPCPython.executable_path() || python
-
-              case System.cmd(
-                     refreshed_python,
-                     ["-c", "import grpc, google.protobuf, snakebridge_adapter"],
-                     env: env,
-                     stderr_to_stdout: true
-                   ) do
-                {_output, 0} ->
-                  {:ok, refreshed_python}
-
-                {retry_output, _status} ->
-                  {:skip,
-                   "python deps missing (grpc/protobuf/snakebridge_adapter): #{String.trim(retry_output)}"}
-              end
-
-            {:skip, reason} ->
-              {:skip, reason}
-          end
-        end
+      {_output, 0} -> :ok
+      {output, _status} -> {:error, output}
     end
+  end
+
+  defp handle_missing_python_deps(python, _env, output) do
+    if python_override?() do
+      {:skip,
+       "python deps missing in override (grpc/protobuf/snakebridge_adapter): #{String.trim(output)}"}
+    else
+      fetch_snakepit_requirements(python, output)
+    end
+  end
+
+  defp fetch_snakepit_requirements(python, output) do
+    case ensure_snakepit_requirements() do
+      :ok ->
+        refreshed_python = GRPCPython.executable_path() || python
+        resolve_missing_deps(refreshed_python, output)
+
+      {:skip, reason} ->
+        {:skip, reason}
+    end
+  end
+
+  defp resolve_missing_deps(nil, output), do: {:skip, missing_deps_message(output)}
+
+  defp resolve_missing_deps(python, output) do
+    env = [{"PYTHONPATH", build_pythonpath()}]
+
+    case check_python_deps(python, env) do
+      :ok -> {:ok, python}
+      {:error, retry_output} -> {:skip, missing_deps_message(retry_output || output)}
+    end
+  end
+
+  defp missing_deps_message(output) do
+    "python deps missing (grpc/protobuf/snakebridge_adapter): #{String.trim(output)}"
   end
 
   defp ensure_snakepit_pool(python) do
@@ -345,28 +369,20 @@ defmodule SnakeBridge.RealPythonCase do
     stop_snakepit_if_running()
     clear_snakepit_configured()
 
-    python =
-      stored_python_path() ||
-        System.get_env("SNAKEBRIDGE_TEST_PYTHON") ||
-        Application.get_env(:snakepit, :python_executable) ||
-        System.get_env("SNAKEPIT_PYTHON") ||
-        GRPCPython.executable_path() ||
-        System.find_executable("python3") ||
-        System.find_executable("python")
+    case resolve_python_with_cache() do
+      {:ok, path} -> restart_with_python(path)
+      {:skip, _reason} = skip -> skip
+    end
+  end
 
-    case python do
-      nil ->
-        {:skip, "python3 not available"}
+  defp restart_with_python(path) do
+    case ensure_python_deps(path) do
+      {:ok, resolved} ->
+        store_python_path(resolved)
+        ensure_snakepit_pool(resolved)
 
-      path ->
-        case ensure_python_deps(path) do
-          {:ok, resolved} ->
-            store_python_path(resolved)
-            ensure_snakepit_pool(resolved)
-
-          {:skip, reason} ->
-            {:skip, reason}
-        end
+      {:skip, reason} ->
+        {:skip, reason}
     end
   end
 

@@ -21,6 +21,7 @@ defmodule SnakeBridge.Telemetry do
   | `[:snakebridge, :compile, :generate, :stop]` | `duration`, `bytes_written`, `functions_generated`, `classes_generated` | `library`, `phase`, `details` |
   | `[:snakebridge, :docs, :fetch]` | `duration` | `module`, `function`, `source` |
   | `[:snakebridge, :lock, :verify]` | `duration` | `result`, `warnings` |
+  | `[:snakebridge, :session, :cleanup]` | `system_time` | `session_id`, `source`, `reason` |
 
   ## Usage
 
@@ -298,7 +299,33 @@ defmodule SnakeBridge.Telemetry do
     [:library, :function, :call_type]
   end
 
+  def event_metadata_schema([:snakebridge, :session | _]) do
+    [:session_id, :source, :reason]
+  end
+
   def event_metadata_schema(_event), do: []
+
+  @doc """
+  Emits session cleanup event.
+
+  ## Measurements
+
+  - `system_time` - System time when cleanup was triggered
+
+  ## Metadata
+
+  - `session_id` - Session identifier
+  - `source` - `:manual` or `:owner_down`
+  - `reason` - Exit reason or `:manual`
+  """
+  @spec session_cleanup(String.t(), :manual | :owner_down, term()) :: :ok
+  def session_cleanup(session_id, source, reason) do
+    emit(
+      [:snakebridge, :session, :cleanup],
+      %{system_time: System.system_time()},
+      %{session_id: session_id, source: source, reason: reason}
+    )
+  end
 
   defp emit(event, measurements, metadata) do
     case Application.ensure_all_started(:telemetry) do

@@ -56,7 +56,6 @@ def serialize_type(t) -> dict:
     - Basic types (int, float, str, bool, bytes, None)
     - Collection types (list, dict, tuple, set)
     - Union and Optional types
-    - ML library types (numpy, torch, pandas)
     - Generic types
     """
     if t is type(None):
@@ -118,29 +117,9 @@ def serialize_type(t) -> dict:
             return {"type": "optional", "inner_type": serialize_type(non_none)}
         return {"type": "union", "types": [serialize_type(a) for a in args]}
 
-    # Handle special ML types
+    # Fallback: use class representation
     type_name = getattr(t, '__name__', str(t))
     module = getattr(t, '__module__', '')
-
-    if 'numpy' in module:
-        if 'ndarray' in type_name.lower():
-            return {"type": "numpy.ndarray"}
-        if 'dtype' in type_name.lower():
-            return {"type": "numpy.dtype"}
-
-    if 'torch' in module:
-        if 'Tensor' in type_name:
-            return {"type": "torch.Tensor"}
-        if 'dtype' in type_name.lower():
-            return {"type": "torch.dtype"}
-
-    if 'pandas' in module:
-        if 'DataFrame' in type_name:
-            return {"type": "pandas.DataFrame"}
-        if 'Series' in type_name:
-            return {"type": "pandas.Series"}
-
-    # Fallback: use class representation
     return {"type": "class", "name": type_name, "module": module}
 
 

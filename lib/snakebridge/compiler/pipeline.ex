@@ -404,10 +404,19 @@ defmodule SnakeBridge.Compiler.Pipeline do
     Telemetry.compile_start(libraries, false)
 
     try do
-      detected = scanner_module().scan_project(config)
       manifest = Manifest.load(config)
+
+      # First, handle libraries with generate: :all
+      {all_libraries, used_libraries} =
+        Enum.split_with(config.libraries, &(&1.generate == :all))
+
+      manifest = process_generate_all_libraries(manifest, all_libraries)
+
+      # Then handle libraries with generate: :used (default)
+      used_config = %{config | libraries: used_libraries}
+      detected = scanner_module().scan_project(used_config)
       missing = Manifest.missing(manifest, detected)
-      targets = build_targets(missing, config, manifest)
+      targets = build_targets(missing, used_config, manifest)
 
       updated_manifest =
         if targets != [] do
@@ -431,6 +440,123 @@ defmodule SnakeBridge.Compiler.Pipeline do
         Telemetry.compile_exception(start_time, e, __STACKTRACE__)
         reraise e, __STACKTRACE__
     end
+  end
+
+  defp process_generate_all_libraries(manifest, []), do: manifest
+
+  defp process_generate_all_libraries(manifest, libraries) do
+    Enum.reduce(libraries, manifest, fn library, acc ->
+      process_generate_all_library(acc, library)
+    end)
+  end
+
+  defp process_generate_all_library(manifest, library) do
+    submodules =
+      case library.submodules do
+        true -> nil
+        false -> nil
+        list when is_list(list) -> list
+        _ -> nil
+      end
+
+    opts = if submodules, do: [submodules: submodules], else: []
+
+    case SnakeBridge.Introspector.introspect_module(library, opts) do
+      {:ok, result} ->
+        update_manifest_from_module_introspection(manifest, library, result)
+
+      {:error, reason} ->
+        log_generate_all_error(library, reason)
+        manifest
+    end
+  end
+
+  defp update_manifest_from_module_introspection(manifest, library, %{"namespaces" => namespaces}) do
+    Enum.reduce(namespaces, manifest, fn {namespace, data}, acc ->
+      python_module =
+        if namespace == "" do
+          library.python_name
+        else
+          "#{library.python_name}.#{namespace}"
+        end
+
+      functions = data["functions"] || []
+      classes = data["classes"] || []
+      attributes = data["attributes"] || []
+
+      # Build entries for functions and attributes
+      {symbol_entries, _} =
+        (functions ++ attributes)
+        |> Enum.reject(fn info -> info["name"] in library.exclude end)
+        |> Enum.reduce({[], []}, fn info, {symbols, classes_acc} ->
+          info = Map.put(info, "python_module", python_module)
+          entry = symbol_entry_for(library, python_module, info)
+          {[entry | symbols], classes_acc}
+        end)
+
+      # Build entries for classes
+      class_entries =
+        classes
+        |> Enum.reject(fn info -> info["name"] in library.exclude end)
+        |> Enum.flat_map(fn info ->
+          info = Map.put(info, "python_module", python_module)
+          class_entries_for(library, python_module, info)
+        end)
+
+      acc
+      |> Manifest.put_symbols(symbol_entries)
+      |> Manifest.put_classes(class_entries)
+    end)
+  end
+
+  defp update_manifest_from_module_introspection(
+         manifest,
+         library,
+         %{"functions" => functions, "classes" => classes} = data
+       ) do
+    # Flat format (v2.0)
+    python_module = library.python_name
+    attributes = data["attributes"] || []
+
+    {symbol_entries, _} =
+      (functions ++ attributes)
+      |> Enum.reject(fn info -> info["name"] in library.exclude end)
+      |> Enum.reduce({[], []}, fn info, {symbols, classes_acc} ->
+        info = Map.put(info, "python_module", python_module)
+        entry = symbol_entry_for(library, python_module, info)
+        {[entry | symbols], classes_acc}
+      end)
+
+    class_entries =
+      classes
+      |> Enum.reject(fn info -> info["name"] in library.exclude end)
+      |> Enum.flat_map(fn info ->
+        info = Map.put(info, "python_module", python_module)
+        class_entries_for(library, python_module, info)
+      end)
+
+    manifest
+    |> Manifest.put_symbols(symbol_entries)
+    |> Manifest.put_classes(class_entries)
+  end
+
+  defp update_manifest_from_module_introspection(manifest, _library, _result), do: manifest
+
+  defp log_generate_all_error(library, reason) do
+    message = """
+      [warning] Full module introspection failed for #{library.name}
+        Error: #{inspect(reason)}
+        The library was configured with generate: :all but introspection failed.
+        Falling back to empty bindings for this library.
+    """
+
+    Mix.shell().info(message)
+  end
+
+  # Test helper - exposes process_generate_all_library for testing
+  @doc false
+  def test_process_generate_all_library(manifest, library) do
+    process_generate_all_library(manifest, library)
   end
 
   @spec verify_generated_files_exist!(Config.t()) :: :ok

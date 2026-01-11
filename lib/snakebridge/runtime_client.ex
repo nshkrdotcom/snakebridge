@@ -3,7 +3,7 @@ defmodule SnakeBridge.RuntimeClient do
   Behaviour for runtime clients that execute SnakeBridge payloads.
 
   The default runtime client is `Snakepit`, but tests can override
-  this via the `:runtime_client` config.
+  this via the `:runtime_client` config or a per-process override.
   """
 
   @type tool :: String.t()

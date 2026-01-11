@@ -13,7 +13,7 @@ defmodule Demo do
       IO.puts("-----------------")
 
       step("generate/1 (non-streaming)")
-      result = Streaming.generate("hello")
+      result = Streaming.generate("hello", [])
       print_result(result)
 
       step("generate_stream/3 (stream: true)")

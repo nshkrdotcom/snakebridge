@@ -19,6 +19,14 @@ defmodule SnakeBridge.Generator do
 
   @spec render_library(SnakeBridge.Config.Library.t(), list(), list(), keyword()) :: String.t()
   def render_library(library, functions, classes, opts \\ []) do
+    context = TypeMapper.build_context(classes)
+
+    TypeMapper.with_context(context, fn ->
+      do_render_library(library, functions, classes, opts)
+    end)
+  end
+
+  defp do_render_library(library, functions, classes, opts) do
     version = Keyword.get(opts, :version, Application.spec(:snakebridge, :vsn) |> to_string())
     module_name = module_to_string(library.module_name)
 
@@ -44,6 +52,8 @@ defmodule SnakeBridge.Generator do
       - `:timeout_profile` - Use a named profile (`:default`, `:ml_inference`, `:batch_job`, `:streaming`)
       - `:stream_timeout` - Timeout for streaming operations (default: 1,800,000ms / 30 minutes)
       - `:session_id` - Override the session ID for this call
+      - `:pool_name` - Target a specific Snakepit pool (multi-pool setups)
+      - `:affinity` - Override session affinity (`:hint`, `:strict_queue`, `:strict_fail_fast`)
 
       ### Timeout Profiles
 
@@ -59,6 +69,9 @@ defmodule SnakeBridge.Generator do
 
           # Or explicit timeout
           #{library.module_name}.predict(data, __runtime__: [timeout: 600_000])
+
+          # Route to a pool and enforce strict affinity
+          #{library.module_name}.predict(data, __runtime__: [pool_name: :strict_pool, affinity: :strict_queue])
 
       See `SnakeBridge.Defaults` for global timeout configuration.
       \"\"\"
@@ -278,7 +291,10 @@ defmodule SnakeBridge.Generator do
           end
 
         arity = required_arity(info["parameters"] || [])
-        summary = info["docstring"] |> to_string() |> String.split("\n") |> List.first() || ""
+
+        summary =
+          info["docstring"] |> normalize_docstring() |> String.split("\n") |> List.first() || ""
+
         "{:#{name}, #{arity}, __MODULE__, #{inspect(summary)}}"
       end)
 
@@ -286,7 +302,7 @@ defmodule SnakeBridge.Generator do
       classes
       |> Enum.map_join(",\n      ", fn info ->
         module = class_module_name(info, nil)
-        doc = info["docstring"] |> to_string()
+        doc = info["docstring"] |> normalize_docstring()
         "{#{module}, #{inspect(doc)}}"
       end)
 
@@ -317,11 +333,37 @@ defmodule SnakeBridge.Generator do
     """
   end
 
-  @spec format_docstring(String.t() | nil, list(), map() | nil) :: String.t()
+  @doc """
+  Normalize a docstring to a string, handling both raw strings and parsed docstring maps.
+  """
+  @spec normalize_docstring(String.t() | map() | nil) :: String.t()
+  def normalize_docstring(nil), do: ""
+  def normalize_docstring(doc) when is_binary(doc), do: doc
+
+  def normalize_docstring(%{"raw" => raw}) when is_binary(raw), do: raw
+
+  def normalize_docstring(%{"summary" => summary, "description" => desc}) do
+    case {summary, desc} do
+      {nil, nil} -> ""
+      {s, nil} when is_binary(s) -> s
+      {nil, d} when is_binary(d) -> d
+      {s, d} when is_binary(s) and is_binary(d) -> "#{s}\n\n#{d}"
+      _ -> ""
+    end
+  end
+
+  def normalize_docstring(%{}), do: ""
+
+  @spec format_docstring(String.t() | map() | nil, list(), map() | nil) :: String.t()
   def format_docstring(raw_doc, params \\ [], return_type \\ nil)
 
   def format_docstring(nil, _params, _return_type), do: ""
   def format_docstring("", _params, _return_type), do: ""
+
+  # Handle parsed docstring maps from full module introspection
+  def format_docstring(doc, params, return_type) when is_map(doc) do
+    format_docstring(normalize_docstring(doc), params, return_type)
+  end
 
   def format_docstring(raw_doc, params, return_type) when is_binary(raw_doc) do
     base =
@@ -494,7 +536,9 @@ defmodule SnakeBridge.Generator do
 
   @doc false
 
-  def maybe_add_args(items, true, args_name), do: items ++ ["#{args_name} \\\\ []"]
+  # When we have args, don't add a default because opts will also have a default
+  # This avoids the Elixir "defaults conflict" error
+  def maybe_add_args(items, true, args_name), do: items ++ [args_name]
   def maybe_add_args(items, false, _args_name), do: items
 
   defp maybe_add_opts(items, _has_opts), do: items ++ ["opts \\\\ []"]
@@ -608,10 +652,18 @@ defmodule SnakeBridge.Generator do
   defp sanitize_name(%{"name" => name}), do: sanitize_name(name)
 
   defp sanitize_name(name) when is_binary(name) do
-    name
-    |> Macro.underscore()
-    |> String.replace(~r/[^a-z0-9_]/, "_")
-    |> ensure_identifier()
+    sanitized =
+      name
+      |> Macro.underscore()
+      |> String.replace(~r/[^a-z0-9_]/, "_")
+      |> ensure_identifier()
+
+    # Escape reserved words for parameter names
+    if sanitized in @reserved_words do
+      "py_#{sanitized}"
+    else
+      sanitized
+    end
   end
 
   @doc false

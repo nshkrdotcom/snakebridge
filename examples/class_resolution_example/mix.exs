@@ -27,15 +27,11 @@ defmodule ClassResolutionExample.MixProject do
   end
 
   defp python_deps do
-    base = [
+    [
       {:math, :stdlib, python_name: "math", module_name: Math},
-      {:pathlib, :stdlib, python_name: "pathlib", module_name: Pathlib}
+      {:pathlib, :stdlib, python_name: "pathlib", module_name: Pathlib},
+      {:numpy, :stdlib,
+       python_name: "numpy", module_name: Numpy, include: ["nan", "array", "ndarray"]}
     ]
-
-    if System.get_env("SNAKEBRIDGE_EXAMPLE_NUMPY") == "1" do
-      base ++ [{:numpy, :stdlib, python_name: "numpy", module_name: Numpy}]
-    else
-      base
-    end
   end
 end

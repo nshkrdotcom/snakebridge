@@ -391,7 +391,9 @@ defmodule SnakeBridge.Generator do
 
   @spec build_params(list(), map()) :: %{
           required: list(map()),
+          optional_positional: list(map()),
           has_args: boolean(),
+          has_varargs: boolean(),
           has_opts: boolean(),
           is_variadic: boolean(),
           required_keyword_only: list(map()),
@@ -404,7 +406,9 @@ defmodule SnakeBridge.Generator do
     if params == [] and not signature_available do
       %{
         required: [],
+        optional_positional: [],
         has_args: true,
+        has_varargs: true,
         has_opts: true,
         is_variadic: true,
         required_keyword_only: [],
@@ -417,8 +421,15 @@ defmodule SnakeBridge.Generator do
         |> Enum.filter(&required_positional?/1)
         |> Enum.map(&param_entry/1)
 
+      optional_pos =
+        params
+        |> Enum.filter(&optional_positional?/1)
+        |> Enum.map(&param_entry/1)
+
       required_kw_only = Enum.filter(params, &keyword_only_required?/1)
       optional_kw_only = Enum.filter(params, &keyword_only_optional?/1)
+
+      has_varargs = Enum.any?(params, &varargs?/1)
 
       has_args =
         Enum.any?(params, fn param ->
@@ -427,7 +438,9 @@ defmodule SnakeBridge.Generator do
 
       %{
         required: required,
+        optional_positional: optional_pos,
         has_args: has_args,
+        has_varargs: has_varargs,
         has_opts: true,
         is_variadic: false,
         required_keyword_only: required_kw_only,
@@ -755,13 +768,17 @@ defmodule SnakeBridge.Generator do
   @doc false
 
   def class_module_name(info, nil) do
-    info["module"] || class_name(info)
+    case info["module"] do
+      module when is_binary(module) -> camelize_module_name(module)
+      _ -> Macro.camelize(class_name(info))
+    end
   end
 
   def class_module_name(info, library) do
     case info["module"] do
       module when is_binary(module) ->
-        module
+        # Ensure the class name part (last segment) is properly camelized
+        camelize_module_name(module)
 
       _ ->
         python_module = class_python_module(info, library)
@@ -773,10 +790,16 @@ defmodule SnakeBridge.Generator do
         library.module_name
         |> Module.split()
         |> Kernel.++(Enum.map(extra_parts, &Macro.camelize/1))
-        |> Kernel.++([class_name(info)])
+        |> Kernel.++([Macro.camelize(class_name(info))])
         |> Module.concat()
         |> module_to_string()
     end
+  end
+
+  defp camelize_module_name(module) when is_binary(module) do
+    module
+    |> String.split(".")
+    |> Enum.map_join(".", &Macro.camelize/1)
   end
 
   @doc false

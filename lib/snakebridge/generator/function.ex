@@ -28,11 +28,16 @@ defmodule SnakeBridge.Generator.Function do
     maybe_add_streaming(normal, name, python_name, plan, args_name, library)
   end
 
-  defp render_function_body(name, python_name, plan, args_name, return_type, doc, params) do
-    if plan.is_variadic do
-      render_variadic_function(name, python_name, return_type, doc, params)
-    else
-      render_normal_function(name, python_name, plan, args_name, return_type, doc, params)
+  defp render_function_body(name, python_name, plan, _args_name, return_type, doc, params) do
+    cond do
+      plan.is_variadic ->
+        render_variadic_function(name, python_name, return_type, doc, params)
+
+      plan.optional_positional != [] and not plan.has_varargs ->
+        render_optional_positional_function(name, python_name, plan, return_type, doc, params)
+
+      true ->
+        render_simple_function(name, python_name, plan, return_type, doc, params)
     end
   end
 
@@ -78,23 +83,120 @@ defmodule SnakeBridge.Generator.Function do
     """
   end
 
-  defp render_normal_function(name, python_name, plan, args_name, return_type, doc, params) do
+  defp render_simple_function(name, python_name, plan, return_type, doc, params) do
     param_names = Enum.map(plan.required, & &1.name)
-    args = Generator.args_expr(param_names, plan.has_args, args_name)
-    call = Generator.runtime_call(name, python_name, args)
-    spec = Generator.function_spec(name, plan.required, plan.has_args, return_type)
+    args_list = "[#{Enum.join(param_names, ", ")}]"
     formatted_doc = Generator.format_docstring(doc, params, return_type)
-    normalize = Generator.normalize_args_line(plan.has_args, args_name, 8)
     kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 8)
+    return_spec = Generator.type_spec_string(return_type)
+
+    param_specs = Enum.map(plan.required, &Generator.param_type_spec/1)
+    spec_args = Enum.join(param_specs ++ ["keyword()"], ", ")
+
+    param_list =
+      if param_names == [] do
+        "opts \\\\ []"
+      else
+        Enum.join(param_names ++ ["opts \\\\ []"], ", ")
+      end
+
+    call = Generator.runtime_call(name, python_name, args_list)
 
     """
       @doc \"\"\"
       #{String.trim(formatted_doc)}
       \"\"\"
-      #{spec}
-      def #{name}(#{Generator.param_list(param_names, plan.has_args, plan.has_opts, args_name)}) do
-    #{normalize}#{kw_validation}        #{call}
+      @spec #{name}(#{spec_args}) :: {:ok, #{return_spec}} | {:error, Snakepit.Error.t()}
+      def #{name}(#{param_list}) do
+    #{kw_validation}        #{call}
       end
+    """
+  end
+
+  defp render_optional_positional_function(name, python_name, plan, return_type, doc, params) do
+    formatted_doc = Generator.format_docstring(doc, params, return_type)
+    kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 8)
+    return_spec = Generator.type_spec_string(return_type)
+
+    required_names = Enum.map(plan.required, & &1.name)
+    optional_names = Enum.map(plan.optional_positional, & &1.name)
+
+    # Generate clauses for each arity: required only, required+1 optional, required+2 optional, etc.
+    clauses =
+      0..length(optional_names)
+      |> Enum.flat_map(fn opt_count ->
+        current_optional = Enum.take(optional_names, opt_count)
+        all_params = required_names ++ current_optional
+        args_list = "[#{Enum.join(all_params, ", ")}]"
+
+        # Clause without opts
+        no_opts_clause =
+          if all_params == [] do
+            call = Generator.runtime_call(name, python_name, args_list, "[]")
+
+            """
+            def #{name}() do
+            #{kw_validation}        #{call}
+              end
+            """
+          else
+            call = Generator.runtime_call(name, python_name, args_list, "[]")
+
+            """
+            def #{name}(#{Enum.join(all_params, ", ")}) do
+            #{kw_validation}        #{call}
+              end
+            """
+          end
+
+        # Clause with opts (using guard)
+        opts_clause =
+          if all_params == [] do
+            call = Generator.runtime_call(name, python_name, args_list, "opts")
+
+            """
+            def #{name}(opts) when #{Generator.opts_guard()} do
+            #{kw_validation}        #{call}
+              end
+            """
+          else
+            call = Generator.runtime_call(name, python_name, args_list, "opts")
+
+            """
+            def #{name}(#{Enum.join(all_params ++ ["opts"], ", ")}) when #{Generator.opts_guard()} do
+            #{kw_validation}        #{call}
+              end
+            """
+          end
+
+        [no_opts_clause, opts_clause]
+      end)
+      |> Enum.join("\n")
+
+    # Generate specs for each arity
+    specs =
+      0..length(optional_names)
+      |> Enum.flat_map(fn opt_count ->
+        current_optional = Enum.take(plan.optional_positional, opt_count)
+        all_param_entries = plan.required ++ current_optional
+        param_specs = Enum.map(all_param_entries, &Generator.param_type_spec/1)
+
+        spec_no_opts =
+          "@spec #{name}(#{Enum.join(param_specs, ", ")}) :: {:ok, #{return_spec}} | {:error, Snakepit.Error.t()}"
+
+        spec_with_opts =
+          "@spec #{name}(#{Enum.join(param_specs ++ ["keyword()"], ", ")}) :: {:ok, #{return_spec}} | {:error, Snakepit.Error.t()}"
+
+        [spec_no_opts, spec_with_opts]
+      end)
+      |> Enum.join("\n  ")
+
+    """
+      @doc \"\"\"
+      #{String.trim(formatted_doc)}
+      \"\"\"
+      #{specs}
+    #{Generator.indent(clauses, 4)}
     """
   end
 

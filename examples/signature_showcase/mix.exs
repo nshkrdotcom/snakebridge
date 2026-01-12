@@ -26,21 +26,13 @@ defmodule SignatureShowcaseExample.MixProject do
   end
 
   defp python_deps do
-    base = [
+    [
       {:signature_showcase, :stdlib,
        python_name: "signature_showcase",
        module_name: SignatureShowcase,
        include: ["optional_args", "keyword_only", "variadic", "class"]},
-      {:math, :stdlib, python_name: "math", module_name: Math, include: ["sqrt"]}
+      {:math, :stdlib, python_name: "math", module_name: Math, include: ["sqrt"]},
+      {:numpy, :stdlib, python_name: "numpy", module_name: Numpy, include: ["sqrt"]}
     ]
-
-    if System.get_env("SNAKEBRIDGE_EXAMPLE_NUMPY") == "1" do
-      base ++
-        [
-          {:numpy, :stdlib, python_name: "numpy", module_name: Numpy, include: ["sqrt"]}
-        ]
-    else
-      base
-    end
   end
 end

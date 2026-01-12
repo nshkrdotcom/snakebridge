@@ -7,6 +7,6 @@ config :snakebridge,
   docs: [source: :python, cache_enabled: false]
 
 config :logger,
-  level: :debug
+  level: :warning
 
 # Snakepit is configured in runtime.exs using SnakeBridge.ConfigHelper

@@ -110,6 +110,8 @@ defmodule SnakeBridge.ConfigHelper do
   This applies configuration via Application.put_env, which works in runtime.exs.
   """
   def configure_snakepit!(opts \\ []) do
+    align_otp_logger_level()
+
     for {key, value} <- snakepit_config(opts) do
       # Only set if not already configured
       unless Application.get_env(:snakepit, key) do
@@ -237,6 +239,19 @@ defmodule SnakeBridge.ConfigHelper do
       root -> Path.join([root, "priv", "python"])
     end
   end
+
+  defp align_otp_logger_level do
+    level = Application.get_env(:logger, :level, :warning)
+    :logger.set_primary_config(:level, normalize_otp_level(level))
+  end
+
+  defp normalize_otp_level(:warn), do: :warning
+
+  defp normalize_otp_level(level)
+       when level in [:debug, :info, :notice, :warning, :error, :critical, :alert, :emergency],
+       do: level
+
+  defp normalize_otp_level(_), do: :warning
 
   defp normalize_pools(pools, base_pool_config, affinity) do
     Enum.map(pools, fn pool ->

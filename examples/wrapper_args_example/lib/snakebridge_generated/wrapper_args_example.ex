@@ -55,10 +55,9 @@ defmodule WrapperArgs do
   Returns:
   - `term()`
   """
-  @spec join_values(list(term()), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
-  def join_values(args, opts \\ []) do
-    {args, opts} = SnakeBridge.Runtime.normalize_args_opts(args, opts)
-    SnakeBridge.Runtime.call(__MODULE__, :join_values, [] ++ List.wrap(args), opts)
+  @spec join_values(keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  def join_values(opts \\ []) do
+    SnakeBridge.Runtime.call(__MODULE__, :join_values, [], opts)
   end
 
   @doc """
@@ -73,10 +72,57 @@ defmodule WrapperArgs do
   Returns:
   - `term()`
   """
-  @spec mean(term(), list(term()), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
-  def mean(values, args, opts \\ []) do
-    {args, opts} = SnakeBridge.Runtime.normalize_args_opts(args, opts)
-    SnakeBridge.Runtime.call(__MODULE__, :mean, [values] ++ List.wrap(args), opts)
+  @spec mean(term()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec mean(term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec mean(term(), term()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec mean(term(), term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec mean(term(), term(), term()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec mean(term(), term(), term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec mean(term(), term(), term(), term()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec mean(term(), term(), term(), term(), keyword()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  def mean(values) do
+    SnakeBridge.Runtime.call(__MODULE__, :mean, [values], [])
+  end
+
+  def mean(values, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :mean, [values], opts)
+  end
+
+  def mean(values, axis) do
+    SnakeBridge.Runtime.call(__MODULE__, :mean, [values, axis], [])
+  end
+
+  def mean(values, axis, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :mean, [values, axis], opts)
+  end
+
+  def mean(values, axis, dtype) do
+    SnakeBridge.Runtime.call(__MODULE__, :mean, [values, axis, dtype], [])
+  end
+
+  def mean(values, axis, dtype, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :mean, [values, axis, dtype], opts)
+  end
+
+  def mean(values, axis, dtype, keepdims) do
+    SnakeBridge.Runtime.call(__MODULE__, :mean, [values, axis, dtype, keepdims], [])
+  end
+
+  def mean(values, axis, dtype, keepdims, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :mean, [values, axis, dtype, keepdims], opts)
   end
 
   @doc false

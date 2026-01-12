@@ -51,7 +51,7 @@ defmodule SnakeBridge.Generator.WrapperArgsTest do
   end
 
   describe "render_function/2 generates correct wrappers" do
-    test "wrapper with defaulted params accepts keyword opts" do
+    test "wrapper with defaulted params generates multiple arities" do
       info = %{
         "name" => "mean",
         "parameters" => [
@@ -70,9 +70,13 @@ defmodule SnakeBridge.Generator.WrapperArgsTest do
 
       source = Generator.render_function(info, library)
 
-      assert source =~ "def mean(a, args, opts \\\\ [])"
-      assert source =~ "{args, opts} = SnakeBridge.Runtime.normalize_args_opts(args, opts)"
-      assert source =~ "SnakeBridge.Runtime.call(__MODULE__, :mean, [a] ++ List.wrap(args), opts)"
+      # Should generate multiple arities instead of args list
+      assert source =~ "def mean(a) do"
+      assert source =~ "def mean(a, opts) when"
+      assert source =~ "def mean(a, axis) do"
+      assert source =~ "def mean(a, axis, opts) when"
+      assert source =~ "SnakeBridge.Runtime.call(__MODULE__, :mean, [a], [])"
+      assert source =~ "SnakeBridge.Runtime.call(__MODULE__, :mean, [a, axis], opts)"
     end
   end
 end

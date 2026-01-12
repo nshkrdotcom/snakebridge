@@ -20,8 +20,9 @@ defmodule SnakeBridge.Application do
   end
 
   defp suppress_otel_transitive_logs do
-    # tls_certificate_check logs "Loading X CA(s) from ..." at notice level
-    Logger.put_application_level(:tls_certificate_check, :warning)
+    # ssl/public_key can log "Loading X CA(s) from ..." at info/notice level
+    Logger.put_application_level(:ssl, :warning)
+    Logger.put_application_level(:public_key, :warning)
     # opentelemetry_exporter can log during exporter init
     Logger.put_application_level(:opentelemetry_exporter, :warning)
   end

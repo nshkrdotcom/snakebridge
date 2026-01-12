@@ -99,10 +99,133 @@ defmodule MathVerify do
   Returns:
   - `term()`
   """
-  @spec parse(String.t(), list(term()), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
-  def parse(pred, args, opts \\ []) do
-    {args, opts} = SnakeBridge.Runtime.normalize_args_opts(args, opts)
-    SnakeBridge.Runtime.call(__MODULE__, :parse, [pred] ++ List.wrap(args), opts)
+  @spec parse(String.t()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec parse(String.t(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec parse(String.t(), term()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec parse(String.t(), term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec parse(String.t(), term(), term()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec parse(String.t(), term(), term(), keyword()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec parse(String.t(), term(), term(), term()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec parse(String.t(), term(), term(), term(), keyword()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec parse(String.t(), term(), term(), term(), integer()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec parse(String.t(), term(), term(), term(), integer(), keyword()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec parse(String.t(), term(), term(), term(), integer(), boolean()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec parse(String.t(), term(), term(), term(), integer(), boolean(), keyword()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  def parse(pred) do
+    SnakeBridge.Runtime.call(__MODULE__, :parse, [pred], [])
+  end
+
+  def parse(pred, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :parse, [pred], opts)
+  end
+
+  def parse(pred, extraction_config) do
+    SnakeBridge.Runtime.call(__MODULE__, :parse, [pred, extraction_config], [])
+  end
+
+  def parse(pred, extraction_config, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :parse, [pred, extraction_config], opts)
+  end
+
+  def parse(pred, extraction_config, fallback_mode) do
+    SnakeBridge.Runtime.call(__MODULE__, :parse, [pred, extraction_config, fallback_mode], [])
+  end
+
+  def parse(pred, extraction_config, fallback_mode, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :parse, [pred, extraction_config, fallback_mode], opts)
+  end
+
+  def parse(pred, extraction_config, fallback_mode, extraction_mode) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :parse,
+      [pred, extraction_config, fallback_mode, extraction_mode],
+      []
+    )
+  end
+
+  def parse(pred, extraction_config, fallback_mode, extraction_mode, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :parse,
+      [pred, extraction_config, fallback_mode, extraction_mode],
+      opts
+    )
+  end
+
+  def parse(pred, extraction_config, fallback_mode, extraction_mode, parsing_timeout) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :parse,
+      [pred, extraction_config, fallback_mode, extraction_mode, parsing_timeout],
+      []
+    )
+  end
+
+  def parse(pred, extraction_config, fallback_mode, extraction_mode, parsing_timeout, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :parse,
+      [pred, extraction_config, fallback_mode, extraction_mode, parsing_timeout],
+      opts
+    )
+  end
+
+  def parse(
+        pred,
+        extraction_config,
+        fallback_mode,
+        extraction_mode,
+        parsing_timeout,
+        raise_on_error
+      ) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :parse,
+      [pred, extraction_config, fallback_mode, extraction_mode, parsing_timeout, raise_on_error],
+      []
+    )
+  end
+
+  def parse(
+        pred,
+        extraction_config,
+        fallback_mode,
+        extraction_mode,
+        parsing_timeout,
+        raise_on_error,
+        opts
+      )
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :parse,
+      [pred, extraction_config, fallback_mode, extraction_mode, parsing_timeout, raise_on_error],
+      opts
+    )
   end
 
   @doc """
@@ -154,11 +277,243 @@ defmodule MathVerify do
   Returns:
   - `boolean()`
   """
-  @spec verify(term(), term(), list(term()), keyword()) ::
+  @spec verify(term(), term()) :: {:ok, boolean()} | {:error, Snakepit.Error.t()}
+  @spec verify(term(), term(), keyword()) :: {:ok, boolean()} | {:error, Snakepit.Error.t()}
+  @spec verify(term(), term(), integer()) :: {:ok, boolean()} | {:error, Snakepit.Error.t()}
+  @spec verify(term(), term(), integer(), keyword()) ::
           {:ok, boolean()} | {:error, Snakepit.Error.t()}
-  def verify(gold, target, args, opts \\ []) do
-    {args, opts} = SnakeBridge.Runtime.normalize_args_opts(args, opts)
-    SnakeBridge.Runtime.call(__MODULE__, :verify, [gold, target] ++ List.wrap(args), opts)
+  @spec verify(term(), term(), integer(), integer()) ::
+          {:ok, boolean()} | {:error, Snakepit.Error.t()}
+  @spec verify(term(), term(), integer(), integer(), keyword()) ::
+          {:ok, boolean()} | {:error, Snakepit.Error.t()}
+  @spec verify(term(), term(), integer(), integer(), boolean()) ::
+          {:ok, boolean()} | {:error, Snakepit.Error.t()}
+  @spec verify(term(), term(), integer(), integer(), boolean(), keyword()) ::
+          {:ok, boolean()} | {:error, Snakepit.Error.t()}
+  @spec verify(term(), term(), integer(), integer(), boolean(), boolean()) ::
+          {:ok, boolean()} | {:error, Snakepit.Error.t()}
+  @spec verify(term(), term(), integer(), integer(), boolean(), boolean(), keyword()) ::
+          {:ok, boolean()} | {:error, Snakepit.Error.t()}
+  @spec verify(term(), term(), integer(), integer(), boolean(), boolean(), term()) ::
+          {:ok, boolean()} | {:error, Snakepit.Error.t()}
+  @spec verify(term(), term(), integer(), integer(), boolean(), boolean(), term(), keyword()) ::
+          {:ok, boolean()} | {:error, Snakepit.Error.t()}
+  @spec verify(term(), term(), integer(), integer(), boolean(), boolean(), term(), boolean()) ::
+          {:ok, boolean()} | {:error, Snakepit.Error.t()}
+  @spec verify(
+          term(),
+          term(),
+          integer(),
+          integer(),
+          boolean(),
+          boolean(),
+          term(),
+          boolean(),
+          keyword()
+        ) :: {:ok, boolean()} | {:error, Snakepit.Error.t()}
+  def verify(gold, target) do
+    SnakeBridge.Runtime.call(__MODULE__, :verify, [gold, target], [])
+  end
+
+  def verify(gold, target, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :verify, [gold, target], opts)
+  end
+
+  def verify(gold, target, float_rounding) do
+    SnakeBridge.Runtime.call(__MODULE__, :verify, [gold, target, float_rounding], [])
+  end
+
+  def verify(gold, target, float_rounding, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :verify, [gold, target, float_rounding], opts)
+  end
+
+  def verify(gold, target, float_rounding, numeric_precision) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :verify,
+      [gold, target, float_rounding, numeric_precision],
+      []
+    )
+  end
+
+  def verify(gold, target, float_rounding, numeric_precision, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :verify,
+      [gold, target, float_rounding, numeric_precision],
+      opts
+    )
+  end
+
+  def verify(gold, target, float_rounding, numeric_precision, strict) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :verify,
+      [gold, target, float_rounding, numeric_precision, strict],
+      []
+    )
+  end
+
+  def verify(gold, target, float_rounding, numeric_precision, strict, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :verify,
+      [gold, target, float_rounding, numeric_precision, strict],
+      opts
+    )
+  end
+
+  def verify(gold, target, float_rounding, numeric_precision, strict, allow_set_relation_comp) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :verify,
+      [gold, target, float_rounding, numeric_precision, strict, allow_set_relation_comp],
+      []
+    )
+  end
+
+  def verify(
+        gold,
+        target,
+        float_rounding,
+        numeric_precision,
+        strict,
+        allow_set_relation_comp,
+        opts
+      )
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :verify,
+      [gold, target, float_rounding, numeric_precision, strict, allow_set_relation_comp],
+      opts
+    )
+  end
+
+  def verify(
+        gold,
+        target,
+        float_rounding,
+        numeric_precision,
+        strict,
+        allow_set_relation_comp,
+        timeout_seconds
+      ) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :verify,
+      [
+        gold,
+        target,
+        float_rounding,
+        numeric_precision,
+        strict,
+        allow_set_relation_comp,
+        timeout_seconds
+      ],
+      []
+    )
+  end
+
+  def verify(
+        gold,
+        target,
+        float_rounding,
+        numeric_precision,
+        strict,
+        allow_set_relation_comp,
+        timeout_seconds,
+        opts
+      )
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :verify,
+      [
+        gold,
+        target,
+        float_rounding,
+        numeric_precision,
+        strict,
+        allow_set_relation_comp,
+        timeout_seconds
+      ],
+      opts
+    )
+  end
+
+  def verify(
+        gold,
+        target,
+        float_rounding,
+        numeric_precision,
+        strict,
+        allow_set_relation_comp,
+        timeout_seconds,
+        raise_on_error
+      ) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :verify,
+      [
+        gold,
+        target,
+        float_rounding,
+        numeric_precision,
+        strict,
+        allow_set_relation_comp,
+        timeout_seconds,
+        raise_on_error
+      ],
+      []
+    )
+  end
+
+  def verify(
+        gold,
+        target,
+        float_rounding,
+        numeric_precision,
+        strict,
+        allow_set_relation_comp,
+        timeout_seconds,
+        raise_on_error,
+        opts
+      )
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(
+      __MODULE__,
+      :verify,
+      [
+        gold,
+        target,
+        float_rounding,
+        numeric_precision,
+        strict,
+        allow_set_relation_comp,
+        timeout_seconds,
+        raise_on_error
+      ],
+      opts
+    )
   end
 
   @doc false

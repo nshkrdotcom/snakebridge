@@ -32,25 +32,13 @@ defmodule Demo do
       result = Math.sqrt(16)
       print_result(result)
 
-      maybe_numpy_call()
+      step("C-extension call (numpy.sqrt)")
+      result = Numpy.sqrt(16)
+      print_result(result)
 
       Examples.assert_no_failures!()
     end)
     |> Examples.assert_script_ok()
-  end
-
-  defp maybe_numpy_call do
-    numpy = Module.concat([:Numpy])
-
-    if Code.ensure_loaded?(numpy) and function_exported?(numpy, :sqrt, 1) do
-      step("C-extension call (numpy.sqrt)")
-      result = apply(numpy, :sqrt, [16])
-      print_result(result)
-    else
-      IO.puts("")
-      IO.puts("== C-extension call (numpy.sqrt) ==")
-      IO.puts("Numpy not configured; set SNAKEBRIDGE_EXAMPLE_NUMPY=1 to enable.")
-    end
   end
 
   defp step(title) do

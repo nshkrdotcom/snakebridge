@@ -153,7 +153,7 @@ Demonstrates the signature + arity model:
 - Required keyword-only validation
 - Variadic fallback wrappers for missing signatures
 - Sanitized function names (`class` → `py_class`)
-- Optional `numpy` call when `SNAKEBRIDGE_EXAMPLE_NUMPY=1`
+- C-extension calls via `numpy`
 
 ### class_constructor_example
 

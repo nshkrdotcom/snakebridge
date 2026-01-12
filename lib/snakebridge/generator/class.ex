@@ -129,12 +129,34 @@ defmodule SnakeBridge.Generator.Class do
   end
 
   defp render_attribute(attr) do
+    {elixir_name, python_name} = sanitize_attribute_name(attr)
+
     """
-        @spec #{attr}(SnakeBridge.Ref.t()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
-        def #{attr}(ref) do
-          SnakeBridge.Runtime.get_attr(ref, :#{attr})
+        @spec #{elixir_name}(SnakeBridge.Ref.t()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+        def #{elixir_name}(ref) do
+          SnakeBridge.Runtime.get_attr(ref, :#{python_name})
         end
     """
+  end
+
+  defp sanitize_attribute_name(attr) do
+    elixir_name =
+      attr
+      |> Macro.underscore()
+      |> String.replace(~r/[^a-z0-9_]/, "_")
+      |> ensure_valid_attr_identifier()
+
+    {elixir_name, attr}
+  end
+
+  defp ensure_valid_attr_identifier(""), do: "_attr"
+
+  defp ensure_valid_attr_identifier(name) do
+    if String.match?(name, ~r/^[a-z_][a-z0-9_]*$/) do
+      name
+    else
+      "_" <> name
+    end
   end
 
   defp drop_self_param(params) when is_list(params) do

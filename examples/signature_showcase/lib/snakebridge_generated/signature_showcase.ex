@@ -64,11 +64,44 @@ defmodule SignatureShowcase do
   @doc """
 
   """
-  @spec optional_args(term(), list(term()), keyword()) ::
+  @spec optional_args(term()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec optional_args(term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec optional_args(term(), term()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec optional_args(term(), term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec optional_args(term(), term(), term()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec optional_args(term(), term(), term(), keyword()) ::
           {:ok, term()} | {:error, Snakepit.Error.t()}
-  def optional_args(a, args, opts \\ []) do
-    {args, opts} = SnakeBridge.Runtime.normalize_args_opts(args, opts)
-    SnakeBridge.Runtime.call(__MODULE__, :optional_args, [a] ++ List.wrap(args), opts)
+  def optional_args(a) do
+    SnakeBridge.Runtime.call(__MODULE__, :optional_args, [a], [])
+  end
+
+  def optional_args(a, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :optional_args, [a], opts)
+  end
+
+  def optional_args(a, b) do
+    SnakeBridge.Runtime.call(__MODULE__, :optional_args, [a, b], [])
+  end
+
+  def optional_args(a, b, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :optional_args, [a, b], opts)
+  end
+
+  def optional_args(a, b, c) do
+    SnakeBridge.Runtime.call(__MODULE__, :optional_args, [a, b, c], [])
+  end
+
+  def optional_args(a, b, c, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :optional_args, [a, b, c], opts)
   end
 
   @doc """

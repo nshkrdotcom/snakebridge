@@ -38,6 +38,11 @@
       "requested": "stdlib",
       "resolved": "stdlib"
     },
+    "numpy": {
+      "hash": null,
+      "requested": "stdlib",
+      "resolved": "stdlib"
+    },
     "signature_showcase": {
       "hash": null,
       "requested": "stdlib",

@@ -28,45 +28,19 @@ defmodule Demo do
         missing("Pathlib.Path module not available. Run `mix compile`.")
       end
 
-      maybe_numpy_demo()
+      step("NumPy module constant (numpy.nan)")
+      print_result(Numpy.nan())
+
+      step("NumPy class resolution (numpy.ndarray.shape/1)")
+
+      case Numpy.array([1, 2, 3]) do
+        {:ok, ref} -> print_result(Numpy.Ndarray.shape(ref))
+        other -> print_result(other)
+      end
 
       Examples.assert_no_failures!()
     end)
     |> Examples.assert_script_ok()
-  end
-
-  defp maybe_numpy_demo do
-    numpy = Module.concat([:Numpy])
-
-    if Code.ensure_loaded?(numpy) do
-      step("NumPy module constant (numpy.nan)")
-
-      if function_exported?(numpy, :nan, 0) do
-        print_result(apply(numpy, :nan, []))
-      else
-        missing("Numpy.nan/0 not available. Run `mix compile` with numpy enabled.")
-      end
-
-      step("NumPy class resolution (numpy.ndarray.shape/1)")
-
-      case apply(numpy, :array, [[1, 2, 3]]) do
-        {:ok, ref} ->
-          ndarray_module = Module.concat(numpy, "ndarray")
-
-          if Code.ensure_loaded?(ndarray_module) and function_exported?(ndarray_module, :shape, 1) do
-            print_result(apply(ndarray_module, :shape, [ref]))
-          else
-            missing("Numpy.ndarray module not available. Run `mix compile` with numpy enabled.")
-          end
-
-        other ->
-          print_result(other)
-      end
-    else
-      IO.puts("")
-      IO.puts("== NumPy class resolution ==")
-      IO.puts("Numpy not configured; set SNAKEBRIDGE_EXAMPLE_NUMPY=1 to enable.")
-    end
   end
 
   defp step(title) do

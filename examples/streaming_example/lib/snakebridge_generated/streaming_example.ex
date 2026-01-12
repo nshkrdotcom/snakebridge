@@ -57,10 +57,58 @@ defmodule Streaming do
   Returns:
   - `term()`
   """
-  @spec generate(term(), list(term()), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
-  def generate(prompt, args, opts \\ []) do
-    {args, opts} = SnakeBridge.Runtime.normalize_args_opts(args, opts)
-    SnakeBridge.Runtime.call(__MODULE__, :generate, [prompt] ++ List.wrap(args), opts)
+  @spec generate(term()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec generate(term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec generate(term(), term()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec generate(term(), term(), keyword()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec generate(term(), term(), term()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec generate(term(), term(), term(), keyword()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec generate(term(), term(), term(), term()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
+  @spec generate(term(), term(), term(), term(), keyword()) ::
+          {:ok, term()} | {:error, Snakepit.Error.t()}
+  def generate(prompt) do
+    SnakeBridge.Runtime.call(__MODULE__, :generate, [prompt], [])
+  end
+
+  def generate(prompt, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :generate, [prompt], opts)
+  end
+
+  def generate(prompt, stream) do
+    SnakeBridge.Runtime.call(__MODULE__, :generate, [prompt, stream], [])
+  end
+
+  def generate(prompt, stream, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :generate, [prompt, stream], opts)
+  end
+
+  def generate(prompt, stream, count) do
+    SnakeBridge.Runtime.call(__MODULE__, :generate, [prompt, stream, count], [])
+  end
+
+  def generate(prompt, stream, count, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :generate, [prompt, stream, count], opts)
+  end
+
+  def generate(prompt, stream, count, delay) do
+    SnakeBridge.Runtime.call(__MODULE__, :generate, [prompt, stream, count, delay], [])
+  end
+
+  def generate(prompt, stream, count, delay, opts)
+      when is_list(opts) and
+             (opts == [] or
+                (is_tuple(hd(opts)) and tuple_size(hd(opts)) == 2 and is_atom(elem(hd(opts), 0)))) do
+    SnakeBridge.Runtime.call(__MODULE__, :generate, [prompt, stream, count, delay], opts)
   end
 
   @doc """

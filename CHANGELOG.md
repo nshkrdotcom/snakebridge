@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-01-11
+
+### Changed
+- **Explicit arity generation for optional positional parameters**: Functions with
+  optional positional parameters now generate multiple explicit arities instead of
+  using the variadic args list pattern. This provides better compile-time checking
+  and clearer generated code.
+- **Class module names are properly camelized**: Class modules like `numpy.ndarray`
+  are now generated as `Numpy.Ndarray` instead of `Numpy.ndarray`, following Elixir
+  naming conventions.
+- **Attribute name sanitization**: Class attributes with special characters (e.g.,
+  `T`, `mT`) are now sanitized to valid Elixir identifiers (`t`, `m_t`).
+- **OTP logger level alignment**: `ConfigHelper.configure_snakepit!/1` now aligns
+  the OTP logger level with the Elixir logger level to suppress low-level SSL and
+  public_key logs.
+- **Examples enable numpy by default**: The `signature_showcase` and
+  `class_resolution_example` examples now include numpy without requiring the
+  `SNAKEBRIDGE_EXAMPLE_NUMPY=1` environment variable.
+
+### Fixed
+- Suppress ssl/public_key CA loading logs instead of tls_certificate_check logs
+  during application startup.
+
 ## [0.8.2] - 2026-01-11
 
 ### Added
@@ -512,6 +535,7 @@ Numpy.compute(data, __runtime__: [timeout: 600_000])
 - Type system mapper
 - Basic code generation
 
+[0.8.3]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.10...v0.8.0

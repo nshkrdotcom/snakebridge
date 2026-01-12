@@ -31,7 +31,7 @@ defmodule MyApp.MixProject do
 
   defp deps do
     [
-      {:snakebridge, "~> 0.8.3"}
+      {:snakebridge, "~> 0.9.0"}
     ]
   end
 
@@ -442,6 +442,34 @@ Python results that are not JSON-serializable are automatically returned as
 refs (e.g., `{"__type__": "ref", ...}`) so you can chain method calls on the
 returned object. Each ref includes a `session_id` to keep ownership scoped
 to the calling process.
+
+### Graceful Serialization
+
+Python objects that cannot be serialized to JSON are replaced with informative markers
+instead of causing errors. SnakeBridge provides helpers to detect and inspect these markers:
+
+```elixir
+{:ok, result} = SnakeBridge.call("some_module", "get_data", [])
+
+# Check if a value is an unserializable marker
+if SnakeBridge.unserializable?(result["response"]) do
+  {:ok, info} = SnakeBridge.unserializable_info(result["response"])
+  IO.puts("Got unserializable type: #{info.type}")
+end
+```
+
+Objects with conversion methods (`model_dump`, `to_dict`, `isoformat`, etc.) are
+automatically converted before falling back to markers.
+
+Configuration is done via environment variables before starting Snakepit:
+
+```elixir
+# In config/runtime.exs (for debugging only - not recommended for production)
+System.put_env("SNAKEPIT_UNSERIALIZABLE_DETAIL", "repr_redacted_truncated")
+```
+
+See Snakepit's [Graceful Serialization guide](https://hexdocs.pm/snakepit/graceful-serialization.html)
+for full documentation.
 
 ### ML Error Translation
 

@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.8.3"
+  @version "0.9.0"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -43,7 +43,8 @@ defmodule SnakeBridge.MixProject do
   defp deps do
     [
       # Core - Python bridge
-      {:snakepit, "~> 0.10.1"},
+      #      {:snakepit, "~> 0.11.0"},
+      {:snakepit, path: "../snakepit"},
 
       # JSON encoding
       {:jason, "~> 1.4"},

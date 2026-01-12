@@ -577,6 +577,80 @@ defmodule SnakeBridge do
   defdelegate ref?(value), to: Ref
 
   # ============================================================================
+  # Serialization Utilities
+  # ============================================================================
+
+  @doc """
+  Check if a value is an unserializable marker.
+
+  When Python returns data containing objects that cannot be serialized to JSON,
+  Snakepit replaces them with marker maps. This function detects those markers.
+
+  ## Examples
+
+      # Regular values
+      SnakeBridge.unserializable?(%{"key" => "value"})
+      # => false
+
+      # Marker from unserializable Python object
+      SnakeBridge.unserializable?(%{
+        "__ffi_unserializable__" => true,
+        "__type__" => "some.Module.Class",
+        "__repr__" => "Class(...)"
+      })
+      # => true
+
+  ## Usage Pattern
+
+      case SnakeBridge.call("module", "function", []) do
+        {:ok, result} ->
+          if SnakeBridge.unserializable?(result) do
+            {:ok, info} = SnakeBridge.unserializable_info(result)
+            Logger.warning("Got unserializable: \#{info.type}")
+          else
+            process(result)
+          end
+        {:error, _} = err -> err
+      end
+
+  See `Snakepit.Serialization` for details on the serialization layer.
+  """
+  @spec unserializable?(term()) :: boolean()
+  defdelegate unserializable?(value), to: Snakepit.Serialization
+
+  @doc """
+  Extract information from an unserializable marker.
+
+  Returns `{:ok, info}` with `:type` and `:repr` fields if the value is an
+  unserializable marker, or `:error` otherwise.
+
+  ## Examples
+
+      marker = %{
+        "__ffi_unserializable__" => true,
+        "__type__" => "requests.models.Response",
+        "__repr__" => "<Response [200]>"
+      }
+
+      {:ok, info} = SnakeBridge.unserializable_info(marker)
+      info.type
+      # => "requests.models.Response"
+      info.repr
+      # => "<Response [200]>"
+
+      SnakeBridge.unserializable_info(%{"normal" => "map"})
+      # => :error
+
+  ## Security Note
+
+  The `repr` field may contain sensitive information from the Python object's
+  string representation. Avoid logging or persisting without review.
+  """
+  @spec unserializable_info(term()) ::
+          {:ok, %{type: String.t() | nil, repr: String.t() | nil}} | :error
+  defdelegate unserializable_info(value), to: Snakepit.Serialization
+
+  # ============================================================================
   # Helpers & Macros (Existing)
   # ============================================================================
 

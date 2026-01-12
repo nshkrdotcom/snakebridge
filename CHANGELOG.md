@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.3] - 2026-01-11
+## [0.9.0] - 2026-01-11
+
+### Added
+- **Serialization helpers**: `SnakeBridge.unserializable?/1` and
+  `SnakeBridge.unserializable_info/1` to detect and inspect non-JSON-serializable
+  Python objects that were replaced with markers
+  - Delegates to `Snakepit.Serialization` for consistent behavior
+  - Markers include type information; repr is opt-in via environment variables
+  - See Snakepit's graceful serialization guide for full documentation
 
 ### Changed
 - **Explicit arity generation for optional positional parameters**: Functions with

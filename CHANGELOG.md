@@ -10,26 +10,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.9.0] - 2026-01-11
 
 ### Added
+- **Graceful serialization for containers**: When a Python result is a container
+  (list, dict, tuple, set, frozenset) that contains non-serializable objects,
+  SnakeBridge now preserves the container structure and ref-wraps ONLY the
+  non-serializable leaf objects. This is a significant improvement over the
+  previous behavior where any non-serializable item caused the entire container
+  to become a single ref.
+
+  Example - DSPy history with non-serializable `response` field:
+  ```elixir
+  {:ok, history} = SnakeBridge.call("dspy_module", "get_history", [])
+
+  # history is a list of maps - NOT a single opaque ref!
+  for entry <- history do
+    # Serializable fields are directly accessible
+    IO.puts("Model: #{entry["model"]}, cost: #{entry["cost"]}")
+
+    # Only the non-serializable field becomes a ref
+    response = entry["response"]
+    {:ok, id} = SnakeBridge.attr(response, "id")
+  end
+  ```
+
+- **Cycle detection in serialization**: Self-referential structures (e.g., a list
+  containing itself) are now handled safely - cycles are detected and converted to
+  refs to prevent infinite recursion.
+
+- **Enhanced ref metadata**: Ref payloads now include `type_name` and `__type_name__`
+  fields containing the Python class name, enabling better inspection and debugging.
+
 - **Serialization helpers**: `SnakeBridge.unserializable?/1` and
   `SnakeBridge.unserializable_info/1` to detect and inspect non-JSON-serializable
-  Python objects that were replaced with markers
+  Python objects that were replaced with markers (Snakepit markers, not refs)
   - Delegates to `Snakepit.Serialization` for consistent behavior
   - Markers include type information; repr is opt-in via environment variables
   - See Snakepit's graceful serialization guide for full documentation
 
+- **Comprehensive documentation guides**: Added 10 in-depth guides covering all
+  major SnakeBridge features including Getting Started, Universal FFI, Generated
+  Wrappers, Refs and Sessions, Type System, Streaming, Error Handling, Telemetry,
+  Best Practices, and Session Affinity. Available in `guides/` and integrated into
+  HexDocs with organized navigation.
+
+- **Python test suite for adapter**: New comprehensive Python tests for
+  `encode_result` behavior in `test_snakebridge_adapter.py`, covering nested refs,
+  cycle detection, and type metadata.
+
+- **Integration tests for graceful serialization**: New Elixir tests verifying
+  validation config structures, nested refs, and ref usability. Test helpers use
+  real Python stdlib (`re.compile()` patterns) instead of mocks.
+
+- **Graceful serialization demo in universal_ffi_example**: Section 9 demonstrates
+  mixing compiled regex patterns with serializable metadata, showing direct field
+  access while patterns remain as usable refs.
+
+- **Atom round-trip preservation**: When `SNAKEBRIDGE_ATOM_CLASS=true`, Python `Atom`
+  objects returned from functions now encode as tagged atoms (`{"__type__": "atom", ...}`)
+  rather than becoming refs, preserving the expected round-trip semantics.
+
 ### Changed
+- **Container serialization behavior (breaking)**: Non-serializable items inside
+  containers no longer force the whole container into a ref. Instead, only the
+  leaf values that cannot be serialized become refs. This is the new default and
+  only behavior - no feature flag or opt-out.
+
+  Before:
+  ```python
+  # Python returns: [{"model": "gpt-4", "response": <ModelResponse>}]
+  # Elixir received: %SnakeBridge.Ref{}  # The entire list was wrapped!
+  ```
+
+  After:
+  ```python
+  # Python returns: [{"model": "gpt-4", "response": <ModelResponse>}]
+  # Elixir receives: [%{"model" => "gpt-4", "response" => %SnakeBridge.Ref{}}]
+  ```
+
 - **Explicit arity generation for optional positional parameters**: Functions with
   optional positional parameters now generate multiple explicit arities instead of
   using the variadic args list pattern. This provides better compile-time checking
   and clearer generated code.
+
 - **Class module names are properly camelized**: Class modules like `numpy.ndarray`
   are now generated as `Numpy.Ndarray` instead of `Numpy.ndarray`, following Elixir
   naming conventions.
+
 - **Attribute name sanitization**: Class attributes with special characters (e.g.,
   `T`, `mT`) are now sanitized to valid Elixir identifiers (`t`, `m_t`).
+
 - **OTP logger level alignment**: `ConfigHelper.configure_snakepit!/1` now aligns
   the OTP logger level with the Elixir logger level to suppress low-level SSL and
   public_key logs.
+
 - **Examples enable numpy by default**: The `signature_showcase` and
   `class_resolution_example` examples now include numpy without requiring the
   `SNAKEBRIDGE_EXAMPLE_NUMPY=1` environment variable.
@@ -37,6 +109,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Suppress ssl/public_key CA loading logs instead of tls_certificate_check logs
   during application startup.
+
+### Internal
+- **Schema version alignment**: Tagged values (bytes, datetime, tuple, set, dict, etc.)
+  now use `SCHEMA_VERSION`; refs and stream_refs use `REF_SCHEMA_VERSION`. This prevents
+  future breakage if the constants diverge.
+- **Async generator exclusion centralized**: `_is_generator_or_iterator` and `_is_streamable`
+  now explicitly exclude async generators (they cannot be consumed via `next()`).
+- **Broad exception fallback**: `encode_result` catches any `Exception` during encoding
+  and falls back to ref-wrapping, preventing hard failures from concurrent mutation,
+  weird `__iter__` implementations, or deeply nested structures.
+- **Memoization for refs/stream_refs**: `ref_memo` dict tracks created refs to ensure
+  the same object yields the same ref id (deduplication).
+- **Container snapshotting**: List, dict, set, and frozenset iteration now snapshots
+  the container first to reduce "changed size during iteration" errors.
+- **`_is_json_safe` recursion guard**: The safety-net validation is wrapped in
+  `try/except RecursionError` to prevent crashes on near-limit structures.
+- **Fallback ref cleanup**: On encoding failure, any refs created during partial encoding
+  are removed from the registry to prevent unreachable ref leakage.
 
 ## [0.8.2] - 2026-01-11
 
@@ -543,6 +633,7 @@ Numpy.compute(data, __runtime__: [timeout: 600_000])
 - Type system mapper
 - Basic code generation
 
+[0.9.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.0...v0.8.1

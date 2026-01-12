@@ -15,10 +15,20 @@ The adapter:
 4. Calls the function with the decoded arguments
 5. Encodes the result back to SnakeBridge format
 6. Returns a success/error response
+
+Graceful Serialization:
+    When encoding results, this adapter preserves container structure (lists,
+    dicts, tuples, sets) even when they contain non-serializable objects.
+    Non-serializable leaf values are ref-wrapped in place. No lossy conversion
+    is performed (e.g., no model_dump/to_dict calls); non-serializable leaves
+    become refs that can be used for further Python operations. This enables
+    users to access all serializable fields while still having refs for
+    non-serializable objects.
 """
 
 import sys
 import importlib
+import importlib.util
 import inspect
 import traceback
 import uuid
@@ -27,17 +37,34 @@ import glob
 import hashlib
 import time
 import threading
+import types
 from contextlib import nullcontext
 from typing import Any, Dict, List, Tuple, Optional
 
 # Import the SnakeBridge type encoding system
 try:
-    from snakebridge_types import decode, encode, encode_error, _is_generator_or_iterator
+    from snakebridge_types import (
+        decode,
+        encode,
+        encode_error,
+        _is_generator_or_iterator,
+        _get_stream_type,
+        Atom,
+        SCHEMA_VERSION,
+    )
 except ImportError:
     # If running as a script, try relative import
     import os
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from snakebridge_types import decode, encode, encode_error, _is_generator_or_iterator
+    from snakebridge_types import (
+        decode,
+        encode,
+        encode_error,
+        _is_generator_or_iterator,
+        _get_stream_type,
+        Atom,
+        SCHEMA_VERSION,
+    )
 
 try:
     from snakepit_bridge import telemetry as snakepit_telemetry
@@ -170,6 +197,26 @@ def _store_ref(key: str, obj: Any) -> None:
     now = time.time()
     with _registry_lock:
         _instance_registry[key] = {"obj": obj, "created_at": now, "last_access": now}
+
+
+def _registry_key(session_id: str, ref_id: str) -> str:
+    """
+    Construct a registry key from session_id and ref_id.
+
+    This is the single source of truth for registry key format.
+    All code that constructs or parses registry keys should use this function.
+    """
+    return f"{session_id}:{ref_id}"
+
+
+def _registry_key_prefix(session_id: str) -> str:
+    """
+    Get the registry key prefix for a session.
+
+    Used for session-scoped operations like release_session.
+    Delegates to _registry_key to maintain single source of truth for key format.
+    """
+    return _registry_key(session_id, "")
 
 
 def _extract_ref_identity(ref: dict, session_id: str) -> Tuple[str, str]:
@@ -469,9 +516,11 @@ def _import_module(module_name: str) -> Any:
 
 def _make_ref(session_id: str, obj: Any, python_module: str, library: str) -> dict:
     ref_id = uuid.uuid4().hex
-    key = f"{session_id}:{ref_id}"
+    key = _registry_key(session_id, ref_id)
     _prune_registry()
     _store_ref(key, obj)
+
+    type_name = type(obj).__name__
 
     return {
         "__type__": "ref",
@@ -480,6 +529,8 @@ def _make_ref(session_id: str, obj: Any, python_module: str, library: str) -> di
         "session_id": session_id,
         "python_module": python_module,
         "library": library,
+        "type_name": type_name,
+        "__type_name__": type_name,
     }
 
 def _make_stream_ref(
@@ -490,55 +541,377 @@ def _make_stream_ref(
     stream_type: str,
 ) -> dict:
     ref_id = uuid.uuid4().hex
-    key = f"{session_id}:{ref_id}"
+    key = _registry_key(session_id, ref_id)
     _prune_registry()
     _store_ref(key, obj)
 
+    type_name = type(obj).__name__
+
     return {
         "__type__": "stream_ref",
+        "__schema__": REF_SCHEMA_VERSION,
         "id": ref_id,
         "session_id": session_id,
         "python_module": python_module,
         "library": library,
         "stream_type": stream_type,
+        "type_name": type_name,
+        "__type_name__": type_name,
     }
+
+
+def _truncate_message(msg: str, max_len: int = 200) -> str:
+    """Truncate a message to max_len, stripping newlines for log safety."""
+    msg = msg.replace('\n', ' ').replace('\r', '')
+    if len(msg) > max_len:
+        return msg[:max_len] + "..."
+    return msg
+
+
+def _cleanup_created_refs(created_keys: list) -> None:
+    """Remove refs from registry that were created during a failed encode."""
+    with _registry_lock:
+        for key in created_keys:
+            _instance_registry.pop(key, None)
 
 
 def encode_result(result: Any, session_id: str, python_module: str, library: str) -> Any:
     """
     Encode a Python result for transmission to Elixir.
 
-    INVARIANT: The returned value is ALWAYS one of:
+    INVARIANT: Always returns JSON-safe values. Any non-serializable object
+    is represented by a ref or stream_ref payload (lossless - the object
+    remains accessible via Python operations).
+
+    The returned value is ALWAYS one of:
     1. A JSON-safe primitive (None, bool, int, float, str)
-    2. A JSON-safe list/dict (recursively safe)
+    2. A JSON-safe list/dict (recursively containing the above types)
     3. A tagged value with __type__ that Elixir can decode
     4. A ref ({"__type__": "ref", ...}) for non-serializable objects
-    5. A stream_ref ({"__type__": "stream_ref", ...}) for iterators
+    5. A stream_ref ({"__type__": "stream_ref", ...}) for sync iterators
 
-    NEVER returns partially encoded or lossy data.
+    This function preserves container structure: if a list/dict contains
+    non-serializable items, only those items become refs, not the entire
+    container. This enables "graceful serialization" where users can access
+    all serializable fields even when some fields are non-serializable.
+
+    No lossy conversion is performed (e.g., no model_dump/to_dict calls).
+    Repeated references to the same non-serializable object yield the same
+    ref payload; repeated references to the same iterator yield the same
+    stream_ref payload.
+    Async generators become refs (not stream_refs) since they cannot be
+    consumed via sync iteration.
+
+    On encoding failure, any refs created during partial encoding are cleaned
+    up to prevent unreachable ref leakage in the registry.
     """
-    encoded = encode(result)
+    # Use set of object ids to detect cycles
+    in_progress = set()
+    # Memo table: id(obj) -> ref/stream_ref payload for deduplication
+    ref_memo = {}
+    # Track registry keys created during this encode for cleanup on failure
+    created_keys = []
 
-    # Stream ref request - create stream ref
-    if isinstance(encoded, dict) and encoded.get("__needs_stream_ref__"):
-        stream_type = encoded.get("__stream_type__") or "iterator"
-        return _make_stream_ref(session_id, result, python_module, library, stream_type)
-
-    # Ref request - create ref
-    if isinstance(encoded, dict) and encoded.get("__needs_ref__"):
+    try:
+        encoded = _encode_result_recursive(
+            result, session_id, python_module, library, in_progress, ref_memo, created_keys
+        )
+    except Exception as e:
+        # Any exception during encoding (RecursionError, RuntimeError from
+        # concurrent mutation, weird __iter__ implementations, etc.)
+        # Clean up any refs created during partial encoding
+        _cleanup_created_refs(created_keys)
+        # Fall back to ref-wrapping the entire result (lossless)
+        _log_warning(
+            f"{type(e).__name__} encoding type {type(result).__name__}: "
+            f"{_truncate_message(str(e))}, wrapping in ref as fallback"
+        )
         return _make_ref(session_id, result, python_module, library)
 
-    # Validate result is actually JSON-safe (safety net)
-    if not _is_json_safe(encoded):
-        # Safety net - this shouldn't happen if encode() is correct
-        # but ensures we never send garbage
-        _log_warning(f"encode() returned non-JSON-safe result for type {type(result).__name__}, wrapping in ref")
+    # Safety net: validate result is actually JSON-safe
+    # This catches any edge cases missed by the recursive encoder
+    try:
+        is_safe = _is_json_safe(encoded)
+    except RecursionError:
+        # _is_json_safe itself can recurse deeply on near-limit structures
+        # Clean up any refs created during encoding
+        _cleanup_created_refs(created_keys)
+        _log_warning(
+            f"RecursionError in _is_json_safe for type {type(result).__name__}, "
+            "wrapping in ref as safety fallback"
+        )
+        return _make_ref(session_id, result, python_module, library)
+
+    if not is_safe:
+        # Clean up any refs created during encoding
+        _cleanup_created_refs(created_keys)
+        _log_warning(
+            f"encode_result produced non-JSON-safe result for type {type(result).__name__}, "
+            "wrapping in ref as safety fallback"
+        )
         return _make_ref(session_id, result, python_module, library)
 
     return encoded
 
 
+def _encode_result_recursive(
+    value: Any,
+    session_id: str,
+    python_module: str,
+    library: str,
+    in_progress: set,
+    ref_memo: dict,
+    created_keys: list,
+) -> Any:
+    """
+    Recursively encode a Python value, creating refs for non-serializable leaves.
+
+    Args:
+        value: The Python value to encode
+        session_id: Session ID for ref tracking
+        python_module: Module name for ref metadata
+        library: Library name for ref metadata
+        in_progress: Set of object ids currently being encoded (for cycle detection)
+        ref_memo: Dict mapping id(obj) -> ref payload for deduplication
+        created_keys: List to append registry keys of created refs (for cleanup on failure)
+
+    Returns:
+        A JSON-safe value with refs for non-serializable objects
+    """
+    import base64
+    import math
+    from datetime import datetime, date, time
+
+    # Handle None
+    if value is None:
+        return None
+
+    # Handle booleans (must check before int - bool is subclass of int)
+    if isinstance(value, bool):
+        return value
+
+    # Handle integers
+    if isinstance(value, int):
+        return value
+
+    # Handle float (check for special values)
+    if isinstance(value, float):
+        if math.isinf(value):
+            return {
+                "__type__": "special_float",
+                "__schema__": SCHEMA_VERSION,
+                "value": "infinity" if value > 0 else "neg_infinity",
+            }
+        if math.isnan(value):
+            return {
+                "__type__": "special_float",
+                "__schema__": SCHEMA_VERSION,
+                "value": "nan",
+            }
+        return value
+
+    # Handle strings
+    if isinstance(value, str):
+        return value
+
+    # Handle bytes/bytearray - always tagged
+    if isinstance(value, (bytes, bytearray)):
+        return {
+            "__type__": "bytes",
+            "__schema__": SCHEMA_VERSION,
+            "data": base64.b64encode(bytes(value)).decode("ascii"),
+        }
+
+    # Handle complex
+    if isinstance(value, complex):
+        return {
+            "__type__": "complex",
+            "__schema__": SCHEMA_VERSION,
+            "real": value.real,
+            "imag": value.imag,
+        }
+
+    # Handle datetime types
+    if isinstance(value, datetime):
+        return {
+            "__type__": "datetime",
+            "__schema__": SCHEMA_VERSION,
+            "value": value.isoformat(),
+        }
+    if isinstance(value, date):
+        return {
+            "__type__": "date",
+            "__schema__": SCHEMA_VERSION,
+            "value": value.isoformat(),
+        }
+    if isinstance(value, time):
+        return {
+            "__type__": "time",
+            "__schema__": SCHEMA_VERSION,
+            "value": value.isoformat(),
+        }
+
+    # Handle Atom - tagged atom value for Elixir interop
+    if isinstance(value, Atom):
+        return {
+            "__type__": "atom",
+            "__schema__": SCHEMA_VERSION,
+            "value": value.value,
+        }
+
+    # Check for async generators FIRST - these cannot be consumed via next()
+    # so we treat them as regular refs, not stream_refs
+    if hasattr(types, 'AsyncGeneratorType') and isinstance(value, types.AsyncGeneratorType):
+        obj_id = id(value)
+        if obj_id in ref_memo:
+            return ref_memo[obj_id]
+        ref_payload = _make_ref(session_id, value, python_module, library)
+        created_keys.append(_registry_key(session_id, ref_payload['id']))
+        ref_memo[obj_id] = ref_payload
+        return ref_payload
+
+    # Check for sync generators/iterators - create stream_ref in-place
+    if _is_generator_or_iterator(value):
+        obj_id = id(value)
+        if obj_id in ref_memo:
+            return ref_memo[obj_id]
+        stream_type = _get_stream_type(value)
+        stream_ref_payload = _make_stream_ref(session_id, value, python_module, library, stream_type)
+        created_keys.append(_registry_key(session_id, stream_ref_payload['id']))
+        ref_memo[obj_id] = stream_ref_payload
+        return stream_ref_payload
+
+    # For container types, check for cycles
+    obj_id = id(value)
+
+    # Cycle detection: if we're already encoding this object, create a ref
+    # Use memo if available to ensure same ref for same object
+    if obj_id in in_progress:
+        if obj_id in ref_memo:
+            return ref_memo[obj_id]
+        ref_payload = _make_ref(session_id, value, python_module, library)
+        created_keys.append(_registry_key(session_id, ref_payload['id']))
+        ref_memo[obj_id] = ref_payload
+        return ref_payload
+
+    # Handle list - recursively encode elements, refs for non-encodable
+    # Snapshot to avoid "list changed size during iteration" errors
+    if isinstance(value, list):
+        in_progress.add(obj_id)
+        try:
+            items = list(value)  # Snapshot
+            return [
+                _encode_result_recursive(item, session_id, python_module, library, in_progress, ref_memo, created_keys)
+                for item in items
+            ]
+        finally:
+            in_progress.discard(obj_id)
+
+    # Handle tuple - recursively encode elements
+    # Tuples are immutable, but snapshot for consistency
+    if isinstance(value, tuple):
+        in_progress.add(obj_id)
+        try:
+            items = tuple(value)  # Snapshot (tuples are immutable but be consistent)
+            elements = [
+                _encode_result_recursive(item, session_id, python_module, library, in_progress, ref_memo, created_keys)
+                for item in items
+            ]
+            return {
+                "__type__": "tuple",
+                "__schema__": SCHEMA_VERSION,
+                "elements": elements,
+            }
+        finally:
+            in_progress.discard(obj_id)
+
+    # Handle set - recursively encode elements (no sorting; sets have no order semantics)
+    # Snapshot to avoid "set changed size during iteration" errors
+    if isinstance(value, set):
+        in_progress.add(obj_id)
+        try:
+            items = list(value)  # Snapshot
+            elements = [
+                _encode_result_recursive(item, session_id, python_module, library, in_progress, ref_memo, created_keys)
+                for item in items
+            ]
+            return {
+                "__type__": "set",
+                "__schema__": SCHEMA_VERSION,
+                "elements": elements,
+            }
+        finally:
+            in_progress.discard(obj_id)
+
+    # Handle frozenset - recursively encode elements (no sorting; sets have no order semantics)
+    # Frozensets are immutable, but snapshot for consistency
+    if isinstance(value, frozenset):
+        in_progress.add(obj_id)
+        try:
+            items = list(value)  # Snapshot
+            elements = [
+                _encode_result_recursive(item, session_id, python_module, library, in_progress, ref_memo, created_keys)
+                for item in items
+            ]
+            return {
+                "__type__": "frozenset",
+                "__schema__": SCHEMA_VERSION,
+                "elements": elements,
+            }
+        finally:
+            in_progress.discard(obj_id)
+
+    # Handle dict - recursively encode values (and keys if non-string)
+    # Snapshot to avoid "dictionary changed size during iteration" errors
+    if isinstance(value, dict):
+        in_progress.add(obj_id)
+        try:
+            items = list(value.items())  # Snapshot
+            all_string_keys = all(isinstance(k, str) for k, _ in items)
+
+            if all_string_keys:
+                # Plain dict with string keys
+                return {
+                    k: _encode_result_recursive(v, session_id, python_module, library, in_progress, ref_memo, created_keys)
+                    for k, v in items
+                }
+            else:
+                # Tagged dict with pairs for non-string keys
+                pairs = [
+                    [
+                        _encode_result_recursive(k, session_id, python_module, library, in_progress, ref_memo, created_keys),
+                        _encode_result_recursive(v, session_id, python_module, library, in_progress, ref_memo, created_keys),
+                    ]
+                    for k, v in items
+                ]
+                return {
+                    "__type__": "dict",
+                    "__schema__": SCHEMA_VERSION,
+                    "pairs": pairs,
+                }
+        finally:
+            in_progress.discard(obj_id)
+
+    # EVERYTHING ELSE - create a ref (with memoization)
+    # This includes custom objects, functions, modules, etc.
+    if obj_id in ref_memo:
+        return ref_memo[obj_id]
+    ref_payload = _make_ref(session_id, value, python_module, library)
+    created_keys.append(_registry_key(session_id, ref_payload['id']))
+    ref_memo[obj_id] = ref_payload
+    return ref_payload
+
+
 def _is_streamable(value: Any) -> bool:
+    """
+    Check if value can be streamed (consumed via sync iteration).
+
+    NOTE: Async generators are explicitly EXCLUDED - they cannot be consumed
+    via next() and must be treated as regular refs.
+    """
+    # Explicitly exclude async generators - they cannot be consumed via next()
+    if hasattr(types, 'AsyncGeneratorType') and isinstance(value, types.AsyncGeneratorType):
+        return False
     if _is_generator_or_iterator(value):
         return True
     if hasattr(value, "__iter__"):
@@ -640,7 +1013,7 @@ def _resolve_ref(ref: dict, session_id: str) -> Any:
     with _registry_lock:
         _prune_registry()
         ref_id, ref_session = _extract_ref_identity(ref, session_id)
-        key = f"{ref_session}:{ref_id}"
+        key = _registry_key(ref_session, ref_id)
 
         if key not in _instance_registry:
             raise KeyError(f"Unknown SnakeBridge reference: {ref_id}")
@@ -659,7 +1032,7 @@ def _release_ref(ref: dict, session_id: str) -> bool:
     with _registry_lock:
         _prune_registry()
         ref_id, ref_session = _extract_ref_identity(ref, session_id)
-        key = f"{ref_session}:{ref_id}"
+        key = _registry_key(ref_session, ref_id)
 
         if key in _instance_registry:
             del _instance_registry[key]
@@ -673,7 +1046,7 @@ def _release_session(session_id: str) -> int:
 
     with _registry_lock:
         removed = 0
-        prefix = f"{session_id}:"
+        prefix = _registry_key_prefix(session_id)
         for key in list(_instance_registry.keys()):
             if key.startswith(prefix):
                 del _instance_registry[key]

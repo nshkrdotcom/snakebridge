@@ -1,6 +1,6 @@
 defmodule Demo do
   @moduledoc """
-  Comprehensive showcase of SnakeBridge Universal FFI (v0.8.4+).
+  Comprehensive showcase of SnakeBridge Universal FFI (v0.9.0+).
 
   The Universal FFI enables calling ANY Python module dynamically,
   without compile-time code generation. This is the "escape hatch"
@@ -33,7 +33,7 @@ defmodule Demo do
       IO.puts("")
       IO.puts(String.duplicate("=", 60))
       IO.puts("SNAKEBRIDGE UNIVERSAL FFI SHOWCASE")
-      IO.puts("Version: 0.8.4+")
+      IO.puts("Version: 0.9.0+")
       IO.puts(String.duplicate("=", 60))
 
       demo_basic_calls()
@@ -44,6 +44,7 @@ defmodule Demo do
       demo_sessions()
       demo_bang_variants()
       demo_streaming()
+      demo_graceful_serialization()
       demo_when_to_use()
 
       IO.puts("")
@@ -477,11 +478,83 @@ defmodule Demo do
   end
 
   # ============================================================================
-  # 9. When to Use Universal FFI
+  # 9. Graceful Serialization (v0.9.0+)
+  # ============================================================================
+
+  defp demo_graceful_serialization do
+    section("9. GRACEFUL SERIALIZATION (v0.9.0+)")
+
+    IO.puts("Containers preserve structure - only non-serializable leaves become refs.")
+    IO.puts("")
+
+    # Compiled regex patterns are not JSON-serializable, but metadata is
+    IO.puts("Creating validation config with compiled regex:")
+
+    case SnakeBridge.call("re", "compile", ["^\\d{3}-\\d{4}$"]) do
+      {:ok, pattern_ref} ->
+        IO.puts("Pattern ref: #{inspect(pattern_ref)}")
+        IO.puts("Is ref?: #{SnakeBridge.ref?(pattern_ref)}")
+
+        # Create a dict mixing the pattern with serializable metadata
+        config = %{
+          "pattern" => pattern_ref,
+          "name" => "phone_validator",
+          "required" => true
+        }
+
+        IO.puts("")
+        IO.puts("Config dict: #{inspect(config)}")
+        IO.puts("")
+
+        # The dict structure is preserved - pattern stays as ref, strings stay as strings
+        IO.puts("Accessing fields directly:")
+        IO.puts("  config[\"name\"] = #{inspect(config["name"])}")
+        IO.puts("  config[\"required\"] = #{inspect(config["required"])}")
+        IO.puts("  config[\"pattern\"] is ref? #{SnakeBridge.ref?(config["pattern"])}")
+
+        # Can still use the pattern ref for matching
+        IO.puts("")
+        IO.puts("Using the pattern ref for matching:")
+
+        case SnakeBridge.method(pattern_ref, "match", ["555-1234"]) do
+          {:ok, match} when not is_nil(match) ->
+            IO.puts("  pattern.match(\"555-1234\") = Match object (valid!)")
+
+          {:ok, nil} ->
+            IO.puts("  pattern.match(\"555-1234\") = None (no match)")
+
+          error ->
+            print_result("  match", error)
+        end
+
+        case SnakeBridge.method(pattern_ref, "match", ["invalid"]) do
+          {:ok, result} when is_nil(result) or result == "None" ->
+            IO.puts("  pattern.match(\"invalid\") = None (no match, as expected)")
+
+          {:ok, match} ->
+            IO.puts("  pattern.match(\"invalid\") = #{inspect(match)}")
+
+          error ->
+            print_result("  match", error)
+        end
+
+      error ->
+        print_result("re.compile", error)
+    end
+
+    IO.puts("")
+    IO.puts("This enables working with Python objects that return mixed data -")
+    IO.puts("serializable fields (strings, numbers, bools) are directly accessible,")
+    IO.puts("while non-serializable objects (compiled patterns, connections, etc.)")
+    IO.puts("remain as usable refs.")
+  end
+
+  # ============================================================================
+  # 10. When to Use Universal FFI
   # ============================================================================
 
   defp demo_when_to_use do
-    section("9. WHEN TO USE UNIVERSAL FFI")
+    section("10. WHEN TO USE UNIVERSAL FFI")
 
     IO.puts("""
 

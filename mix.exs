@@ -43,8 +43,7 @@ defmodule SnakeBridge.MixProject do
   defp deps do
     [
       # Core - Python bridge
-      #      {:snakepit, "~> 0.11.0"},
-      {:snakepit, path: "../snakepit"},
+      {:snakepit, "~> 0.11.0"},
 
       # JSON encoding
       {:jason, "~> 1.4"},
@@ -69,21 +68,28 @@ defmodule SnakeBridge.MixProject do
       source_url: @source_url,
       assets: %{"assets" => "assets"},
       logo: "assets/snakebridge.svg",
-      extras: [
-        "README.md",
-        "CHANGELOG.md",
-        "LICENSE",
-        {"guides/SESSION_AFFINITY.md", [title: "Session Affinity", filename: "session-affinity"]},
-        # Examples
-        {"examples/README.md", [title: "Examples Overview", filename: "examples-overview"]},
-        {"examples/math_demo/README.md", [title: "Math Demo", filename: "example-math-demo"]},
-        {"examples/proof_pipeline/README.md",
-         [title: "Proof Pipeline", filename: "example-proof-pipeline"]}
-      ],
+      extras: extras(),
       groups_for_extras: [
-        Introduction: ~w(readme changelog license),
-        Guides: ~w(session-affinity),
-        Examples: ~w(examples-overview example-math-demo example-proof-pipeline)
+        # Introduction
+        Introduction: ~w(readme getting-started),
+
+        # Core Concepts - Essential knowledge for using SnakeBridge
+        "Core Concepts": ~w(universal-ffi generated-wrappers type-system),
+
+        # Sessions & State - Managing Python state and object lifecycles
+        "Sessions & State": ~w(refs-and-sessions session-affinity),
+
+        # Advanced Features - Streaming, errors, and observability
+        "Advanced Features": ~w(streaming error-handling telemetry),
+
+        # Best Practices
+        "Best Practices": ~w(best-practices),
+
+        # Examples
+        Examples: ~w(examples-overview example-math-demo example-proof-pipeline),
+
+        # Reference
+        Reference: ~w(changelog license)
       ],
       groups_for_modules: [
         Core: [
@@ -103,6 +109,43 @@ defmodule SnakeBridge.MixProject do
           SnakeBridge.EnvironmentError
         ]
       ]
+    ]
+  end
+
+  defp extras do
+    [
+      # Introduction
+      "README.md",
+      {"guides/GETTING_STARTED.md", [title: "Getting Started", filename: "getting-started"]},
+
+      # Core Concepts
+      {"guides/UNIVERSAL_FFI.md", [title: "Universal FFI", filename: "universal-ffi"]},
+      {"guides/GENERATED_WRAPPERS.md",
+       [title: "Generated Wrappers", filename: "generated-wrappers"]},
+      {"guides/TYPE_SYSTEM.md", [title: "Type System", filename: "type-system"]},
+
+      # Sessions & State
+      {"guides/REFS_AND_SESSIONS.md",
+       [title: "Refs and Sessions", filename: "refs-and-sessions"]},
+      {"guides/SESSION_AFFINITY.md", [title: "Session Affinity", filename: "session-affinity"]},
+
+      # Advanced Features
+      {"guides/STREAMING.md", [title: "Streaming", filename: "streaming"]},
+      {"guides/ERROR_HANDLING.md", [title: "Error Handling", filename: "error-handling"]},
+      {"guides/TELEMETRY.md", [title: "Telemetry", filename: "telemetry"]},
+
+      # Best Practices
+      {"guides/BEST_PRACTICES.md", [title: "Best Practices", filename: "best-practices"]},
+
+      # Examples
+      {"examples/README.md", [title: "Examples Overview", filename: "examples-overview"]},
+      {"examples/math_demo/README.md", [title: "Math Demo", filename: "example-math-demo"]},
+      {"examples/proof_pipeline/README.md",
+       [title: "Proof Pipeline", filename: "example-proof-pipeline"]},
+
+      # Reference
+      "CHANGELOG.md",
+      "LICENSE"
     ]
   end
 

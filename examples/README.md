@@ -59,7 +59,7 @@ cd affinity_defaults_example && mix run --no-start -e Demo.run
 | **affinity_defaults_example** | Single-pool affinity defaults | Default strictness, per-call overrides, busy-worker behavior |
 | **python_idioms_example** | Python idioms bridge | Generators, context managers, callbacks |
 | **protocol_integration_example** | Protocol integration | Inspect/String.Chars, Enumerable, dynamic exceptions |
-| **universal_ffi_example** | Universal FFI showcase (v0.8.4+) | `SnakeBridge.call/4`, `get/3`, `method/4`, `attr/3`, `bytes/1`, auto-sessions |
+| **universal_ffi_example** | Universal FFI showcase (v0.9.0+) | `SnakeBridge.call/4`, `get/3`, `method/4`, `attr/3`, `bytes/1`, auto-sessions, graceful serialization |
 
 ## Verbose Output Format
 
@@ -246,7 +246,7 @@ Libraries used: `math`, `json`, `os`, `sys`, `platform`, `datetime`, `random`, `
 
 ### universal_ffi_example
 
-Comprehensive showcase of Universal FFI features (v0.8.4+):
+Comprehensive showcase of Universal FFI features (v0.9.0+):
 - `SnakeBridge.call/4` - Call any Python function dynamically
 - `SnakeBridge.get/3` - Get module attributes
 - `SnakeBridge.method/4` and `attr/3` - Call methods/get attributes on refs
@@ -255,6 +255,7 @@ Comprehensive showcase of Universal FFI features (v0.8.4+):
 - Auto-session management
 - Bang variants (`call!`, `get!`, `method!`, `attr!`)
 - Streaming with `SnakeBridge.stream/5`
+- **Graceful serialization** - containers preserve structure, only non-serializable leaves become refs (e.g., `re.compile()` patterns mixed with metadata)
 
 This is the canonical reference for Universal FFI usage - the "escape hatch" for calling Python without code generation.
 

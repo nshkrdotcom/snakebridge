@@ -375,11 +375,16 @@ def _encode_tagged_dict(d: dict) -> Any:
 
 
 def _is_generator_or_iterator(value: Any) -> bool:
-    """Check if value is a generator or iterator."""
-    if isinstance(value, types.GeneratorType):
-        return True
-    # Check for async generators if available
+    """
+    Check if value is a sync generator or iterator that can be consumed via next().
+
+    NOTE: Async generators are explicitly EXCLUDED because they cannot be consumed
+    via sync iteration (next()). They should be treated as regular refs, not stream_refs.
+    """
+    # Explicitly exclude async generators - they cannot be consumed via next()
     if hasattr(types, 'AsyncGeneratorType') and isinstance(value, types.AsyncGeneratorType):
+        return False
+    if isinstance(value, types.GeneratorType):
         return True
     # Check for iterator protocol
     if hasattr(value, '__next__') and hasattr(value, '__iter__'):

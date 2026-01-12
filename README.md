@@ -445,31 +445,39 @@ to the calling process.
 
 ### Graceful Serialization
 
-Python objects that cannot be serialized to JSON are replaced with informative markers
-instead of causing errors. SnakeBridge provides helpers to detect and inspect these markers:
+SnakeBridge preserves container structure when encoding Python results. If a list or dict
+contains non-serializable objects, only those specific items become refs - the rest of
+the container remains accessible as normal Elixir data.
+
+This is especially useful for DSPy-like "history" structures where most fields are
+serializable but some (like `response` objects) are not:
 
 ```elixir
-{:ok, result} = SnakeBridge.call("some_module", "get_data", [])
+{:ok, history} = SnakeBridge.call("dspy_module", "get_history", [])
 
-# Check if a value is an unserializable marker
-if SnakeBridge.unserializable?(result["response"]) do
-  {:ok, info} = SnakeBridge.unserializable_info(result["response"])
-  IO.puts("Got unserializable type: #{info.type}")
+# history is a list of maps - NOT a single opaque ref
+for entry <- history do
+  # Serializable fields are directly accessible
+  IO.puts("Model: #{entry["model"]}, cost: #{entry["cost"]}")
+
+  # Non-serializable fields become nested refs
+  response = entry["response"]
+  if SnakeBridge.ref?(response) do
+    # Can still access the ref's attributes
+    {:ok, id} = SnakeBridge.attr(response, "id")
+    IO.puts("Response ID: #{id}")
+  end
 end
 ```
 
-Objects with conversion methods (`model_dump`, `to_dict`, `isoformat`, etc.) are
-automatically converted before falling back to markers.
+Key behaviors:
+- **Container preservation**: Lists and dicts keep their structure; only non-serializable
+  leaves become `%SnakeBridge.Ref{}` or `%SnakeBridge.StreamRef{}`
+- **Cycle detection**: Self-referential structures are handled safely - cycles become refs
+- **Type metadata**: Refs include `type_name` for inspection (the Python class name)
 
-Configuration is done via environment variables before starting Snakepit:
-
-```elixir
-# In config/runtime.exs (for debugging only - not recommended for production)
-System.put_env("SNAKEPIT_UNSERIALIZABLE_DETAIL", "repr_redacted_truncated")
-```
-
-See Snakepit's [Graceful Serialization guide](https://hexdocs.pm/snakepit/graceful-serialization.html)
-for full documentation.
+For Snakepit-style unserializable markers (used by Snakepit's internal adapters, not
+SnakeBridge encoding), see `SnakeBridge.unserializable?/1` and `SnakeBridge.unserializable_info/1`.
 
 ### ML Error Translation
 
@@ -716,6 +724,21 @@ cd examples/multi_session_example && mix run -e Demo.run
 cd examples/affinity_defaults_example && mix run -e Demo.run
 cd examples/universal_ffi_example && mix run -e Demo.run  # Universal FFI showcase
 ```
+
+## Guides
+
+Comprehensive guides are available in the `guides/` directory:
+
+- **[Getting Started](guides/GETTING_STARTED.md)** - Installation, setup, and your first SnakeBridge call
+- **[Universal FFI](guides/UNIVERSAL_FFI.md)** - Runtime API for dynamic Python calls without codegen
+- **[Generated Wrappers](guides/GENERATED_WRAPPERS.md)** - Compile-time wrapper generation and configuration
+- **[Refs and Sessions](guides/REFS_AND_SESSIONS.md)** - Python object lifecycle and session management
+- **[Type System](guides/TYPE_SYSTEM.md)** - Wire protocol, tagged types, and serialization
+- **[Streaming](guides/STREAMING.md)** - Generators, iterators, and streaming functions
+- **[Error Handling](guides/ERROR_HANDLING.md)** - Exception translation and structured errors
+- **[Telemetry](guides/TELEMETRY.md)** - Observability, metrics, and debugging
+- **[Best Practices](guides/BEST_PRACTICES.md)** - Patterns, anti-patterns, and production tips
+- **[Session Affinity](guides/SESSION_AFFINITY.md)** - Routing and affinity modes for stateful workloads
 
 ## Script Execution
 

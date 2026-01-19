@@ -30,21 +30,44 @@ defmodule SnakeBridge.Compiler.Pipeline do
       run_strict(config)
     else
       PythonEnv.ensure!(config)
-      run_normal(config)
+      with_introspector_config(config, fn -> run_normal(config) end)
     end
   end
 
   defp update_manifest(manifest, targets) do
-    targets
-    |> IntrospectionRunner.run()
-    |> Enum.reduce(manifest, fn {library, python_module, infos}, acc ->
-      {symbol_entries, class_entries} =
-        build_manifest_entries(library, python_module, infos)
+    {updates, errors} = IntrospectionRunner.run(targets)
 
-      acc
-      |> Manifest.put_symbols(symbol_entries)
-      |> Manifest.put_classes(class_entries)
-    end)
+    {existing_class_map, existing_class_modules} = existing_classes_from_manifest(manifest)
+    reserved_modules = reserved_modules_from_manifest(manifest)
+
+    {updated, _reserved_modules, _used_class_modules} =
+      Enum.reduce(
+        updates,
+        {manifest, reserved_modules, existing_class_modules},
+        fn {library, python_module, infos}, {acc, reserved, used_class_modules} ->
+          class_keys = class_keys_from_infos(infos, python_module)
+
+          {symbol_entries, class_entries, reserved, used_class_modules} =
+            build_manifest_entries(
+              library,
+              python_module,
+              infos,
+              reserved,
+              used_class_modules,
+              existing_class_map
+            )
+
+          acc =
+            acc
+            |> drop_class_entries(class_keys)
+            |> Manifest.put_symbols(symbol_entries)
+            |> Manifest.put_classes(class_entries)
+
+          {acc, reserved, used_class_modules}
+        end
+      )
+
+    {updated, errors}
   end
 
   defp build_targets(missing, config, manifest) do
@@ -122,21 +145,37 @@ defmodule SnakeBridge.Compiler.Pipeline do
     end)
   end
 
-  defp build_manifest_entries(library, python_module, infos) do
-    Enum.reduce(infos, {[], []}, fn info, {symbols, classes} ->
-      cond do
-        info["error"] ->
-          {symbols, classes}
+  defp build_manifest_entries(
+         library,
+         python_module,
+         infos,
+         reserved_modules,
+         used_class_modules,
+         existing_class_map
+       ) do
+    filtered = Enum.reject(infos, & &1["error"])
+    {class_infos, function_infos} = Enum.split_with(filtered, &(&1["type"] == "class"))
 
-        info["type"] == "class" ->
-          class_entries = class_entries_for(library, python_module, info)
-          {symbols, class_entries ++ classes}
+    symbol_entries = Enum.map(function_infos, &symbol_entry_for(library, python_module, &1))
 
-        true ->
-          symbol_entry = symbol_entry_for(library, python_module, info)
-          {[symbol_entry | symbols], classes}
-      end
-    end)
+    reserved_modules = add_symbol_modules(symbol_entries, reserved_modules)
+
+    {class_entries, used_class_modules} =
+      Enum.reduce(class_infos, {[], used_class_modules}, fn info, {acc, used} ->
+        {entry, used} =
+          class_entries_for(
+            library,
+            python_module,
+            info,
+            reserved_modules,
+            used,
+            existing_class_map
+          )
+
+        {[entry | acc], used}
+      end)
+
+    {symbol_entries, class_entries, reserved_modules, used_class_modules}
   end
 
   defp symbol_entry_for(library, python_module, info) do
@@ -165,6 +204,12 @@ defmodule SnakeBridge.Compiler.Pipeline do
         "elixir_name" => elixir_name,
         "python_module" => python_module,
         "signature_available" => Map.get(info, "signature_available", true),
+        "signature_source" => info["signature_source"],
+        "signature_detail" => info["signature_detail"],
+        "signature_missing_reason" => info["signature_missing_reason"],
+        "doc_source" => info["doc_source"],
+        "doc_missing_reason" => info["doc_missing_reason"],
+        "overload_count" => info["overload_count"],
         "parameters" => params,
         "docstring" => info["docstring"] || "",
         "return_annotation" => info["return_annotation"],
@@ -190,10 +235,34 @@ defmodule SnakeBridge.Compiler.Pipeline do
     }
   end
 
-  defp class_entries_for(library, python_module, info) do
+  defp class_entries_for(
+         library,
+         python_module,
+         info,
+         reserved_modules,
+         used_class_modules,
+         existing_class_map
+       ) do
     class_name = info["name"] || info["class"] || "Class"
     class_python_module = info["python_module"] || python_module || library.python_name
-    class_module = class_module_for(library, class_python_module, class_name)
+    class_key = {class_python_module, class_name}
+
+    preferred_module = Map.get(existing_class_map, class_key)
+
+    class_module =
+      preferred_module ||
+        class_module_for(library, class_python_module, class_name)
+
+    used_class_modules =
+      if preferred_module do
+        MapSet.delete(used_class_modules, preferred_module)
+      else
+        used_class_modules
+      end
+
+    {class_module, used_class_modules} =
+      unique_class_module(class_module, reserved_modules, used_class_modules)
+
     key = Manifest.class_key(class_module)
 
     methods =
@@ -202,7 +271,7 @@ defmodule SnakeBridge.Compiler.Pipeline do
       |> Enum.map(&class_method_entry/1)
       |> Enum.reject(&is_nil/1)
 
-    [
+    {
       {
         key,
         %{
@@ -210,36 +279,52 @@ defmodule SnakeBridge.Compiler.Pipeline do
           "class" => class_name,
           "python_module" => class_python_module,
           "docstring" => info["docstring"] || "",
+          "doc_source" => info["doc_source"],
+          "doc_missing_reason" => info["doc_missing_reason"],
           "methods" => methods,
           "attributes" => info["attributes"] || []
         }
-      }
-    ]
+      },
+      used_class_modules
+    }
   end
 
   defp class_method_entry(method) do
-    name = method["name"] || method[:name] || ""
+    name = method_value(method, :name, "")
 
     case Generator.sanitize_method_name(name) do
       {elixir_name, python_name} ->
-        params = method["parameters"] || method[:parameters] || []
-        arity_info = compute_arity_info(params, method)
-
-        arity_info =
-          if python_name == "__init__" do
-            arity_info
-          else
-            add_ref_arity_info(arity_info)
-          end
+        params = method_value(method, :parameters, [])
+        arity_info = method_arity_info(params, method, python_name)
 
         method
         |> Map.put("name", python_name)
         |> Map.put("python_name", python_name)
         |> Map.put("elixir_name", elixir_name)
+        |> Map.put("signature_source", method_value(method, :signature_source))
+        |> Map.put("signature_detail", method_value(method, :signature_detail))
+        |> Map.put("signature_missing_reason", method_value(method, :signature_missing_reason))
+        |> Map.put("doc_source", method_value(method, :doc_source))
+        |> Map.put("doc_missing_reason", method_value(method, :doc_missing_reason))
+        |> Map.put("overload_count", method_value(method, :overload_count))
         |> Map.merge(arity_info)
 
       nil ->
         nil
+    end
+  end
+
+  defp method_value(method, key, default \\ nil) do
+    Map.get(method, Atom.to_string(key)) || Map.get(method, key) || default
+  end
+
+  defp method_arity_info(params, method, python_name) do
+    arity_info = compute_arity_info(params, method)
+
+    if python_name == "__init__" do
+      arity_info
+    else
+      add_ref_arity_info(arity_info)
     end
   end
 
@@ -265,11 +350,12 @@ defmodule SnakeBridge.Compiler.Pipeline do
     library_parts = String.split(library.python_name, ".")
     extra_parts = Enum.drop(python_parts, length(library_parts))
     extra_parts = drop_class_suffix(extra_parts, class_name)
+    class_segment = Macro.camelize(class_name)
 
     library.module_name
     |> Module.split()
     |> Kernel.++(Enum.map(extra_parts, &Macro.camelize/1))
-    |> Kernel.++([class_name])
+    |> Kernel.++([class_segment])
     |> Module.concat()
   end
 
@@ -292,6 +378,147 @@ defmodule SnakeBridge.Compiler.Pipeline do
     library.module_name
     |> Module.split()
     |> Kernel.++(Enum.map(extra_parts, &Macro.camelize/1))
+    |> Module.concat()
+  end
+
+  defp unique_class_module(class_module, reserved_modules, used_class_modules) do
+    if MapSet.member?(reserved_modules, class_module) or
+         MapSet.member?(used_class_modules, class_module) do
+      parts = Module.split(class_module)
+      {base_parts, [last]} = Enum.split(parts, -1)
+
+      unique =
+        disambiguate_class_module(base_parts, last, reserved_modules, used_class_modules, 2)
+
+      {unique, MapSet.put(used_class_modules, unique)}
+    else
+      {class_module, MapSet.put(used_class_modules, class_module)}
+    end
+  end
+
+  defp disambiguate_class_module(base_parts, last, reserved_modules, used_class_modules, counter) do
+    suffix = if counter == 2, do: "Class", else: "Class" <> Integer.to_string(counter)
+    candidate = Module.concat(base_parts ++ [last <> suffix])
+
+    if MapSet.member?(reserved_modules, candidate) or
+         MapSet.member?(used_class_modules, candidate) do
+      disambiguate_class_module(
+        base_parts,
+        last,
+        reserved_modules,
+        used_class_modules,
+        counter + 1
+      )
+    else
+      candidate
+    end
+  end
+
+  defp reserved_modules_from_manifest(manifest) do
+    manifest
+    |> Map.get("symbols", %{})
+    |> Map.values()
+    |> Enum.reduce(MapSet.new(), fn info, acc ->
+      case info["module"] do
+        module when is_binary(module) -> MapSet.put(acc, module_from_string(module))
+        _ -> acc
+      end
+    end)
+  end
+
+  defp existing_classes_from_manifest(manifest) do
+    manifest
+    |> Map.get("classes", %{})
+    |> Enum.reduce({%{}, MapSet.new()}, fn {module, info}, {map, set} ->
+      python_module = info["python_module"] || info[:python_module]
+      class_name = info["class"] || info["name"] || info[:class] || info[:name]
+
+      if is_binary(python_module) and is_binary(class_name) and is_binary(module) do
+        module_atom = module_from_string(module)
+        {Map.put(map, {python_module, class_name}, module_atom), MapSet.put(set, module_atom)}
+      else
+        {map, set}
+      end
+    end)
+  end
+
+  defp reserved_modules_from_namespaces(library, namespaces) do
+    Enum.reduce(namespaces, MapSet.new(), fn {namespace, data}, acc ->
+      python_module =
+        if namespace == "" do
+          library.python_name
+        else
+          "#{library.python_name}.#{namespace}"
+        end
+
+      functions = data["functions"] || []
+      attributes = data["attributes"] || []
+
+      visible =
+        (functions ++ attributes)
+        |> Enum.reject(fn info -> info["name"] in library.exclude end)
+
+      if visible == [] do
+        acc
+      else
+        MapSet.put(acc, module_for_python(library, python_module))
+      end
+    end)
+  end
+
+  defp add_symbol_modules(symbol_entries, reserved_modules) do
+    Enum.reduce(symbol_entries, reserved_modules, fn {_key, info}, acc ->
+      case info["module"] do
+        module when is_binary(module) -> MapSet.put(acc, module_from_string(module))
+        _ -> acc
+      end
+    end)
+  end
+
+  defp class_keys_from_infos(infos, python_module) do
+    infos
+    |> Enum.filter(&(&1["type"] == "class"))
+    |> Enum.map(&class_key_from_info(&1, python_module))
+    |> Enum.reject(&is_nil/1)
+    |> MapSet.new()
+  end
+
+  defp class_keys_from_classes(classes, python_module) do
+    classes
+    |> Enum.map(&class_key_from_info(&1, python_module))
+    |> Enum.reject(&is_nil/1)
+    |> MapSet.new()
+  end
+
+  defp class_key_from_info(info, python_module) do
+    class_name = info["name"] || info["class"]
+    class_python_module = info["python_module"] || python_module
+
+    if is_binary(class_name) and is_binary(class_python_module) do
+      {class_python_module, class_name}
+    end
+  end
+
+  defp drop_class_entries(manifest, class_keys) do
+    if MapSet.size(class_keys) == 0 do
+      manifest
+    else
+      classes =
+        manifest
+        |> Map.get("classes", %{})
+        |> Enum.reject(fn {_module, info} ->
+          key = class_key_from_info(info, info["python_module"] || info[:python_module])
+          key in class_keys
+        end)
+        |> Map.new()
+
+      Map.put(manifest, "classes", classes)
+    end
+  end
+
+  defp module_from_string(module) when is_binary(module) do
+    module
+    |> String.split(".")
     |> Module.concat()
   end
 
@@ -410,7 +637,7 @@ defmodule SnakeBridge.Compiler.Pipeline do
       {all_libraries, used_libraries} =
         Enum.split_with(config.libraries, &(&1.generate == :all))
 
-      manifest = process_generate_all_libraries(manifest, all_libraries)
+      {manifest, generate_all_errors} = process_generate_all_libraries(manifest, all_libraries)
 
       # Then handle libraries with generate: :used (default)
       used_config = %{config | libraries: used_libraries}
@@ -418,18 +645,22 @@ defmodule SnakeBridge.Compiler.Pipeline do
       missing = Manifest.missing(manifest, detected)
       targets = build_targets(missing, used_config, manifest)
 
-      updated_manifest =
+      {updated_manifest, introspection_errors} =
         if targets != [] do
           update_manifest(manifest, targets)
         else
-          manifest
+          {manifest, []}
         end
 
+      errors = generate_all_errors ++ format_introspection_errors(introspection_errors)
+
       Manifest.save(config, updated_manifest)
+      enforce_signature_thresholds!(config, updated_manifest)
       generate_from_manifest(config, updated_manifest)
       generate_helper_wrappers(config)
       SnakeBridge.Registry.save()
       Lock.update(config)
+      SnakeBridge.CoverageReport.write_reports(config, updated_manifest, errors)
 
       symbol_count = count_symbols(updated_manifest)
       file_count = length(config.libraries)
@@ -442,11 +673,37 @@ defmodule SnakeBridge.Compiler.Pipeline do
     end
   end
 
-  defp process_generate_all_libraries(manifest, []), do: manifest
+  defp with_introspector_config(config, fun) do
+    original = Application.get_env(:snakebridge, :introspector, [])
+    merged = merge_introspector_config(original, List.wrap(config.introspector))
+    Application.put_env(:snakebridge, :introspector, merged)
+
+    try do
+      fun.()
+    after
+      Application.put_env(:snakebridge, :introspector, original)
+    end
+  end
+
+  defp merge_introspector_config(base, override) do
+    base = List.wrap(base)
+    override = List.wrap(override)
+
+    Keyword.merge(base, override, fn
+      :env, base_env, override_env ->
+        Map.merge(Map.new(base_env || %{}), Map.new(override_env || %{}))
+
+      _key, _base, override_value ->
+        override_value
+    end)
+  end
+
+  defp process_generate_all_libraries(manifest, []), do: {manifest, []}
 
   defp process_generate_all_libraries(manifest, libraries) do
-    Enum.reduce(libraries, manifest, fn library, acc ->
-      process_generate_all_library(acc, library)
+    Enum.reduce(libraries, {manifest, []}, fn library, {acc, errors} ->
+      {updated, library_errors} = process_generate_all_library(acc, library)
+      {updated, errors ++ library_errors}
     end)
   end
 
@@ -466,47 +723,93 @@ defmodule SnakeBridge.Compiler.Pipeline do
         update_manifest_from_module_introspection(manifest, library, result)
 
       {:error, reason} ->
-        log_generate_all_error(library, reason)
-        manifest
+        {manifest, [generate_all_error(library, reason)]}
     end
   end
 
-  defp update_manifest_from_module_introspection(manifest, library, %{"namespaces" => namespaces}) do
-    Enum.reduce(namespaces, manifest, fn {namespace, data}, acc ->
-      python_module =
-        if namespace == "" do
-          library.python_name
-        else
-          "#{library.python_name}.#{namespace}"
+  defp update_manifest_from_module_introspection(
+         manifest,
+         library,
+         %{"namespaces" => namespaces} = result
+       ) do
+    base_issues = extract_module_issues(library, result)
+    {existing_class_map, existing_class_modules} = existing_classes_from_manifest(manifest)
+
+    reserved_modules =
+      manifest
+      |> reserved_modules_from_manifest()
+      |> MapSet.union(reserved_modules_from_namespaces(library, namespaces))
+
+    {updated, issues, _used_class_modules} =
+      Enum.reduce(
+        namespaces,
+        {manifest, base_issues, existing_class_modules},
+        fn {namespace, data}, {acc, issues_acc, used_class_modules} ->
+          python_module =
+            if namespace == "" do
+              library.python_name
+            else
+              "#{library.python_name}.#{namespace}"
+            end
+
+          functions = data["functions"] || []
+          classes = data["classes"] || []
+          attributes = data["attributes"] || []
+
+          filtered_functions =
+            functions
+            |> Enum.reject(fn info -> info["name"] in library.exclude end)
+
+          filtered_attributes =
+            attributes
+            |> Enum.reject(fn info -> info["name"] in library.exclude end)
+
+          # Build entries for functions and attributes
+          {symbol_entries, _} =
+            (filtered_functions ++ filtered_attributes)
+            |> Enum.reduce({[], []}, fn info, {symbols, classes_acc} ->
+              info = Map.put(info, "python_module", python_module)
+              entry = symbol_entry_for(library, python_module, info)
+              {[entry | symbols], classes_acc}
+            end)
+
+          # Build entries for classes
+          visible_classes =
+            classes
+            |> Enum.reject(fn info -> info["name"] in library.exclude end)
+
+          class_keys = class_keys_from_classes(visible_classes, python_module)
+
+          {class_entries, used_class_modules} =
+            visible_classes
+            |> Enum.reduce({[], used_class_modules}, fn info, {acc_entries, used} ->
+              info = Map.put(info, "python_module", python_module)
+
+              {entry, used} =
+                class_entries_for(
+                  library,
+                  python_module,
+                  info,
+                  reserved_modules,
+                  used,
+                  existing_class_map
+                )
+
+              {[entry | acc_entries], used}
+            end)
+
+          updated =
+            acc
+            |> drop_class_entries(class_keys)
+            |> Manifest.put_symbols(symbol_entries)
+            |> Manifest.put_classes(class_entries)
+
+          issues = issues_acc ++ extract_namespace_issues(library, python_module, data)
+          {updated, issues, used_class_modules}
         end
+      )
 
-      functions = data["functions"] || []
-      classes = data["classes"] || []
-      attributes = data["attributes"] || []
-
-      # Build entries for functions and attributes
-      {symbol_entries, _} =
-        (functions ++ attributes)
-        |> Enum.reject(fn info -> info["name"] in library.exclude end)
-        |> Enum.reduce({[], []}, fn info, {symbols, classes_acc} ->
-          info = Map.put(info, "python_module", python_module)
-          entry = symbol_entry_for(library, python_module, info)
-          {[entry | symbols], classes_acc}
-        end)
-
-      # Build entries for classes
-      class_entries =
-        classes
-        |> Enum.reject(fn info -> info["name"] in library.exclude end)
-        |> Enum.flat_map(fn info ->
-          info = Map.put(info, "python_module", python_module)
-          class_entries_for(library, python_module, info)
-        end)
-
-      acc
-      |> Manifest.put_symbols(symbol_entries)
-      |> Manifest.put_classes(class_entries)
-    end)
+    {updated, issues}
   end
 
   defp update_manifest_from_module_introspection(
@@ -517,47 +820,145 @@ defmodule SnakeBridge.Compiler.Pipeline do
     # Flat format (v2.0)
     python_module = library.python_name
     attributes = data["attributes"] || []
+    {existing_class_map, existing_class_modules} = existing_classes_from_manifest(manifest)
+    reserved_modules = reserved_modules_from_manifest(manifest)
+
+    filtered_functions =
+      functions
+      |> Enum.reject(fn info -> info["name"] in library.exclude end)
+
+    filtered_attributes =
+      attributes
+      |> Enum.reject(fn info -> info["name"] in library.exclude end)
 
     {symbol_entries, _} =
-      (functions ++ attributes)
-      |> Enum.reject(fn info -> info["name"] in library.exclude end)
+      (filtered_functions ++ filtered_attributes)
       |> Enum.reduce({[], []}, fn info, {symbols, classes_acc} ->
         info = Map.put(info, "python_module", python_module)
         entry = symbol_entry_for(library, python_module, info)
         {[entry | symbols], classes_acc}
       end)
 
-    class_entries =
+    reserved_modules = add_symbol_modules(symbol_entries, reserved_modules)
+
+    visible_classes =
       classes
       |> Enum.reject(fn info -> info["name"] in library.exclude end)
-      |> Enum.flat_map(fn info ->
+
+    class_keys = class_keys_from_classes(visible_classes, python_module)
+
+    {class_entries, _used_class_modules} =
+      visible_classes
+      |> Enum.reduce({[], existing_class_modules}, fn info, {acc_entries, used} ->
         info = Map.put(info, "python_module", python_module)
-        class_entries_for(library, python_module, info)
+
+        {entry, used} =
+          class_entries_for(
+            library,
+            python_module,
+            info,
+            reserved_modules,
+            used,
+            existing_class_map
+          )
+
+        {[entry | acc_entries], used}
       end)
 
-    manifest
-    |> Manifest.put_symbols(symbol_entries)
-    |> Manifest.put_classes(class_entries)
+    updated =
+      manifest
+      |> drop_class_entries(class_keys)
+      |> Manifest.put_symbols(symbol_entries)
+      |> Manifest.put_classes(class_entries)
+
+    issues =
+      extract_module_issues(library, data) ++
+        extract_namespace_issues(library, python_module, data)
+
+    {updated, issues}
   end
 
-  defp update_manifest_from_module_introspection(manifest, _library, _result), do: manifest
+  defp update_manifest_from_module_introspection(manifest, _library, _result), do: {manifest, []}
 
-  defp log_generate_all_error(library, reason) do
-    message = """
-      [warning] Full module introspection failed for #{library.name}
-        Error: #{inspect(reason)}
-        The library was configured with generate: :all but introspection failed.
-        Falling back to empty bindings for this library.
-    """
+  defp generate_all_error(library, reason) do
+    %{
+      type: :introspect_module_failed,
+      library: library.name,
+      python_module: library.python_name,
+      reason: reason
+    }
+  end
 
-    Mix.shell().info(message)
+  defp extract_module_issues(library, result) do
+    issues = Map.get(result, "issues", []) || []
+
+    Enum.map(issues, fn issue ->
+      %{
+        type: :introspection_issue,
+        library: library.name,
+        python_module: issue["module"] || library.python_name,
+        reason: issue
+      }
+    end)
+  end
+
+  defp extract_namespace_issues(library, python_module, data) do
+    issues = Map.get(data, "issues", []) || []
+
+    Enum.map(issues, fn issue ->
+      %{
+        type: :introspection_issue,
+        library: library.name,
+        python_module: python_module,
+        reason: issue
+      }
+    end)
   end
 
   # Test helper - exposes process_generate_all_library for testing
   @doc false
   def test_process_generate_all_library(manifest, library) do
-    process_generate_all_library(manifest, library)
+    {updated, _errors} = process_generate_all_library(manifest, library)
+    updated
   end
+
+  @doc false
+  @spec test_class_module_for(term(), String.t(), String.t(), MapSet.t(), MapSet.t()) :: module()
+  def test_class_module_for(
+        library,
+        python_module,
+        class_name,
+        reserved_modules,
+        used_class_modules
+      ) do
+    class_module = class_module_for(library, python_module, class_name)
+
+    {class_module, _used_class_modules} =
+      unique_class_module(class_module, reserved_modules, used_class_modules)
+
+    class_module
+  end
+
+  defp enforce_signature_thresholds!(config, manifest) do
+    SnakeBridge.SignatureThresholds.enforce!(config, manifest)
+  end
+
+  defp format_introspection_errors(errors) do
+    Enum.map(errors, fn {library, python_module, reason} ->
+      %{
+        type: :introspection_failed,
+        library: library_name(library),
+        python_module: python_module,
+        reason: reason
+      }
+    end)
+  end
+
+  defp library_name(%{name: name}) when is_atom(name), do: name
+  defp library_name(name) when is_atom(name), do: name
+  defp library_name(%{python_name: name}) when is_binary(name), do: name
+  defp library_name(name) when is_binary(name), do: name
+  defp library_name(_), do: :unknown
 
   @spec verify_generated_files_exist!(Config.t()) :: :ok
   def verify_generated_files_exist!(config) do

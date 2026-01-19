@@ -41,7 +41,7 @@ defmodule MyApp.MixProject do
   end
 
   defp deps do
-    [{:snakebridge, "~> 0.9.0"}]
+    [{:snakebridge, "~> 0.10.0"}]
   end
 
   # Python dependencies - just like Elixir deps

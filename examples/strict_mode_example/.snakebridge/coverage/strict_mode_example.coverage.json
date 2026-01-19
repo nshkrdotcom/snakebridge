@@ -1,0 +1,35 @@
+{
+  "generated_at": "2026-01-19T23:51:04.268761Z",
+  "issues": [
+    {
+      "reason": [
+        "runtime: signature unavailable",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found"
+      ],
+      "type": "signature_missing",
+      "symbol": "StrictModeExample.mystery",
+      "source": "variadic"
+    }
+  ],
+  "library": "strict_mode_example",
+  "stubs": {
+    "count": 0,
+    "sources": []
+  },
+  "summary": {
+    "class_methods": 0,
+    "doc_coverage_ratio": 1.0,
+    "doc_tiers": {
+      "module": 3
+    },
+    "functions": 3,
+    "non_variadic_ratio": 0.6666666666666666,
+    "signature_tiers": {
+      "runtime": 2,
+      "variadic": 1
+    },
+    "symbols_total": 3
+  }
+}

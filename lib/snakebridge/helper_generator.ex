@@ -148,7 +148,7 @@ defmodule SnakeBridge.HelperGenerator do
     docstring = String.trim(doc)
 
     """
-      @doc #{inspect(docstring)}
+      @doc #{inspect(docstring, limit: :infinity, printable_limit: :infinity)}
       #{spec}
       def #{name}(#{param_list(param_names, plan.has_args, plan.has_opts, args_name)}) do
     #{normalize}        #{call}

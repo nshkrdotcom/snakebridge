@@ -1,0 +1,56 @@
+{
+  "classes": {},
+  "symbols": {
+    "StubFallbackExample.stubbed/1": {
+      "doc_missing_reason": null,
+      "doc_source": "stub",
+      "docstring": "Add two numbers using the stub signature.",
+      "elixir_name": "stubbed",
+      "function": "stubbed",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 3,
+      "minimum_arity": 1,
+      "module": "StubFallbackExample",
+      "name": "stubbed",
+      "optional_keyword_only": [],
+      "overload_count": 0,
+      "parameters": [
+        {
+          "annotation": "int",
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "a",
+          "type": {
+            "type": "int"
+          }
+        },
+        {
+          "annotation": "int",
+          "default": "...",
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "b",
+          "type": {
+            "type": "int"
+          }
+        }
+      ],
+      "python_module": "stub_fallback_example",
+      "python_name": "stubbed",
+      "required_arity": 1,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "int"
+      },
+      "signature_available": true,
+      "signature_detail": "/home/home/p/g/n/snakebridge/examples/stub_fallback_example/priv/python/stub_fallback_example/__init__.pyi",
+      "signature_missing_reason": [
+        "runtime: signature unavailable",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable"
+      ],
+      "signature_source": "stub"
+    }
+  },
+  "version": "0.10.0"
+}

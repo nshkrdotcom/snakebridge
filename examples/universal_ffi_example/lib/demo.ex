@@ -1,6 +1,6 @@
 defmodule Demo do
   @moduledoc """
-  Comprehensive showcase of SnakeBridge Universal FFI (v0.9.0+).
+  Comprehensive showcase of SnakeBridge Universal FFI (v0.10.0+).
 
   The Universal FFI enables calling ANY Python module dynamically,
   without compile-time code generation. This is the "escape hatch"
@@ -33,7 +33,7 @@ defmodule Demo do
       IO.puts("")
       IO.puts(String.duplicate("=", 60))
       IO.puts("SNAKEBRIDGE UNIVERSAL FFI SHOWCASE")
-      IO.puts("Version: 0.9.0+")
+      IO.puts("Version: 0.10.0+")
       IO.puts(String.duplicate("=", 60))
 
       demo_basic_calls()
@@ -478,11 +478,11 @@ defmodule Demo do
   end
 
   # ============================================================================
-  # 9. Graceful Serialization (v0.9.0+)
+  # 9. Graceful Serialization (v0.10.0+)
   # ============================================================================
 
   defp demo_graceful_serialization do
-    section("9. GRACEFUL SERIALIZATION (v0.9.0+)")
+    section("9. GRACEFUL SERIALIZATION (v0.10.0+)")
 
     IO.puts("Containers preserve structure - only non-serializable leaves become refs.")
     IO.puts("")

@@ -32,26 +32,13 @@ defmodule SnakeBridge.Introspector do
     library_label = library_label(library)
     SnakeBridge.Telemetry.introspect_start(library_label, 0)
     python_name = library_python_name(library)
+    config_json = introspection_config_json(library)
 
-    args = [script_path(), "--module", python_name]
-
-    args =
-      case Keyword.get(opts, :submodules) do
-        nil ->
-          args
-
-        [] ->
-          args
-
-        submodules when is_list(submodules) ->
-          args ++ ["--submodules", Enum.join(submodules, ",")]
-      end
-
-    args = if Keyword.get(opts, :flat, false), do: args ++ ["--flat"], else: args
+    args = build_module_args(python_name, config_json, library, opts)
 
     result =
       case run_script(args, runner_opts()) do
-        {output, 0} -> parse_module_output(output)
+        {output, 0} -> parse_module_output(output, python_name)
         {output, _status} -> handle_python_error(output, python_name)
       end
 
@@ -72,9 +59,32 @@ defmodule SnakeBridge.Introspector do
     result
   end
 
-  defp parse_module_output(output) do
+  defp build_module_args(python_name, config_json, library, opts) do
+    base = [script_path(), "--module", python_name, "--config", config_json]
+    {submodules, discover_submodules?} = resolve_submodules(library, opts)
+
+    base
+    |> maybe_add_submodules(submodules)
+    |> maybe_add_discover_submodules(discover_submodules?)
+    |> maybe_add_flat(opts)
+  end
+
+  defp maybe_add_submodules(args, list) when is_list(list) and list != [] do
+    args ++ ["--submodules", Enum.join(list, ",")]
+  end
+
+  defp maybe_add_submodules(args, _), do: args
+
+  defp maybe_add_discover_submodules(args, true), do: args ++ ["--discover-submodules"]
+  defp maybe_add_discover_submodules(args, _), do: args
+
+  defp maybe_add_flat(args, opts) do
+    if Keyword.get(opts, :flat, false), do: args ++ ["--flat"], else: args
+  end
+
+  defp parse_module_output(output, package) do
     case Jason.decode(output) do
-      {:ok, %{"error" => error}} -> {:error, error}
+      {:ok, %{"error" => error}} -> {:error, normalize_error(error, package)}
       {:ok, result} when is_map(result) -> {:ok, result}
       {:error, _} -> {:error, {:json_parse, output}}
     end
@@ -124,6 +134,8 @@ defmodule SnakeBridge.Introspector do
     python_name = python_module || library_python_name(library)
     functions_json = Jason.encode!(Enum.map(functions, &to_string/1))
 
+    config_json = introspection_config_json(library)
+
     result =
       case run_script(
              [
@@ -131,11 +143,13 @@ defmodule SnakeBridge.Introspector do
                "--module",
                python_name,
                "--symbols",
-               functions_json
+               functions_json,
+               "--config",
+               config_json
              ],
              runner_opts()
            ) do
-        {output, 0} -> parse_output(output)
+        {output, 0} -> parse_output(output, python_name)
         {output, _status} -> handle_python_error(output, python_name)
       end
 
@@ -211,14 +225,75 @@ defmodule SnakeBridge.Introspector do
              "--module",
              to_string(module_path),
              "--attribute",
-             to_string(attr_name)
+             to_string(attr_name),
+             "--config",
+             introspection_config_json(%{python_name: to_string(module_path)})
            ],
            runner_opts
          ) do
-      {output, 0} -> parse_attribute_output(output)
+      {output, 0} -> parse_attribute_output(output, to_string(module_path))
       {output, _status} -> handle_python_error(output, to_string(module_path))
     end
   end
+
+  defp introspection_config_json(library) do
+    library_config =
+      cond do
+        is_struct(library) -> Map.from_struct(library)
+        is_map(library) -> library
+        true -> %{}
+      end
+
+    signature_sources =
+      library_config
+      |> Map.get(:signature_sources)
+      |> default_signature_sources()
+      |> Enum.map(&to_string/1)
+
+    stub_search_paths =
+      Application.get_env(:snakebridge, :stub_search_paths, [])
+      |> Kernel.++(List.wrap(Map.get(library_config, :stub_search_paths) || []))
+      |> Enum.map(&to_string/1)
+      |> Enum.uniq()
+
+    use_typeshed =
+      case Map.get(library_config, :use_typeshed) do
+        nil -> Application.get_env(:snakebridge, :use_typeshed, false)
+        value -> value
+      end
+
+    typeshed_path =
+      Map.get(library_config, :typeshed_path) ||
+        Application.get_env(:snakebridge, :typeshed_path)
+
+    stubgen_config =
+      Application.get_env(:snakebridge, :stubgen, [])
+      |> Keyword.merge(List.wrap(Map.get(library_config, :stubgen) || []))
+      |> Enum.into(%{}, fn {key, value} -> {to_string(key), value} end)
+
+    config = %{
+      "signature_sources" => signature_sources,
+      "stub_search_paths" => stub_search_paths,
+      "use_typeshed" => use_typeshed,
+      "typeshed_path" => typeshed_path,
+      "stubgen" => stubgen_config
+    }
+
+    Jason.encode!(config)
+  end
+
+  defp default_signature_sources(nil) do
+    Application.get_env(:snakebridge, :signature_sources, [
+      :runtime,
+      :text_signature,
+      :runtime_hints,
+      :stub,
+      :stubgen,
+      :variadic
+    ])
+  end
+
+  defp default_signature_sources(sources), do: List.wrap(sources)
 
   defp library_python_name(%{python_name: python_name}) when is_binary(python_name),
     do: python_name
@@ -236,26 +311,55 @@ defmodule SnakeBridge.Introspector do
   defp library_label(name) when is_atom(name), do: name
   defp library_label(_), do: :unknown
 
+  defp resolve_submodules(library, opts) do
+    submodules_opt = Keyword.get(opts, :submodules)
+
+    library_submodules =
+      if is_map(library) do
+        Map.get(library, :submodules)
+      else
+        nil
+      end
+
+    case submodules_opt do
+      list when is_list(list) ->
+        {list, false}
+
+      _ ->
+        case library_submodules do
+          true -> {nil, true}
+          list when is_list(list) -> {list, false}
+          _ -> {nil, false}
+        end
+    end
+  end
+
   defp runner_opts do
     config = Application.get_env(:snakebridge, :introspector, [])
     Keyword.take(config, [:timeout, :env, :cd])
   end
 
-  defp parse_output(output) do
+  defp parse_output(output, package) do
     case Jason.decode(output) do
       {:ok, results} when is_list(results) -> {:ok, results}
-      {:ok, %{"error" => error}} -> {:error, error}
+      {:ok, %{"error" => error}} -> {:error, normalize_error(error, package)}
       {:error, _} -> {:error, {:json_parse, output}}
     end
   end
 
-  defp parse_attribute_output(output) do
+  defp parse_attribute_output(output, package) do
     case Jason.decode(output) do
-      {:ok, %{"error" => error}} -> {:error, error}
+      {:ok, %{"error" => error}} -> {:error, normalize_error(error, package)}
       {:ok, result} when is_map(result) -> {:ok, result}
       {:error, _} -> {:error, {:json_parse, output}}
     end
   end
+
+  defp normalize_error(error, package) when is_binary(error) do
+    IntrospectionError.from_python_output(error, package)
+  end
+
+  defp normalize_error(error, _package), do: error
 
   defp group_symbols(infos) do
     infos

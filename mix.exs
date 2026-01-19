@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.9.0"
+  @version "0.10.0"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -66,86 +66,105 @@ defmodule SnakeBridge.MixProject do
       name: "SnakeBridge",
       source_ref: "v#{@version}",
       source_url: @source_url,
+      canonical: "https://hexdocs.pm/snakebridge",
       assets: %{"assets" => "assets"},
       logo: "assets/snakebridge.svg",
       extras: extras(),
-      groups_for_extras: [
-        # Introduction
-        Introduction: ~w(readme getting-started),
-
-        # Core Concepts - Essential knowledge for using SnakeBridge
-        "Core Concepts": ~w(universal-ffi generated-wrappers type-system),
-
-        # Sessions & State - Managing Python state and object lifecycles
-        "Sessions & State": ~w(refs-and-sessions session-affinity),
-
-        # Advanced Features - Streaming, errors, and observability
-        "Advanced Features": ~w(streaming error-handling telemetry),
-
-        # Best Practices
-        "Best Practices": ~w(best-practices),
-
-        # Examples
-        Examples: ~w(examples-overview example-math-demo example-proof-pipeline),
-
-        # Reference
-        Reference: ~w(changelog license)
-      ],
-      groups_for_modules: [
-        Core: [
-          SnakeBridge,
-          SnakeBridge.Runtime,
-          SnakeBridge.Types,
-          SnakeBridge.Config
-        ],
-        Generator: [
-          SnakeBridge.Generator,
-          SnakeBridge.Introspector,
-          SnakeBridge.IntrospectionError,
-          SnakeBridge.Scanner,
-          SnakeBridge.Manifest,
-          SnakeBridge.Lock,
-          SnakeBridge.PythonEnv,
-          SnakeBridge.EnvironmentError
-        ]
-      ]
+      groups_for_extras: groups_for_extras(),
+      groups_for_modules: groups_for_modules(),
+      nest_modules_by_prefix: [SnakeBridge.Error]
     ]
   end
 
   defp extras do
     [
-      # Introduction
-      "README.md",
-      {"guides/GETTING_STARTED.md", [title: "Getting Started", filename: "getting-started"]},
+      # Getting Started
+      {"README.md", [title: "Overview", filename: "readme"]},
+      {"guides/GETTING_STARTED.md", title: "Installation"},
 
-      # Core Concepts
-      {"guides/UNIVERSAL_FFI.md", [title: "Universal FFI", filename: "universal-ffi"]},
-      {"guides/GENERATED_WRAPPERS.md",
-       [title: "Generated Wrappers", filename: "generated-wrappers"]},
-      {"guides/TYPE_SYSTEM.md", [title: "Type System", filename: "type-system"]},
+      # Guides
+      {"guides/UNIVERSAL_FFI.md", title: "Universal FFI"},
+      {"guides/GENERATED_WRAPPERS.md", title: "Generated Wrappers"},
+      {"guides/TYPE_SYSTEM.md", title: "Type System"},
+      {"guides/REFS_AND_SESSIONS.md", title: "References & Sessions"},
+      {"guides/SESSION_AFFINITY.md", title: "Session Affinity"},
+      {"guides/STREAMING.md", title: "Streaming"},
+      {"guides/ERROR_HANDLING.md", title: "Error Handling"},
+      {"guides/TELEMETRY.md", title: "Telemetry"},
 
-      # Sessions & State
-      {"guides/REFS_AND_SESSIONS.md",
-       [title: "Refs and Sessions", filename: "refs-and-sessions"]},
-      {"guides/SESSION_AFFINITY.md", [title: "Session Affinity", filename: "session-affinity"]},
-
-      # Advanced Features
-      {"guides/STREAMING.md", [title: "Streaming", filename: "streaming"]},
-      {"guides/ERROR_HANDLING.md", [title: "Error Handling", filename: "error-handling"]},
-      {"guides/TELEMETRY.md", [title: "Telemetry", filename: "telemetry"]},
-
-      # Best Practices
-      {"guides/BEST_PRACTICES.md", [title: "Best Practices", filename: "best-practices"]},
+      # How-To
+      {"guides/CONFIGURATION.md", title: "Configuration"},
+      {"guides/BEST_PRACTICES.md", title: "Best Practices"},
+      {"guides/COVERAGE_REPORTS.md", title: "Coverage Reports"},
 
       # Examples
-      {"examples/README.md", [title: "Examples Overview", filename: "examples-overview"]},
+      {"examples/README.md", [title: "Examples", filename: "examples"]},
       {"examples/math_demo/README.md", [title: "Math Demo", filename: "example-math-demo"]},
       {"examples/proof_pipeline/README.md",
        [title: "Proof Pipeline", filename: "example-proof-pipeline"]},
 
-      # Reference
-      "CHANGELOG.md",
-      "LICENSE"
+      # About
+      {"CHANGELOG.md", title: "Changelog"},
+      {"LICENSE", title: "License"}
+    ]
+  end
+
+  defp groups_for_extras do
+    [
+      "Getting Started": ~r/README|GETTING_STARTED/,
+      Guides:
+        ~r/guides\/(UNIVERSAL|GENERATED|TYPE_SYSTEM|REFS|SESSION_AFFINITY|STREAMING|ERROR|TELEMETRY)/,
+      "How-To": ~r/guides\/(CONFIGURATION|BEST_PRACTICES|COVERAGE)/,
+      Examples: ~r/examples\//,
+      About: ~r/CHANGELOG|LICENSE/
+    ]
+  end
+
+  defp groups_for_modules do
+    [
+      Core: [
+        SnakeBridge,
+        SnakeBridge.Runtime,
+        SnakeBridge.Dynamic,
+        SnakeBridge.Types
+      ],
+      Sessions: [
+        SnakeBridge.SessionContext,
+        SnakeBridge.SessionManager
+      ],
+      Configuration: [
+        SnakeBridge.Config,
+        SnakeBridge.ConfigHelper,
+        SnakeBridge.Defaults
+      ],
+      "Code Generation": [
+        SnakeBridge.Generator,
+        SnakeBridge.Introspector,
+        SnakeBridge.Scanner,
+        SnakeBridge.Manifest,
+        SnakeBridge.Lock,
+        SnakeBridge.CoverageReport
+      ],
+      "Types & References": [
+        SnakeBridge.Ref,
+        SnakeBridge.StreamRef,
+        SnakeBridge.Bytes,
+        SnakeBridge.Types.Encoder,
+        SnakeBridge.Types.Decoder
+      ],
+      Errors: [
+        SnakeBridge.Error,
+        SnakeBridge.ErrorTranslator,
+        SnakeBridge.DynamicException
+      ],
+      Telemetry: [
+        SnakeBridge.Telemetry
+      ],
+      Environment: [
+        SnakeBridge.PythonEnv,
+        SnakeBridge.EnvironmentError,
+        SnakeBridge.IntrospectionError
+      ]
     ]
   end
 
@@ -153,23 +172,14 @@ defmodule SnakeBridge.MixProject do
     [
       name: "snakebridge",
       files:
-        ~w(lib priv/snakebridge priv/python .formatter.exs mix.exs README.md LICENSE CHANGELOG.md assets),
+        ~w(lib priv/snakebridge priv/python .formatter.exs mix.exs README.md LICENSE CHANGELOG.md),
       exclude_patterns: [
-        "priv/python/.pytest_cache",
-        "priv/snakebridge/.pytest_cache",
-        "priv/python/__pycache__",
-        "priv/snakebridge/__pycache__",
-        "priv/python/*.pyc",
-        "priv/snakebridge/*.pyc",
-        "priv/python/*.egg-info",
-        "priv/snakebridge/*.egg-info",
-        "priv/python/*.bak",
-        "priv/snakebridge/*.bak"
-        # "priv/plts",
-        # "priv/data",
-        # "docs/archive",
-        # "priv/snakepit",
-        # "priv/snakepit/*"
+        # Python bytecode and cache directories
+        ~r/__pycache__/,
+        ~r/\.pyc$/,
+        ~r/\.pytest_cache/,
+        ~r/\.egg-info/,
+        ~r/\.bak$/
       ],
       licenses: ["MIT"],
       links: %{

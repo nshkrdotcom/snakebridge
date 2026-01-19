@@ -20,11 +20,25 @@ import sys
 import json
 import inspect
 import importlib
+import importlib.util
 import types
-import traceback
-from typing import Any, Dict, List, Optional, get_type_hints, Union
+import os
+import ast
+import pkgutil
+import subprocess
+from typing import Any, Dict, List, Optional, Tuple, Union, get_type_hints
 import typing
 import argparse
+
+try:
+    import importlib.metadata as importlib_metadata
+except Exception:  # pragma: no cover
+    import importlib_metadata
+
+try:
+    import libcst as cst
+except ImportError:
+    cst = None
 
 # Try to import docstring_parser for enhanced docstring parsing
 try:
@@ -39,6 +53,55 @@ PROTOCOL_DUNDERS = [
     "__call__", "__hash__", "__eq__", "__ne__", "__lt__", "__le__",
     "__gt__", "__ge__", "__add__", "__sub__", "__mul__", "__truediv__"
 ]
+
+DEFAULT_SIGNATURE_SOURCES = [
+    "runtime",
+    "text_signature",
+    "runtime_hints",
+    "stub",
+    "stubgen",
+    "variadic",
+]
+
+_STUB_CACHE: Dict[str, Dict[str, Any]] = {}
+_STUBGEN_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+def _normalize_signature_sources(sources: Optional[List[str]]) -> List[str]:
+    if not sources:
+        return list(DEFAULT_SIGNATURE_SOURCES)
+    return [str(source) for source in sources]
+
+
+def _parse_config(config_json: Optional[str]) -> Dict[str, Any]:
+    if not config_json:
+        return {
+            "signature_sources": list(DEFAULT_SIGNATURE_SOURCES),
+            "stub_search_paths": [],
+            "use_typeshed": False,
+            "typeshed_path": None,
+            "stubgen": {"enabled": True},
+        }
+
+    try:
+        raw = json.loads(config_json)
+    except Exception:
+        raw = {}
+
+    signature_sources = _normalize_signature_sources(raw.get("signature_sources"))
+    stub_search_paths = raw.get("stub_search_paths") or []
+    stub_search_paths = [str(path) for path in stub_search_paths if path]
+    use_typeshed = bool(raw.get("use_typeshed", False))
+    typeshed_path = raw.get("typeshed_path")
+    stubgen = raw.get("stubgen") or {}
+
+    return {
+        "signature_sources": signature_sources,
+        "stub_search_paths": stub_search_paths,
+        "use_typeshed": use_typeshed,
+        "typeshed_path": typeshed_path,
+        "stubgen": stubgen,
+    }
 
 
 def _docstring_text(obj: Any) -> str:
@@ -161,6 +224,120 @@ def type_to_dict(t: Any) -> Dict[str, Any]:
     return {"type": "any", "raw": str(t)}
 
 
+def _annotation_to_type_dict(annotation: Optional[str], default_module: Optional[str] = None) -> Dict[str, Any]:
+    if not annotation:
+        return {"type": "any"}
+
+    try:
+        node = ast.parse(annotation, mode="eval").body
+        return _annotation_from_ast(node, default_module)
+    except Exception:
+        return {"type": "any", "raw": annotation}
+
+
+def _annotation_from_ast(node: ast.AST, default_module: Optional[str]) -> Dict[str, Any]:
+    if isinstance(node, ast.Name):
+        name = node.id
+        return _annotation_from_name(name, default_module)
+
+    if isinstance(node, ast.Attribute):
+        module = _attribute_to_str(node.value)
+        name = node.attr
+        if module == "typing":
+            return _annotation_from_name(name, default_module)
+        return {"type": "class", "name": name, "module": module}
+
+    if isinstance(node, ast.Subscript):
+        base = node.value
+        base_name = _annotation_base_name(base)
+        args = _annotation_slice_args(node.slice)
+
+        if base_name in ("Optional", "typing.Optional"):
+            inner = _annotation_from_ast(args[0], default_module) if args else {"type": "any"}
+            return {"type": "optional", "inner_type": inner}
+
+        if base_name in ("Union", "typing.Union"):
+            types = [_annotation_from_ast(arg, default_module) for arg in args]
+            return {"type": "union", "types": types}
+
+        if base_name in ("List", "list", "typing.List"):
+            element = _annotation_from_ast(args[0], default_module) if args else {"type": "any"}
+            return {"type": "list", "element_type": element}
+
+        if base_name in ("Dict", "dict", "typing.Dict"):
+            key = _annotation_from_ast(args[0], default_module) if len(args) > 0 else {"type": "any"}
+            value = _annotation_from_ast(args[1], default_module) if len(args) > 1 else {"type": "any"}
+            return {"type": "dict", "key_type": key, "value_type": value}
+
+        if base_name in ("Tuple", "tuple", "typing.Tuple"):
+            if args:
+                return {"type": "tuple", "element_types": [_annotation_from_ast(arg, default_module) for arg in args]}
+            return {"type": "tuple"}
+
+        if base_name in ("Set", "set", "typing.Set", "FrozenSet", "frozenset", "typing.FrozenSet"):
+            element = _annotation_from_ast(args[0], default_module) if args else {"type": "any"}
+            return {"type": "set", "element_type": element}
+
+        return {"type": "generic", "origin": base_name, "args": [_annotation_from_ast(arg, default_module) for arg in args]}
+
+    if isinstance(node, ast.Constant) and node.value is None:
+        return {"type": "none"}
+
+    return {"type": "any", "raw": ast.dump(node)}
+
+
+def _annotation_from_name(name: str, default_module: Optional[str]) -> Dict[str, Any]:
+    mapping = {
+        "int": {"type": "int"},
+        "float": {"type": "float"},
+        "str": {"type": "string"},
+        "bool": {"type": "boolean"},
+        "bytes": {"type": "bytes"},
+        "bytearray": {"type": "bytearray"},
+        "list": {"type": "list"},
+        "dict": {"type": "dict"},
+        "tuple": {"type": "tuple"},
+        "set": {"type": "set"},
+        "frozenset": {"type": "frozenset"},
+        "Any": {"type": "any"},
+        "None": {"type": "none"},
+        "NoneType": {"type": "none"},
+    }
+
+    if name in mapping:
+        return mapping[name]
+
+    return {"type": "class", "name": name, "module": default_module or ""}
+
+
+def _attribute_to_str(node: ast.AST) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return _attribute_to_str(node.value) + "." + node.attr
+    return ""
+
+
+def _annotation_base_name(node: ast.AST) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return _attribute_to_str(node)
+    return ""
+
+
+def _annotation_slice_args(node: ast.AST) -> List[ast.AST]:
+    if isinstance(node, ast.Tuple):
+        return list(node.elts)
+    if hasattr(ast, "Index") and isinstance(node, ast.Index):  # pragma: no cover
+        return [_unwrap_index(node)]
+    return [node]
+
+
+def _unwrap_index(node: ast.Index) -> ast.AST:  # pragma: no cover
+    return node.value
+
+
 def _param_info(param: inspect.Parameter, type_hint: Any = None) -> Dict[str, Any]:
     info = {"name": param.name, "kind": param.kind.name}
     if param.default is not inspect.Parameter.empty:
@@ -171,6 +348,1033 @@ def _param_info(param: inspect.Parameter, type_hint: Any = None) -> Dict[str, An
     type_annotation = type_hint if type_hint is not None else param.annotation
     info["type"] = type_to_dict(type_annotation)
     return info
+
+
+def _extract_docstring_from_body(body: List[Any]) -> Optional[str]:
+    if not body or cst is None:
+        return None
+    first = body[0]
+    if isinstance(first, cst.SimpleStatementLine) and first.body:
+        expr = first.body[0]
+        if isinstance(expr, cst.Expr) and isinstance(expr.value, cst.SimpleString):
+            try:
+                return expr.value.evaluated_value
+            except Exception:
+                return expr.value.value.strip("\"'")
+    return None
+
+
+def _parse_stub_file(path: str, module_name: str) -> Dict[str, Any]:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            source = handle.read()
+    except Exception as exc:
+        return {"error": f"stub_read_failed: {exc}"}
+
+    if cst is None:
+        return _parse_stub_ast(source, path, module_name)
+
+    try:
+        module = cst.parse_module(source)
+    except Exception as exc:
+        return {"error": f"stub_parse_failed: {exc}"}
+
+    stub_info: Dict[str, Any] = {
+        "path": path,
+        "docstring": _extract_docstring_from_body(module.body),
+        "functions": {},
+        "classes": {},
+    }
+
+    for stmt in module.body:
+        if isinstance(stmt, cst.FunctionDef):
+            _collect_stub_function(stub_info, stmt, module, module_name)
+        elif isinstance(stmt, cst.ClassDef):
+            _collect_stub_class(stub_info, stmt, module, module_name)
+
+    return stub_info
+
+
+def _collect_stub_function(stub_info: Dict[str, Any], node: "cst.FunctionDef", module: "cst.Module", module_name: str) -> None:
+    name = node.name.value
+    func_info = _parse_stub_function(node, module, module_name)
+    is_overload = _has_overload_decorator(node)
+
+    entry = stub_info["functions"].setdefault(name, {"overloads": [], "impl": None})
+    if is_overload:
+        entry["overloads"].append(func_info)
+    else:
+        entry["impl"] = func_info
+
+
+def _collect_stub_class(stub_info: Dict[str, Any], node: "cst.ClassDef", module: "cst.Module", module_name: str) -> None:
+    name = node.name.value
+    class_info = {
+        "name": name,
+        "docstring": _extract_docstring_from_body(node.body.body),
+        "methods": {},
+    }
+
+    for stmt in node.body.body:
+        if isinstance(stmt, cst.FunctionDef):
+            method_info = _parse_stub_function(stmt, module, module_name, drop_first_param=True)
+            is_overload = _has_overload_decorator(stmt)
+
+            entry = class_info["methods"].setdefault(stmt.name.value, {"overloads": [], "impl": None})
+            if is_overload:
+                entry["overloads"].append(method_info)
+            else:
+                entry["impl"] = method_info
+
+    stub_info["classes"][name] = class_info
+
+
+def _parse_stub_ast(source: str, path: str, module_name: str) -> Dict[str, Any]:
+    try:
+        module = ast.parse(source)
+    except Exception as exc:
+        return {"error": f"stub_parse_failed: {exc}"}
+
+    stub_info: Dict[str, Any] = {
+        "path": path,
+        "docstring": ast.get_docstring(module),
+        "functions": {},
+        "classes": {},
+    }
+
+    for stmt in module.body:
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            _collect_stub_function_ast(stub_info, stmt, module_name)
+        elif isinstance(stmt, ast.ClassDef):
+            _collect_stub_class_ast(stub_info, stmt, module_name)
+
+    return stub_info
+
+
+def _collect_stub_function_ast(stub_info: Dict[str, Any], node: ast.AST, module_name: str) -> None:
+    name = node.name
+    func_info = _parse_stub_function_ast(node, module_name)
+    is_overload = _ast_has_overload_decorator(node)
+
+    entry = stub_info["functions"].setdefault(name, {"overloads": [], "impl": None})
+    if is_overload:
+        entry["overloads"].append(func_info)
+    else:
+        entry["impl"] = func_info
+
+
+def _collect_stub_class_ast(stub_info: Dict[str, Any], node: ast.ClassDef, module_name: str) -> None:
+    name = node.name
+    class_info = {
+        "name": name,
+        "docstring": ast.get_docstring(node),
+        "methods": {},
+    }
+
+    for stmt in node.body:
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            method_info = _parse_stub_function_ast(stmt, module_name, drop_first_param=True)
+            is_overload = _ast_has_overload_decorator(stmt)
+
+            entry = class_info["methods"].setdefault(stmt.name, {"overloads": [], "impl": None})
+            if is_overload:
+                entry["overloads"].append(method_info)
+            else:
+                entry["impl"] = method_info
+
+    stub_info["classes"][name] = class_info
+
+
+def _parse_stub_function_ast(
+    node: ast.AST,
+    module_name: str,
+    drop_first_param: bool = False,
+) -> Dict[str, Any]:
+    params = _parse_stub_params_ast(node.args, module_name)
+
+    if drop_first_param and params:
+        if params[0]["name"] in ("self", "cls"):
+            params = params[1:]
+
+    return_type = {"type": "any"}
+    if node.returns is not None:
+        annotation = _ast_to_source(node.returns)
+        return_type = _annotation_to_type_dict(annotation, module_name)
+
+    return {
+        "name": node.name,
+        "parameters": params,
+        "return_type": return_type,
+        "docstring": ast.get_docstring(node),
+    }
+
+
+def _parse_stub_params_ast(args: ast.arguments, module_name: str) -> List[Dict[str, Any]]:
+    parsed: List[Dict[str, Any]] = []
+
+    posonly = list(args.posonlyargs)
+    regular = list(args.args)
+    all_positional = posonly + regular
+    defaults = list(args.defaults)
+    default_offset = len(all_positional) - len(defaults)
+
+    for idx, param in enumerate(all_positional):
+        default = defaults[idx - default_offset] if idx >= default_offset else None
+        kind = "POSITIONAL_ONLY" if idx < len(posonly) else "POSITIONAL_OR_KEYWORD"
+        parsed.append(_stub_param_entry_ast(param, kind, module_name, default))
+
+    if args.vararg:
+        parsed.append(_stub_param_entry_ast(args.vararg, "VAR_POSITIONAL", module_name, None))
+
+    for param, default in zip(args.kwonlyargs, args.kw_defaults):
+        parsed.append(_stub_param_entry_ast(param, "KEYWORD_ONLY", module_name, default))
+
+    if args.kwarg:
+        parsed.append(_stub_param_entry_ast(args.kwarg, "VAR_KEYWORD", module_name, None))
+
+    return parsed
+
+
+def _stub_param_entry_ast(
+    param: ast.arg,
+    kind: str,
+    module_name: str,
+    default: Optional[ast.AST],
+) -> Dict[str, Any]:
+    annotation = _ast_to_source(param.annotation) if param.annotation is not None else None
+    default_value = _ast_to_source(default) if default is not None else None
+
+    entry = {
+        "name": param.arg,
+        "kind": kind,
+        "annotation": annotation,
+        "type": _annotation_to_type_dict(annotation, module_name),
+    }
+    if default_value is not None:
+        entry["default"] = default_value
+    return entry
+
+
+def _ast_has_overload_decorator(node: ast.AST) -> bool:
+    for decorator in getattr(node, "decorator_list", []):
+        name = _ast_decorator_name(decorator)
+        if name == "overload" or name.endswith(".overload"):
+            return True
+    return False
+
+
+def _ast_decorator_name(node: ast.AST) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return _ast_decorator_name(node.value) + "." + node.attr
+    if isinstance(node, ast.Call):
+        return _ast_decorator_name(node.func)
+    return ""
+
+
+def _ast_to_source(node: Optional[ast.AST]) -> Optional[str]:
+    if node is None:
+        return None
+    try:
+        return ast.unparse(node)
+    except Exception:
+        return None
+
+
+def _parse_stub_function(
+    node: "cst.FunctionDef",
+    module: "cst.Module",
+    module_name: str,
+    drop_first_param: bool = False,
+) -> Dict[str, Any]:
+    params = _parse_stub_params(node.params, module, module_name)
+
+    if drop_first_param and params:
+        if params[0]["name"] in ("self", "cls"):
+            params = params[1:]
+
+    return_type = {"type": "any"}
+    if node.returns and node.returns.annotation:
+        annotation = module.code_for_node(node.returns.annotation)
+        return_type = _annotation_to_type_dict(annotation, module_name)
+
+    return {
+        "name": node.name.value,
+        "parameters": params,
+        "return_type": return_type,
+        "docstring": _extract_docstring_from_body(node.body.body),
+    }
+
+
+def _parse_stub_params(params: "cst.Parameters", module: "cst.Module", module_name: str) -> List[Dict[str, Any]]:
+    parsed: List[Dict[str, Any]] = []
+
+    for param in params.posonly_params:
+        parsed.append(_stub_param_entry(param, "POSITIONAL_ONLY", module, module_name))
+
+    for param in params.params:
+        parsed.append(_stub_param_entry(param, "POSITIONAL_OR_KEYWORD", module, module_name))
+
+    if params.star_arg and isinstance(params.star_arg, cst.Param):
+        parsed.append(_stub_param_entry(params.star_arg, "VAR_POSITIONAL", module, module_name))
+
+    for param in params.kwonly_params:
+        parsed.append(_stub_param_entry(param, "KEYWORD_ONLY", module, module_name))
+
+    if params.star_kwarg:
+        parsed.append(_stub_param_entry(params.star_kwarg, "VAR_KEYWORD", module, module_name))
+
+    return parsed
+
+
+def _stub_param_entry(param: "cst.Param", kind: str, module: "cst.Module", module_name: str) -> Dict[str, Any]:
+    default = None
+    if param.default is not None:
+        default = module.code_for_node(param.default)
+
+    annotation = None
+    if param.annotation is not None:
+        annotation = module.code_for_node(param.annotation.annotation)
+
+    entry = {
+        "name": param.name.value,
+        "kind": kind,
+        "annotation": annotation,
+        "type": _annotation_to_type_dict(annotation, module_name),
+    }
+    if default is not None:
+        entry["default"] = default
+    return entry
+
+
+def _has_overload_decorator(node: "cst.FunctionDef") -> bool:
+    for decorator in node.decorators:
+        name = _decorator_name(decorator.decorator)
+        if name == "overload" or name.endswith(".overload"):
+            return True
+    return False
+
+
+def _decorator_name(node: "cst.CSTNode") -> str:
+    if isinstance(node, cst.Name):
+        return node.value
+    if isinstance(node, cst.Attribute):
+        return _decorator_name(node.value) + "." + node.attr.value
+    return ""
+
+
+def _resolve_stub_for_module(module_name: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    cache_key = f"{module_name}:{json.dumps(config, sort_keys=True)}"
+    if cache_key in _STUB_CACHE:
+        return _STUB_CACHE[cache_key]
+
+    stub_info = _discover_stub_for_module(module_name, config)
+    _STUB_CACHE[cache_key] = stub_info
+    return stub_info
+
+
+def _discover_stub_for_module(module_name: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    candidates = _local_stub_candidates(module_name, config.get("stub_search_paths") or [])
+    for path in candidates:
+        if path and os.path.exists(path):
+            info = _parse_stub_file(path, module_name)
+            info["source"] = "local"
+            return info
+
+    types_pkg = _types_package_stub(module_name)
+    if types_pkg:
+        info = _parse_stub_file(types_pkg, module_name)
+        info["source"] = "types-package"
+        return info
+
+    if config.get("use_typeshed") and config.get("typeshed_path"):
+        typeshed_path = _typeshed_stub(module_name, config.get("typeshed_path"))
+        if typeshed_path:
+            info = _parse_stub_file(typeshed_path, module_name)
+            info["source"] = "typeshed"
+            return info
+
+    return None
+
+
+def _local_stub_candidates(module_name: str, extra_paths: List[str]) -> List[str]:
+    paths: List[str] = []
+    module_path = module_name.replace(".", os.sep)
+
+    spec = None
+    try:
+        spec = importlib.util.find_spec(module_name)
+    except Exception:
+        spec = None
+
+    if spec and spec.origin:
+        if spec.origin.endswith((".py", ".pyc")):
+            paths.append(spec.origin.rsplit(".", 1)[0] + ".pyi")
+
+    if spec and spec.submodule_search_locations:
+        for location in spec.submodule_search_locations:
+            paths.append(os.path.join(location, "__init__.pyi"))
+
+    for base in extra_paths:
+        if not base:
+            continue
+        paths.append(os.path.join(base, module_path + ".pyi"))
+        paths.append(os.path.join(base, module_path, "__init__.pyi"))
+
+    return paths
+
+
+def _types_package_stub(module_name: str) -> Optional[str]:
+    root = module_name.split(".")[0]
+    dist = None
+    for dist_name in (f"types-{root.replace('_', '-')}", f"types-{root}"):
+        try:
+            dist = importlib_metadata.distribution(dist_name)
+            if dist is not None:
+                break
+        except Exception:
+            continue
+
+    if dist is None:
+        desired = _normalize_dist_name(f"types-{root}")
+        for candidate in importlib_metadata.distributions():
+            name = candidate.metadata.get("Name") if candidate.metadata else None
+            if name and _normalize_dist_name(name) == desired:
+                dist = candidate
+                break
+
+    if dist is None:
+        return None
+
+    rel_paths = _module_relative_paths(module_name)
+    if dist.files:
+        for file in dist.files:
+            file_str = str(file)
+            if any(file_str.endswith(rel_path) for rel_path in rel_paths):
+                return str(dist.locate_file(file))
+    else:
+        base = str(dist.locate_file(""))
+        for rel_path in rel_paths:
+            candidate = os.path.join(base, rel_path)
+            if os.path.exists(candidate):
+                return candidate
+    return None
+
+
+def _typeshed_stub(module_name: str, typeshed_path: str) -> Optional[str]:
+    root = module_name.split(".")[0]
+    rel_paths = _module_relative_paths(module_name)
+
+    stdlib_paths = [os.path.join(typeshed_path, "stdlib", rel_path) for rel_path in rel_paths]
+    for path in stdlib_paths:
+        if os.path.exists(path):
+            return path
+
+    third_party_root = os.path.join(typeshed_path, "stubs", root)
+    for rel_path in rel_paths:
+        candidate = os.path.join(third_party_root, rel_path)
+        if os.path.exists(candidate):
+            return candidate
+
+    return None
+
+
+def _module_relative_paths(module_name: str) -> List[str]:
+    module_path = module_name.replace(".", os.sep)
+    return [module_path + ".pyi", os.path.join(module_path, "__init__.pyi")]
+
+
+def _normalize_dist_name(name: str) -> str:
+    return name.lower().replace("-", "_")
+
+
+def _stubgen_enabled(config: Dict[str, Any]) -> bool:
+    stubgen = config.get("stubgen") or {}
+    return bool(stubgen.get("enabled", True))
+
+
+def _stubgen_cache_dir(config: Dict[str, Any]) -> str:
+    stubgen = config.get("stubgen") or {}
+    cache_dir = stubgen.get("cache_dir")
+    if cache_dir:
+        return str(cache_dir)
+    return os.path.join(os.getcwd(), ".snakebridge", "stubgen_cache")
+
+
+def _internal_stubgen(module_name: str) -> Optional[Dict[str, Any]]:
+    try:
+        module = importlib.import_module(module_name)
+    except Exception:
+        return None
+
+    try:
+        source = inspect.getsource(module)
+    except Exception:
+        return None
+
+    info = _parse_stub_ast(source, f"<stubgen:{module_name}>", module_name)
+    if info.get("error"):
+        return None
+
+    info["source"] = "stubgen"
+    info["stubgen_output"] = "internal"
+    return info
+
+
+def _run_stubgen(module_name: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if not _stubgen_enabled(config):
+        return None
+
+    cache_key = f"{module_name}:{json.dumps(config.get('stubgen') or {}, sort_keys=True)}"
+    if cache_key in _STUBGEN_CACHE:
+        return _STUBGEN_CACHE[cache_key]
+
+    output_dir = _stubgen_cache_dir(config)
+    os.makedirs(output_dir, exist_ok=True)
+
+    stub_path = _find_stub_in_dir(module_name, output_dir)
+    if stub_path and os.path.exists(stub_path):
+        info = _parse_stub_file(stub_path, module_name)
+        info["source"] = "stubgen"
+        _STUBGEN_CACHE[cache_key] = info
+        return info
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "mypy.stubgen",
+        "-m",
+        module_name,
+        "-o",
+        output_dir,
+        "--quiet",
+    ]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except Exception as exc:
+        info = _internal_stubgen(module_name)
+        if info:
+            info["stubgen_output"] = f"stubgen_failed: {exc}"
+            _STUBGEN_CACHE[cache_key] = info
+            return info
+
+        info = {"error": f"stubgen_failed: {exc}"}
+        _STUBGEN_CACHE[cache_key] = info
+        return info
+
+    stub_path = _find_stub_in_dir(module_name, output_dir)
+    if stub_path and os.path.exists(stub_path):
+        info = _parse_stub_file(stub_path, module_name)
+        info["source"] = "stubgen"
+        info["stubgen_output"] = result.stdout.strip() or result.stderr.strip()
+        _STUBGEN_CACHE[cache_key] = info
+        return info
+
+    info = _internal_stubgen(module_name)
+    if info:
+        info["stubgen_output"] = result.stderr.strip() or result.stdout.strip()
+        _STUBGEN_CACHE[cache_key] = info
+        return info
+
+    info = {"error": f"stubgen_failed: {result.stderr.strip() or result.stdout.strip()}"}
+    _STUBGEN_CACHE[cache_key] = info
+    return info
+
+
+def _find_stub_in_dir(module_name: str, output_dir: str) -> Optional[str]:
+    for rel_path in _module_relative_paths(module_name):
+        candidate = os.path.join(output_dir, rel_path)
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
+def _resolve_signature(
+    name: str,
+    obj: Optional[Any],
+    module_name: str,
+    config: Dict[str, Any],
+    stub_info: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    sources = _normalize_signature_sources(config.get("signature_sources"))
+    failures: List[str] = []
+    fallback: Optional[Dict[str, Any]] = None
+    fallback_has_types = False
+
+    for source in sources:
+        if source == "runtime":
+            if obj is None:
+                failures.append("runtime: missing object")
+                continue
+            result = _signature_from_runtime(obj)
+            if result:
+                result["signature_source"] = "runtime"
+                result["signature_detail"] = "inspect.signature"
+                result["signature_missing_reason"] = failures
+                if _signature_has_type_info(result):
+                    return result
+                if fallback is None:
+                    fallback = result
+                    fallback_has_types = False
+                failures.append("runtime: no type info")
+                continue
+            failures.append("runtime: signature unavailable")
+
+        elif source == "text_signature":
+            if obj is None:
+                failures.append("text_signature: missing object")
+                continue
+            result = _signature_from_text_signature(obj)
+            if result:
+                result["signature_source"] = "text_signature"
+                result["signature_detail"] = obj.__text_signature__
+                result["signature_missing_reason"] = failures
+                if _signature_has_type_info(result):
+                    return result
+                if fallback is None:
+                    fallback = result
+                    fallback_has_types = False
+                failures.append("text_signature: no type info")
+                continue
+            failures.append("text_signature: unavailable")
+
+        elif source == "runtime_hints":
+            if obj is None:
+                failures.append("runtime_hints: missing object")
+                continue
+            result = _signature_from_runtime_hints(obj, module_name)
+            if result:
+                result["signature_source"] = "runtime_hints"
+                result["signature_detail"] = "annotations"
+                result["signature_missing_reason"] = failures
+                return result
+            failures.append("runtime_hints: unavailable")
+
+        elif source == "stub":
+            result = _signature_from_stub(name, stub_info)
+            if result:
+                result["signature_source"] = "stub"
+                result["signature_missing_reason"] = failures
+                if fallback is None:
+                    return result
+                if not fallback_has_types and _signature_has_type_info(result):
+                    return result
+                failures.append("stub: no type info")
+                continue
+            failures.append("stub: not found")
+
+        elif source == "stubgen":
+            if fallback is not None:
+                failures.append("stubgen: skipped (signature already found)")
+                continue
+            stubgen_info = _run_stubgen(module_name, config)
+            result = _signature_from_stub(name, stubgen_info)
+            if result:
+                result["signature_source"] = "stubgen"
+                result["signature_missing_reason"] = failures
+                return result
+            if stubgen_info and stubgen_info.get("error"):
+                failures.append(f"stubgen: {stubgen_info.get('error')}")
+            else:
+                failures.append("stubgen: not found")
+
+        elif source == "variadic":
+            if fallback is not None:
+                return fallback
+            return {
+                "parameters": [],
+                "return_type": {"type": "any"},
+                "signature_available": False,
+                "signature_source": "variadic",
+                "signature_detail": None,
+                "signature_missing_reason": failures,
+            }
+
+    if fallback is not None:
+        return fallback
+
+    return {
+        "parameters": [],
+        "return_type": {"type": "any"},
+        "signature_available": False,
+        "signature_source": "variadic",
+        "signature_detail": None,
+        "signature_missing_reason": failures or ["no signature sources succeeded"],
+    }
+
+
+def _signature_has_type_info(signature: Optional[Dict[str, Any]]) -> bool:
+    if not signature:
+        return False
+
+    if _type_is_specific(signature.get("return_type")):
+        return True
+
+    for param in signature.get("parameters", []):
+        if _type_is_specific(param.get("type")):
+            return True
+
+    return False
+
+
+def _type_is_specific(type_info: Optional[Dict[str, Any]]) -> bool:
+    if not type_info:
+        return False
+    return type_info.get("type") not in (None, "any")
+
+
+def _signature_from_runtime(obj: Any) -> Optional[Dict[str, Any]]:
+    try:
+        sig = inspect.signature(obj)
+    except Exception:
+        return None
+
+    try:
+        type_hints = typing.get_type_hints(obj)
+    except Exception:
+        type_hints = {}
+
+    params = [_param_info(p, type_hints.get(p.name)) for p in sig.parameters.values()]
+    return_type = type_to_dict(type_hints.get("return", sig.return_annotation))
+
+    return {
+        "parameters": params,
+        "return_type": return_type,
+        "signature_available": True,
+    }
+
+
+def _signature_from_text_signature(obj: Any) -> Optional[Dict[str, Any]]:
+    text_sig = getattr(obj, "__text_signature__", None)
+    if not text_sig:
+        return None
+
+    try:
+        sig = inspect._signature_fromstr(inspect.Signature, obj, text_sig, False)
+    except Exception:
+        return None
+
+    params = []
+    for param in sig.parameters.values():
+        entry = {
+            "name": param.name,
+            "kind": param.kind.name,
+            "annotation": None,
+            "type": {"type": "any"},
+        }
+        if param.default is not inspect.Parameter.empty:
+            entry["default"] = repr(param.default)
+        params.append(entry)
+
+    return {
+        "parameters": params,
+        "return_type": {"type": "any"},
+        "signature_available": True,
+    }
+
+
+def _signature_from_runtime_hints(obj: Any, module_name: str) -> Optional[Dict[str, Any]]:
+    try:
+        hints = typing.get_type_hints(obj)
+    except Exception:
+        hints = getattr(obj, "__annotations__", {}) or {}
+
+    if not hints:
+        return None
+
+    params = []
+    for name, hint in hints.items():
+        if name == "return":
+            continue
+        params.append(
+            {
+                "name": name,
+                "kind": "POSITIONAL_OR_KEYWORD",
+                "annotation": _format_annotation(hint),
+                "type": type_to_dict(hint),
+            }
+        )
+
+    if not params:
+        return None
+
+    return_type = type_to_dict(hints.get("return"))
+    return {
+        "parameters": params,
+        "return_type": return_type,
+        "signature_available": True,
+    }
+
+
+def _signature_from_stub(name: str, stub_info: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not stub_info or stub_info.get("error"):
+        return None
+
+    function_entry = stub_info.get("functions", {}).get(name)
+    if function_entry:
+        chosen, overload_count = _choose_stub_signature(function_entry)
+        if chosen:
+            return {
+                "parameters": chosen.get("parameters", []),
+                "return_type": chosen.get("return_type", {"type": "any"}),
+                "signature_available": True,
+                "signature_detail": stub_info.get("path"),
+                "overload_count": overload_count,
+                "docstring": chosen.get("docstring"),
+            }
+
+    return None
+
+
+def _choose_stub_signature(entry: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], int]:
+    overloads = entry.get("overloads") or []
+    if overloads:
+        chosen = max(overloads, key=lambda item: len(item.get("parameters") or []))
+        return chosen, len(overloads)
+
+    impl = entry.get("impl")
+    if impl:
+        return impl, 0
+
+    return None, 0
+
+
+def _signature_from_stub_method(
+    class_name: str,
+    method_name: str,
+    stub_info: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    if not stub_info or stub_info.get("error"):
+        return None
+
+    class_entry = stub_info.get("classes", {}).get(class_name)
+    if not class_entry:
+        return None
+
+    method_entry = class_entry.get("methods", {}).get(method_name)
+    if not method_entry:
+        return None
+
+    chosen, overload_count = _choose_stub_signature(method_entry)
+    if not chosen:
+        return None
+
+    return {
+        "parameters": chosen.get("parameters", []),
+        "return_type": chosen.get("return_type", {"type": "any"}),
+        "signature_available": True,
+        "signature_detail": stub_info.get("path"),
+        "overload_count": overload_count,
+        "docstring": chosen.get("docstring"),
+    }
+
+
+def _stub_function_doc(name: str, stub_info: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not stub_info or stub_info.get("error"):
+        return None
+    entry = stub_info.get("functions", {}).get(name) or {}
+    impl = entry.get("impl")
+    if impl and impl.get("docstring"):
+        return impl.get("docstring")
+    for overload in entry.get("overloads") or []:
+        if overload.get("docstring"):
+            return overload.get("docstring")
+    return None
+
+
+def _stub_class_doc(name: str, stub_info: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not stub_info or stub_info.get("error"):
+        return None
+    entry = stub_info.get("classes", {}).get(name) or {}
+    return entry.get("docstring")
+
+
+def _stub_method_doc(
+    class_name: str,
+    method_name: str,
+    stub_info: Optional[Dict[str, Any]],
+) -> Optional[str]:
+    if not stub_info or stub_info.get("error"):
+        return None
+    class_entry = stub_info.get("classes", {}).get(class_name) or {}
+    method_entry = class_entry.get("methods", {}).get(method_name) or {}
+    impl = method_entry.get("impl")
+    if impl and impl.get("docstring"):
+        return impl.get("docstring")
+    for overload in method_entry.get("overloads") or []:
+        if overload.get("docstring"):
+            return overload.get("docstring")
+    return None
+
+
+def _resolve_docstring(obj: Optional[Any], stub_doc: Optional[str], module_doc: Optional[str]) -> Dict[str, Any]:
+    runtime_doc = _docstring_text(obj) if obj is not None else ""
+    if runtime_doc:
+        return {"docstring": runtime_doc, "doc_source": "runtime", "doc_missing_reason": None}
+    if stub_doc:
+        return {"docstring": stub_doc, "doc_source": "stub", "doc_missing_reason": None}
+    if module_doc:
+        return {
+            "docstring": module_doc,
+            "doc_source": "module",
+            "doc_missing_reason": "runtime docstring missing",
+        }
+    return {"docstring": "", "doc_source": "empty", "doc_missing_reason": "docstring missing"}
+
+
+def _build_function_info(
+    name: str,
+    obj: Optional[Any],
+    module_name: str,
+    config: Dict[str, Any],
+    stub_info: Optional[Dict[str, Any]],
+    module_doc: Optional[str],
+) -> Dict[str, Any]:
+    signature = _resolve_signature(name, obj, module_name, config, stub_info)
+    stub_doc = _stub_function_doc(name, stub_info)
+    doc = _resolve_docstring(obj, stub_doc, module_doc)
+
+    info = {
+        "name": name,
+        "type": "function",
+        "callable": obj is not None and callable(obj),
+        "module": module_name,
+        "python_module": module_name,
+        "parameters": signature.get("parameters", []),
+        "return_type": signature.get("return_type", {"type": "any"}),
+        "signature_available": signature.get("signature_available", False),
+        "signature_source": signature.get("signature_source"),
+        "signature_detail": signature.get("signature_detail"),
+        "signature_missing_reason": signature.get("signature_missing_reason"),
+        "overload_count": signature.get("overload_count"),
+        "docstring": doc.get("docstring", ""),
+        "doc_source": doc.get("doc_source"),
+        "doc_missing_reason": doc.get("doc_missing_reason"),
+    }
+
+    return info
+
+
+def _build_attribute_info(
+    name: str,
+    obj: Any,
+    module_name: str,
+    module_doc: Optional[str],
+) -> Dict[str, Any]:
+    doc = _resolve_docstring(obj, None, module_doc)
+    return {
+        "name": name,
+        "type": "attribute",
+        "module": module_name,
+        "python_module": module_name,
+        "signature_available": True,
+        "signature_source": "runtime",
+        "signature_detail": "attribute",
+        "parameters": [],
+        "return_type": type_to_dict(type(obj)),
+        "docstring": doc.get("docstring", ""),
+        "doc_source": doc.get("doc_source"),
+        "doc_missing_reason": doc.get("doc_missing_reason"),
+    }
+
+
+def _build_class_info(
+    name: str,
+    cls: Optional[type],
+    module_name: str,
+    config: Dict[str, Any],
+    stub_info: Optional[Dict[str, Any]],
+    module_doc: Optional[str],
+) -> Dict[str, Any]:
+    class_stub_doc = _stub_class_doc(name, stub_info)
+    doc = _resolve_docstring(cls, class_stub_doc, module_doc)
+
+    methods: List[Dict[str, Any]] = []
+    dunder_methods: List[str] = []
+
+    if cls is not None:
+        for method_name, method in inspect.getmembers(cls, predicate=callable):
+            if method_name.startswith("__") and method_name not in ["__init__"]:
+                if method_name in PROTOCOL_DUNDERS:
+                    dunder_methods.append(method_name)
+                continue
+
+            method_stub = _signature_from_stub_method(name, method_name, stub_info)
+            signature = _resolve_signature(method_name, method, module_name, config, stub_info)
+            if method_stub and signature.get("signature_source") in ("variadic", "stubgen"):
+                signature = method_stub
+                signature["signature_source"] = "stub"
+
+            stub_doc = _stub_method_doc(name, method_name, stub_info)
+            doc_info = _resolve_docstring(method, stub_doc, module_doc)
+
+            params = signature.get("parameters", [])
+            params = _drop_self_param(params)
+
+            methods.append({
+                "name": method_name,
+                "parameters": params,
+                "docstring": doc_info.get("docstring", ""),
+                "return_type": signature.get("return_type", {"type": "any"}),
+                "signature_available": signature.get("signature_available", False),
+                "signature_source": signature.get("signature_source"),
+                "signature_detail": signature.get("signature_detail"),
+                "signature_missing_reason": signature.get("signature_missing_reason"),
+                "doc_source": doc_info.get("doc_source"),
+                "doc_missing_reason": doc_info.get("doc_missing_reason"),
+                "overload_count": signature.get("overload_count"),
+            })
+    else:
+        class_entry = (stub_info or {}).get("classes", {}).get(name, {})
+        for method_name in (class_entry.get("methods") or {}).keys():
+            signature = _signature_from_stub_method(name, method_name, stub_info)
+            stub_doc = _stub_method_doc(name, method_name, stub_info)
+            doc_info = _resolve_docstring(None, stub_doc, module_doc)
+
+            if signature:
+                params = _drop_self_param(signature.get("parameters", []))
+                methods.append({
+                    "name": method_name,
+                    "parameters": params,
+                    "docstring": doc_info.get("docstring", ""),
+                    "return_type": signature.get("return_type", {"type": "any"}),
+                    "signature_available": signature.get("signature_available", False),
+                    "signature_source": "stub",
+                    "signature_detail": signature.get("signature_detail"),
+                    "signature_missing_reason": signature.get("signature_missing_reason"),
+                    "doc_source": doc_info.get("doc_source"),
+                    "doc_missing_reason": doc_info.get("doc_missing_reason"),
+                    "overload_count": signature.get("overload_count"),
+                })
+
+    attributes: List[str] = []
+    if cls is not None:
+        for attr_name, value in inspect.getmembers(cls):
+            if attr_name.startswith("__"):
+                continue
+            if callable(value):
+                continue
+            attributes.append(attr_name)
+
+    return {
+        "name": name,
+        "type": "class",
+        "python_module": module_name,
+        "docstring": doc.get("docstring", ""),
+        "doc_source": doc.get("doc_source"),
+        "doc_missing_reason": doc.get("doc_missing_reason"),
+        "methods": methods,
+        "attributes": attributes,
+        "dunder_methods": dunder_methods,
+    }
+
+
+def _drop_self_param(params: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if params and params[0].get("name") in ("self", "cls"):
+        return params[1:]
+    return params
 
 
 def _introspect_callable_symbol(name: str, obj: Any, module_name: str) -> Dict[str, Any]:
@@ -281,21 +1485,45 @@ def _introspect_class_symbol(name: str, cls: type) -> Dict[str, Any]:
     }
 
 
-def introspect_symbols(module_name: str, symbols: List[str]) -> List[Dict[str, Any]]:
-    module = importlib.import_module(module_name)
+def introspect_symbols(
+    module_name: str,
+    symbols: List[str],
+    config: Optional[Dict[str, Any]] = None,
+) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
+    config = config or _parse_config(None)
+
+    try:
+        module = importlib.import_module(module_name)
+    except Exception as exc:
+        return {"error": f"Failed to import module '{module_name}': {exc}"}
+
+    module_doc = inspect.getdoc(module) or ""
+
+    stub_info = _resolve_stub_for_module(module_name, config)
+    if stub_info and stub_info.get("docstring"):
+        module_doc = stub_info.get("docstring") or module_doc
+
     results = []
     for name in symbols:
         obj = getattr(module, name, None)
+
         if obj is None:
+            if stub_info and (name in stub_info.get("functions", {}) or name in stub_info.get("classes", {})):
+                if name in stub_info.get("classes", {}):
+                    results.append(_build_class_info(name, None, module_name, config, stub_info, module_doc))
+                else:
+                    results.append(_build_function_info(name, None, module_name, config, stub_info, module_doc))
+                continue
+
             results.append({"name": name, "error": "not_found"})
             continue
 
         if inspect.isclass(obj):
-            results.append(_introspect_class_symbol(name, obj))
+            results.append(_build_class_info(name, obj, module_name, config, stub_info, module_doc))
         elif callable(obj):
-            results.append(_introspect_callable_symbol(name, obj, module_name))
+            results.append(_build_function_info(name, obj, module_name, config, stub_info, module_doc))
         else:
-            results.append(_introspect_attribute_symbol(name, obj, module_name))
+            results.append(_build_attribute_info(name, obj, module_name, module_doc))
     return results
 
 
@@ -604,7 +1832,7 @@ def get_object_namespace(obj: Any, base_module: str) -> str:
         return ""
 
 
-def introspect_module_namespace(module_name: str, namespace: str = "") -> Dict[str, Any]:
+def introspect_module_namespace(module_name: str, namespace: str = "", config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Introspect a Python module or submodule.
 
@@ -618,8 +1846,7 @@ def introspect_module_namespace(module_name: str, namespace: str = "") -> Dict[s
     try:
         module = importlib.import_module(module_name)
     except ImportError as e:
-        sys.stderr.write(f"Warning: Failed to import module '{module_name}': {str(e)}\n")
-        return None
+        return {"error": f"Failed to import module '{module_name}': {str(e)}"}
 
     namespace_info = {
         "functions": [],
@@ -627,8 +1854,16 @@ def introspect_module_namespace(module_name: str, namespace: str = "") -> Dict[s
         "attributes": []
     }
 
+    config = config or _parse_config(None)
+    stub_info = _resolve_stub_for_module(module_name, config)
+    module_doc = inspect.getdoc(module) or ""
+    if stub_info and stub_info.get("docstring"):
+        module_doc = stub_info.get("docstring") or module_doc
+
     # Get the module's __all__ if available (explicit public API)
     module_all = getattr(module, '__all__', None)
+
+    seen_names = set()
 
     # Introspect all public members
     for name, obj in inspect.getmembers(module):
@@ -664,25 +1899,88 @@ def introspect_module_namespace(module_name: str, namespace: str = "") -> Dict[s
             continue
 
         try:
+            seen_names.add(name)
             if inspect.isclass(obj):
-                class_info = introspect_class(name, obj)
+                class_info = _build_class_info(name, obj, module_name, config, stub_info, module_doc)
                 namespace_info["classes"].append(class_info)
             elif inspect.isfunction(obj) or inspect.isbuiltin(obj) or (callable(obj) and not inspect.isclass(obj)):
-                # Include functions, builtins, and other callable objects (like numpy's _ArrayFunctionDispatcher)
-                func_info = introspect_function(name, obj)
+                func_info = _build_function_info(name, obj, module_name, config, stub_info, module_doc)
                 namespace_info["functions"].append(func_info)
             elif not inspect.ismodule(obj):
-                attr_info = introspect_attribute(name, obj)
+                attr_info = _build_attribute_info(name, obj, module_name, module_doc)
                 namespace_info["attributes"].append(attr_info)
         except Exception as e:
-            # Log the error but continue processing
-            sys.stderr.write(f"Warning: Failed to introspect {name} in {module_name}: {str(e)}\n")
+            namespace_info.setdefault("issues", []).append(
+                {"type": "introspect_member_failed", "member": name, "reason": str(e)}
+            )
             continue
+
+    # Add stub-only symbols not present at runtime
+    if stub_info:
+        for name in stub_info.get("functions", {}).keys():
+            if name in seen_names:
+                continue
+            if module_all is not None and name not in module_all:
+                continue
+            namespace_info["functions"].append(
+                _build_function_info(name, None, module_name, config, stub_info, module_doc)
+            )
+
+        for name in stub_info.get("classes", {}).keys():
+            if name in seen_names:
+                continue
+            if module_all is not None and name not in module_all:
+                continue
+            namespace_info["classes"].append(
+                _build_class_info(name, None, module_name, config, stub_info, module_doc)
+            )
 
     return namespace_info
 
 
-def introspect_module(module_name: str, submodules: Optional[List[str]] = None, flat_mode: bool = False) -> Dict[str, Any]:
+def _discover_submodules(module_name: str) -> Tuple[List[str], List[Dict[str, Any]]]:
+    issues: List[Dict[str, Any]] = []
+
+    try:
+        module = importlib.import_module(module_name)
+    except Exception as exc:
+        return [], [{"type": "import_error", "module": module_name, "reason": str(exc)}]
+
+    if not hasattr(module, "__path__"):
+        return [], []
+
+    discovered: List[str] = []
+    seen = set()
+
+    for _finder, name, _is_pkg in pkgutil.walk_packages(module.__path__, prefix=module_name + "."):
+        try:
+            spec = importlib.util.find_spec(name)
+        except Exception as exc:
+            issues.append({"type": "submodule_spec_failed", "module": name, "reason": str(exc)})
+            continue
+
+        if spec is None:
+            issues.append({"type": "submodule_spec_missing", "module": name})
+            continue
+
+        if not name.startswith(module_name + "."):
+            continue
+
+        relative = name[len(module_name) + 1 :]
+        if relative and relative not in seen:
+            discovered.append(relative)
+            seen.add(relative)
+
+    return discovered, issues
+
+
+def introspect_module(
+    module_name: str,
+    submodules: Optional[List[str]] = None,
+    flat_mode: bool = False,
+    config: Optional[Dict[str, Any]] = None,
+    discover_submodules: bool = False,
+) -> Dict[str, Any]:
     """
     Introspect a Python module with optional submodule detection.
 
@@ -690,10 +1988,15 @@ def introspect_module(module_name: str, submodules: Optional[List[str]] = None, 
         module_name: Name of the module to introspect
         submodules: List of submodule names to also introspect (e.g., ["linalg", "fft"])
         flat_mode: If True, use legacy flat format (v2.0), otherwise use namespaced format (v2.1)
+        config: Introspection config dict
+        discover_submodules: If True, walk packages to discover submodules automatically
 
     Returns:
         Dictionary with complete module information
     """
+    config = config or _parse_config(None)
+    issues: List[Dict[str, Any]] = []
+
     try:
         module = importlib.import_module(module_name)
     except ImportError as e:
@@ -702,23 +2005,27 @@ def introspect_module(module_name: str, submodules: Optional[List[str]] = None, 
             "module": module_name
         }
 
-    # Get module version if available
     module_version = getattr(module, '__version__', None)
-
-    # Get module docstring
-    module_doc = inspect.getdoc(module)
-
-    # Get module file path
+    module_doc = inspect.getdoc(module) or ""
     module_file = module.__file__ if hasattr(module, '__file__') else None
 
+    submodule_list: List[str] = [name for name in (submodules or []) if name]
+
+    if discover_submodules:
+        discovered, discovery_issues = _discover_submodules(module_name)
+        issues.extend(discovery_issues)
+        for name in discovered:
+            if name not in submodule_list:
+                submodule_list.append(name)
+
     if flat_mode:
-        # Legacy flat format (v2.0)
         module_info = {
             "module": module_name,
             "version": "2.0",
             "functions": [],
             "classes": [],
-            "attributes": []
+            "attributes": [],
+            "issues": issues,
         }
 
         if module_doc:
@@ -730,86 +2037,65 @@ def introspect_module(module_name: str, submodules: Optional[List[str]] = None, 
         if module_file:
             module_info["file"] = module_file
 
-        # Get the module's __all__ if available (explicit public API)
-        module_all = getattr(module, '__all__', None)
+        base_namespace = introspect_module_namespace(module_name, "", config)
 
-        # Introspect all public members
-        for name, obj in inspect.getmembers(module):
-            # Skip private members
-            if name.startswith('_'):
-                continue
+        if base_namespace.get("error"):
+            module_info["error"] = base_namespace.get("error")
+            module_info["issues"].append({
+                "type": "import_error",
+                "module": module_name,
+                "reason": base_namespace.get("error"),
+            })
+            return module_info
 
-            # Determine if this item should be included
-            should_include = False
+        module_info["functions"] = base_namespace.get("functions", [])
+        module_info["classes"] = base_namespace.get("classes", [])
+        module_info["attributes"] = base_namespace.get("attributes", [])
 
-            if module_all is not None:
-                # If __all__ exists, only include items in __all__
-                should_include = name in module_all
-            else:
-                # No __all__, use heuristics: include if defined in this module
-                try:
-                    obj_module = getattr(obj, '__module__', None)
-                    # Include if defined in this module or its submodules
-                    if obj_module and (obj_module == module_name or obj_module.startswith(module_name + '.')):
-                        should_include = True
-                    # Also include built-in functions that don't have __module__
-                    elif obj_module is None:
-                        should_include = True
-                except Exception:
-                    should_include = True  # Include if we can't determine
-
-            if not should_include:
-                continue
-
-            try:
-                if inspect.isclass(obj):
-                    class_info = introspect_class(name, obj)
-                    module_info["classes"].append(class_info)
-                elif inspect.isfunction(obj) or inspect.isbuiltin(obj) or (callable(obj) and not inspect.isclass(obj)):
-                    # Include functions, builtins, and other callable objects (like numpy's _ArrayFunctionDispatcher)
-                    func_info = introspect_function(name, obj)
-                    module_info["functions"].append(func_info)
-                elif not inspect.ismodule(obj):
-                    attr_info = introspect_attribute(name, obj)
-                    module_info["attributes"].append(attr_info)
-            except Exception as e:
-                # Log the error but continue processing
-                sys.stderr.write(f"Warning: Failed to introspect {name}: {str(e)}\n")
-                continue
+        if base_namespace.get("issues"):
+            module_info["issues"].extend(base_namespace.get("issues") or [])
 
         return module_info
 
-    else:
-        # New namespaced format (v2.1)
-        module_info = {
-            "module": module_name,
-            "version": "2.1",
-            "namespaces": {}
-        }
+    module_info = {
+        "module": module_name,
+        "version": "2.1",
+        "namespaces": {},
+        "issues": issues,
+    }
 
-        if module_doc:
-            module_info["docstring"] = parse_docstring(module_doc)
+    if module_doc:
+        module_info["docstring"] = parse_docstring(module_doc)
 
-        if module_version:
-            module_info["module_version"] = module_version
+    if module_version:
+        module_info["module_version"] = module_version
 
-        if module_file:
-            module_info["file"] = module_file
+    if module_file:
+        module_info["file"] = module_file
 
-        # Introspect base module (namespace "")
-        base_namespace = introspect_module_namespace(module_name, "")
-        if base_namespace:
-            module_info["namespaces"][""] = base_namespace
+    base_namespace = introspect_module_namespace(module_name, "", config)
+    if base_namespace:
+        module_info["namespaces"][""] = base_namespace
+        if base_namespace.get("error"):
+            module_info["issues"].append({
+                "type": "import_error",
+                "module": module_name,
+                "reason": base_namespace.get("error"),
+            })
 
-        # Introspect submodules if requested
-        if submodules:
-            for submodule in submodules:
-                full_module_name = f"{module_name}.{submodule}"
-                namespace_info = introspect_module_namespace(full_module_name, submodule)
-                if namespace_info:
-                    module_info["namespaces"][submodule] = namespace_info
+    for submodule in submodule_list:
+        full_module_name = f"{module_name}.{submodule}"
+        namespace_info = introspect_module_namespace(full_module_name, submodule, config)
+        if namespace_info:
+            module_info["namespaces"][submodule] = namespace_info
+            if namespace_info.get("error"):
+                module_info["issues"].append({
+                    "type": "import_error",
+                    "module": full_module_name,
+                    "reason": namespace_info.get("error"),
+                })
 
-        return module_info
+    return module_info
 
 
 def main():
@@ -847,6 +2133,16 @@ Examples:
         default=None
     )
     parser.add_argument(
+        '--config',
+        help='JSON config for signature and stub resolution',
+        default=None
+    )
+    parser.add_argument(
+        '--discover-submodules',
+        action='store_true',
+        help='Discover submodules automatically when module is a package'
+    )
+    parser.add_argument(
         '--flat',
         action='store_true',
         help='Use legacy flat format (v2.0) instead of namespaced format (v2.1)'
@@ -859,6 +2155,7 @@ Examples:
         parser.error("module name is required")
     submodules = args.submodules.split(',') if args.submodules else None
     flat_mode = args.flat
+    config = _parse_config(args.config)
 
     try:
         if args.attribute:
@@ -866,18 +2163,21 @@ Examples:
             print(json.dumps(result))
         elif args.symbols:
             symbols = _parse_symbols_arg(args.symbols)
-            result = introspect_symbols(module_name, symbols)
+            result = introspect_symbols(module_name, symbols, config)
             print(json.dumps(result))
         else:
-            result = introspect_module(module_name, submodules=submodules, flat_mode=flat_mode)
+            result = introspect_module(
+                module_name,
+                submodules=submodules,
+                flat_mode=flat_mode,
+                config=config,
+                discover_submodules=args.discover_submodules,
+            )
             print(json.dumps(result, indent=2))
     except Exception as e:
-        traceback.print_exc(file=sys.stderr)
-        error_result = {
-            "error": f"Introspection failed: {str(e)}",
-            "module": module_name
-        }
-        print(json.dumps(error_result, indent=2), file=sys.stderr)
+        error_type = type(e).__name__
+        message = str(e)
+        sys.stderr.write(f"{error_type}: {message}\n")
         sys.exit(1)
 
 

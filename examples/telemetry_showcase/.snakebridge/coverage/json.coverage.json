@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-01-19T23:49:17.741470Z",
+  "issues": [],
+  "library": "json",
+  "stubs": {
+    "count": 0,
+    "sources": []
+  },
+  "summary": {
+    "class_methods": 0,
+    "doc_coverage_ratio": 0.0,
+    "doc_tiers": {},
+    "functions": 0,
+    "non_variadic_ratio": 0.0,
+    "signature_tiers": {},
+    "symbols_total": 0
+  }
+}

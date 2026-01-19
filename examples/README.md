@@ -26,6 +26,8 @@ cd basic && mix run --no-start -e Demo.run
 cd math_demo && mix run --no-start -e Demo.run
 cd wrapper_args_example && mix run --no-start -e Demo.run
 cd signature_showcase && mix run --no-start -e Demo.run
+cd coverage_report_example && mix run --no-start -e Demo.run
+cd stub_fallback_example && mix run --no-start -e Demo.run
 cd class_constructor_example && mix run --no-start -e Demo.run
 cd streaming_example && mix run --no-start -e Demo.run
 cd strict_mode_example && mix run --no-start -e Demo.run
@@ -50,16 +52,18 @@ cd affinity_defaults_example && mix run --no-start -e Demo.run
 | **twenty_libraries** | 20 Python stdlib libraries | Performance demo with 40 sequential gRPC calls |
 | **wrapper_args_example** | Wrapper opts and varargs | Optional kwargs, runtime flags, `__args__` |
 | **signature_showcase** | Signature + arity model | Optional args, keyword-only validation, variadic fallback |
+| **coverage_report_example** | Coverage reporting | JSON/Markdown reports, signature tier counts |
+| **stub_fallback_example** | Stub-based signatures | `.pyi` discovery, stub docstrings |
 | **class_constructor_example** | Class constructors | `new/N` generation from `__init__`, method calls |
 | **streaming_example** | Streaming wrappers | `*_stream` variants with callbacks |
 | **bridge_client_example** | Python BridgeClient demo | ExecuteTool/ExecuteStreamingTool, chunk decoding |
-| **strict_mode_example** | Strict mode verification | Manifest and generated file checks |
+| **strict_mode_example** | Strict signature thresholds | `min_signature_tier` enforcement |
 | **session_lifecycle_example** | Session lifecycle management | Auto-ref, SessionContext, cleanup |
 | **multi_session_example** | Multiple snakes in the pit | Concurrent sessions, isolation, affinity modes under load |
 | **affinity_defaults_example** | Single-pool affinity defaults | Default strictness, per-call overrides, busy-worker behavior |
 | **python_idioms_example** | Python idioms bridge | Generators, context managers, callbacks |
 | **protocol_integration_example** | Protocol integration | Inspect/String.Chars, Enumerable, dynamic exceptions |
-| **universal_ffi_example** | Universal FFI showcase (v0.9.0+) | `SnakeBridge.call/4`, `get/3`, `method/4`, `attr/3`, `bytes/1`, auto-sessions, graceful serialization |
+| **universal_ffi_example** | Universal FFI showcase (v0.10.0+) | `SnakeBridge.call/4`, `get/3`, `method/4`, `attr/3`, `bytes/1`, auto-sessions, graceful serialization |
 
 ## Verbose Output Format
 
@@ -155,6 +159,20 @@ Demonstrates the signature + arity model:
 - Sanitized function names (`class` → `py_class`)
 - C-extension calls via `numpy`
 
+### coverage_report_example
+
+Demonstrates coverage reporting for a generate-all library:
+- JSON + Markdown coverage reports
+- Signature tier counts and doc coverage ratios
+- Local module coverage without external dependencies
+
+### stub_fallback_example
+
+Demonstrates stub-based fallback when runtime signatures are missing:
+- Local `.pyi` discovery next to the module
+- Stub docstrings and signatures
+- Generated wrappers from stub metadata
+
 ### class_constructor_example
 
 Demonstrates class constructors generated from `__init__`:
@@ -177,9 +195,10 @@ Demonstrates Python BridgeClient usage against the Elixir BridgeServer:
 
 ### strict_mode_example
 
-Demonstrates strict mode verification:
-- Strict compile checks enabled in config
-- Generated files and manifest stay in sync
+Demonstrates strict signature thresholds:
+- Strict signature tier enforcement with `min_signature_tier`
+- Expected failure when a symbol falls below the tier
+- Relaxed tier configuration to pass
 
 ### session_lifecycle_example
 
@@ -246,7 +265,7 @@ Libraries used: `math`, `json`, `os`, `sys`, `platform`, `datetime`, `random`, `
 
 ### universal_ffi_example
 
-Comprehensive showcase of Universal FFI features (v0.9.0+):
+Comprehensive showcase of Universal FFI features (v0.10.0+):
 - `SnakeBridge.call/4` - Call any Python function dynamically
 - `SnakeBridge.get/3` - Get module attributes
 - `SnakeBridge.method/4` and `attr/3` - Call methods/get attributes on refs

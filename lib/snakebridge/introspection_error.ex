@@ -71,7 +71,8 @@ defmodule SnakeBridge.IntrospectionError do
   end
 
   defp module_not_found?(output) do
-    String.contains?(output, "ModuleNotFoundError")
+    String.contains?(output, "ModuleNotFoundError") or
+      String.contains?(output, "No module named")
   end
 
   defp import_error?(output) do
@@ -84,8 +85,14 @@ defmodule SnakeBridge.IntrospectionError do
 
   defp extract_missing_package(output) do
     case Regex.run(~r/ModuleNotFoundError: No module named ['"]([^'"]+)['"]/m, output) do
-      [_, name] -> name
-      _ -> nil
+      [_, name] ->
+        name
+
+      _ ->
+        case Regex.run(~r/No module named ['"]([^'"]+)['"]/m, output) do
+          [_, name] -> name
+          _ -> nil
+        end
     end
   end
 

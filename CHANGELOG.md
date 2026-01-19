@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-01-19
+
+### Added
+- **Max coverage signature pipeline**: Tiered signature sources (runtime, text_signature, runtime_hints, stubs, stubgen, variadic) with per-symbol `signature_source` metadata.
+- **Doc source tiers**: Runtime docs first, stub docs next, module doc fallback, with per-symbol `doc_source` metadata.
+- **Stub resolution upgrades**: Local `.pyi`, `types-<pkg>` packages, optional typeshed, and overload metadata handling.
+- **Stubgen fallback with caching** for libraries without stubs.
+- **Strict signature thresholds** (`strict_signatures`, `min_signature_tier`) with per-library overrides.
+- **Coverage reports** (JSON + Markdown) with tier counts and structured issues.
+- **New examples**: `coverage_report_example`, `stub_fallback_example`, and updated `strict_mode_example`.
+
+### Changed
+- Manifest schema now records signature/doc sources, missing reasons, and overload counts.
+- Introspection issues are captured in coverage reports instead of emitting warnings during builds.
+
+### Fixed
+- Class/module collisions are now disambiguated (with `Class` suffixes) and stale class entries are pruned to prevent duplicate module definitions.
+- Lowercase/invalid class module segments no longer produce invalid typespec aliases; segments are camelized and invalid aliases fall back to `term()`.
+- Attribute accessors now avoid name collisions with methods by appending `_attr` when needed.
+- Leading-underscore parameter names are normalized to avoid unused-variable warnings in generated wrappers.
+- Prefer the Snakepit-managed venv (default: `priv/snakepit/python/venv`) when resolving the Python runtime in `ConfigHelper` to avoid environment mismatches.
+
+### Documentation
+- README and Generated Wrappers guide now document max coverage configuration and signature tiers.
+- Revamped README.md for clarity and conciseness with focused quick start.
+- Added Configuration Reference and Coverage Reports guides.
+- Improved HexDocs menu structure with organized module groups.
+
 ## [0.9.0] - 2026-01-11
 
 ### Added
@@ -633,6 +661,7 @@ Numpy.compute(data, __runtime__: [timeout: 600_000])
 - Type system mapper
 - Basic code generation
 
+[0.10.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.1...v0.8.2

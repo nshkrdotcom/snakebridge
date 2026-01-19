@@ -33,8 +33,9 @@ defmodule SnakeBridge.ConfigHelper do
   The helper looks for a Python venv in these locations (in order):
   1. `$SNAKEBRIDGE_VENV` environment variable
   2. `:snakebridge, :venv_path` config
-  3. `.venv` in the current project root
-  4. `.venv` in SnakeBridge's installation directory (for path deps or hex deps)
+  3. Snakepit-managed venv (default: `priv/snakepit/python/venv`)
+  4. `.venv` in the current project root
+  5. `.venv` in SnakeBridge's installation directory (for path deps or hex deps)
 
   For PYTHONPATH, it includes:
   - Snakepit's priv/python directory
@@ -131,7 +132,9 @@ defmodule SnakeBridge.ConfigHelper do
       pythonpath: build_pythonpath([]),
       snakebridge_root: snakebridge_root(),
       snakepit_priv: snakepit_priv_python(),
-      snakebridge_priv: snakebridge_priv_python()
+      snakebridge_priv: snakebridge_priv_python(),
+      snakepit_env_dir: snakepit_env_dir(),
+      snakepit_env_python: snakepit_env_python()
     }
   end
 
@@ -151,15 +154,19 @@ defmodule SnakeBridge.ConfigHelper do
       app_venv = Application.get_env(:snakebridge, :venv_path) ->
         venv_python(app_venv)
 
-      # 4. .venv in current project
+      # 4. Snakepit-managed venv (auto-installed with mix snakebridge.setup)
+      snakepit_env = snakepit_env_python() ->
+        snakepit_env
+
+      # 5. .venv in current project
       project_venv = project_venv_python() ->
         project_venv
 
-      # 5. .venv in snakebridge's directory
+      # 6. .venv in snakebridge's directory
       snakebridge_venv = snakebridge_venv_python() ->
         snakebridge_venv
 
-      # 6. Fall back to system python3
+      # 7. Fall back to system python3
       true ->
         nil
     end
@@ -200,6 +207,41 @@ defmodule SnakeBridge.ConfigHelper do
           nil
         end
     end
+  end
+
+  defp snakepit_env_python do
+    case snakepit_env_dir() do
+      nil -> nil
+      venv_dir -> venv_python(venv_dir)
+    end
+  end
+
+  defp snakepit_env_dir do
+    python_packages =
+      :snakepit
+      |> Application.get_env(:python_packages, [])
+      |> normalize_config_input()
+
+    case Map.get(python_packages, :env_dir) do
+      false ->
+        nil
+
+      nil ->
+        default_snakepit_env_dir()
+
+      value ->
+        Path.expand(value, project_root())
+    end
+  end
+
+  defp default_snakepit_env_dir do
+    python_config =
+      :snakepit
+      |> Application.get_env(:python, [])
+      |> normalize_config_input()
+
+    runtime_dir = Map.get(python_config, :runtime_dir, "priv/snakepit/python")
+    Path.expand(Path.join(runtime_dir, "venv"), project_root())
   end
 
   defp build_pythonpath(_opts) do
@@ -273,6 +315,11 @@ defmodule SnakeBridge.ConfigHelper do
   defp normalize_pool_input(%{} = pool), do: pool
   defp normalize_pool_input(pool) when is_list(pool), do: Map.new(pool)
   defp normalize_pool_input(_), do: %{}
+
+  defp normalize_config_input(nil), do: %{}
+  defp normalize_config_input(%{} = map), do: map
+  defp normalize_config_input(list) when is_list(list), do: Map.new(list)
+  defp normalize_config_input(_), do: %{}
 
   defp merge_adapter_env(base_env, nil), do: base_env
 

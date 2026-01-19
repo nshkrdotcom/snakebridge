@@ -60,6 +60,7 @@ defmodule SnakeBridge.PythonEnv do
 
   defp do_ensure!(config) do
     ensure_python_runtime!()
+    ensure_snakebridge_requirements!(config)
     ensure_snakepit_adapter!()
     ensure_snakepit_requirements!(config)
     requirements = derive_requirements(config.libraries)
@@ -88,6 +89,19 @@ defmodule SnakeBridge.PythonEnv do
       end
     else
       :ok
+    end
+  end
+
+  defp ensure_snakebridge_requirements!(config) do
+    case snakebridge_requirements_path() do
+      nil ->
+        :ok
+
+      path ->
+        python_packages_module().ensure!(
+          {:file, path},
+          python_packages_opts(quiet: !config.verbose)
+        )
     end
   end
 
@@ -181,6 +195,17 @@ defmodule SnakeBridge.PythonEnv do
 
   defp snakepit_requirements_path do
     case :code.priv_dir(:snakepit) do
+      {:error, _} ->
+        nil
+
+      priv_dir ->
+        path = Path.join([to_string(priv_dir), "python", "requirements.txt"])
+        if File.exists?(path), do: path, else: nil
+    end
+  end
+
+  defp snakebridge_requirements_path do
+    case :code.priv_dir(:snakebridge) do
       {:error, _} ->
         nil
 

@@ -25,4 +25,22 @@ defmodule SnakeBridge.HelperGeneratorTest do
     assert source =~ "def parse_explicit"
     assert source =~ "SnakeBridge.Runtime.call_helper(\"sympy.parsing.parse_explicit\""
   end
+
+  test "renders long helper docstrings without truncation" do
+    long_doc = "START-" <> String.duplicate("b", 5000) <> "-TAIL"
+
+    helpers = [
+      %{
+        "name" => "demo.long_doc",
+        "parameters" => [],
+        "docstring" => long_doc
+      }
+    ]
+
+    source = SnakeBridge.HelperGenerator.render_library("demo", helpers, version: "0.1.0")
+
+    assert source =~ "START-"
+    assert source =~ "-TAIL"
+    refute source =~ ~r/<>\\s*\\.\\.\\./
+  end
 end

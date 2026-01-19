@@ -19,7 +19,15 @@ defmodule SnakeBridge.Config do
     :introspector,
     :docs,
     :runtime_client,
-    :ledger
+    :ledger,
+    :signature_sources,
+    :strict_signatures,
+    :min_signature_tier,
+    :stub_search_paths,
+    :use_typeshed,
+    :typeshed_path,
+    :stubgen,
+    :coverage_report
   ]
 
   defmodule Library do
@@ -44,7 +52,14 @@ defmodule SnakeBridge.Config do
       exclude: [],
       streaming: [],
       submodules: false,
-      generate: :used
+      generate: :used,
+      signature_sources: nil,
+      strict_signatures: nil,
+      min_signature_tier: nil,
+      stub_search_paths: nil,
+      use_typeshed: nil,
+      typeshed_path: nil,
+      stubgen: nil
     ]
 
     @type generate_mode :: :all | :used
@@ -60,7 +75,14 @@ defmodule SnakeBridge.Config do
             exclude: [String.t()],
             streaming: [String.t()],
             submodules: boolean(),
-            generate: generate_mode()
+            generate: generate_mode(),
+            signature_sources: [atom() | String.t()] | nil,
+            strict_signatures: boolean() | nil,
+            min_signature_tier: atom() | String.t() | nil,
+            stub_search_paths: [String.t()] | nil,
+            use_typeshed: boolean() | nil,
+            typeshed_path: String.t() | nil,
+            stubgen: keyword() | nil
           }
   end
 
@@ -80,7 +102,15 @@ defmodule SnakeBridge.Config do
           introspector: keyword(),
           docs: keyword(),
           runtime_client: module(),
-          ledger: keyword()
+          ledger: keyword(),
+          signature_sources: [atom() | String.t()],
+          strict_signatures: boolean(),
+          min_signature_tier: atom() | String.t(),
+          stub_search_paths: [String.t()],
+          use_typeshed: boolean(),
+          typeshed_path: String.t() | nil,
+          stubgen: keyword(),
+          coverage_report: keyword()
         }
 
   @doc """
@@ -129,7 +159,23 @@ defmodule SnakeBridge.Config do
       introspector: Application.get_env(:snakebridge, :introspector, []),
       docs: Application.get_env(:snakebridge, :docs, []),
       runtime_client: Application.get_env(:snakebridge, :runtime_client, Snakepit),
-      ledger: Application.get_env(:snakebridge, :ledger, [])
+      ledger: Application.get_env(:snakebridge, :ledger, []),
+      signature_sources:
+        Application.get_env(:snakebridge, :signature_sources, [
+          :runtime,
+          :text_signature,
+          :runtime_hints,
+          :stub,
+          :stubgen,
+          :variadic
+        ]),
+      strict_signatures: env_flag(:strict_signatures, "SNAKEBRIDGE_STRICT_SIGNATURES", false),
+      min_signature_tier: Application.get_env(:snakebridge, :min_signature_tier, :runtime),
+      stub_search_paths: Application.get_env(:snakebridge, :stub_search_paths, []),
+      use_typeshed: Application.get_env(:snakebridge, :use_typeshed, false),
+      typeshed_path: Application.get_env(:snakebridge, :typeshed_path),
+      stubgen: Application.get_env(:snakebridge, :stubgen, []),
+      coverage_report: Application.get_env(:snakebridge, :coverage_report, [])
     }
   end
 
@@ -184,7 +230,14 @@ defmodule SnakeBridge.Config do
       exclude: Keyword.get(opts, :exclude, []),
       streaming: Keyword.get(opts, :streaming, []),
       submodules: Keyword.get(opts, :submodules, false),
-      generate: generate
+      generate: generate,
+      signature_sources: Keyword.get(opts, :signature_sources),
+      strict_signatures: Keyword.get(opts, :strict_signatures),
+      min_signature_tier: Keyword.get(opts, :min_signature_tier),
+      stub_search_paths: Keyword.get(opts, :stub_search_paths),
+      use_typeshed: Keyword.get(opts, :use_typeshed),
+      typeshed_path: Keyword.get(opts, :typeshed_path),
+      stubgen: Keyword.get(opts, :stubgen)
     }
   end
 

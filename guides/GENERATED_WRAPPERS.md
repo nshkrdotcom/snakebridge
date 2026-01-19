@@ -57,6 +57,13 @@ end
 | `module_name` | atom | derived | Override Elixir module name |
 | `python_name` | string | derived | Override Python module name |
 | `streaming` | list | `[]` | Functions that return generators |
+| `signature_sources` | list | config default | Ordered list of allowed signature sources |
+| `strict_signatures` | boolean | config default | Enforce minimum signature tier for this library |
+| `min_signature_tier` | atom | config default | Minimum tier when strict signatures are enabled |
+| `stub_search_paths` | list | config default | Additional paths to search for `.pyi` stubs |
+| `use_typeshed` | boolean | config default | Enable typeshed lookup for missing stubs |
+| `typeshed_path` | string | config default | Typeshed root path |
+| `stubgen` | keyword | config default | Stubgen options (enabled, cache_dir) |
 
 ### Generation Modes
 
@@ -105,13 +112,15 @@ Results cache in `.snakebridge/manifest.json`:
 
 ```json
 {
-  "version": "0.9.0",
+  "version": "0.10.0",
   "symbols": {
     "Numpy.mean/1": {
       "module": "Numpy",
       "function": "mean",
       "parameters": [...],
-      "docstring": "Compute the arithmetic mean..."
+      "docstring": "Compute the arithmetic mean...",
+      "signature_source": "runtime",
+      "doc_source": "runtime"
     }
   },
   "classes": {
@@ -127,6 +136,78 @@ Results cache in `.snakebridge/manifest.json`:
 ### 6. Lock Update
 
 `SnakeBridge.Lock` updates `snakebridge.lock` with environment info.
+
+## Max Coverage and Signature Tiers
+
+When `generate: :all` is enabled, SnakeBridge attempts to wrap every public symbol
+and records the source tier for signatures and docs in the manifest.
+
+Signature tiers (highest to lowest):
+1) `runtime` - `inspect.signature` or `__signature__`
+2) `text_signature` - `__text_signature__`
+3) `runtime_hints` - runtime type hints
+4) `stub` - `.pyi` stubs (local, types- packages, typeshed)
+5) `stubgen` - generated stubs fallback
+6) `variadic` - fallback wrapper when no signature is available
+
+Doc tiers:
+1) `runtime` - runtime docstrings
+2) `stub` - stub docstrings
+3) `module` - module docstring fallback
+4) `empty` - no docstring available
+
+Each symbol records `signature_source`, `signature_detail`, `signature_missing_reason`,
+`doc_source`, and `doc_missing_reason` in the manifest.
+
+### Stub Discovery and Configuration
+
+Stub discovery checks, in order:
+- Local `.pyi` next to the module or package
+- `types-<pkg>` stub packages when installed
+- Typeshed when `use_typeshed: true`
+- Stubgen fallback when stubs are missing (cached)
+
+Configure stub sources and search paths:
+
+```elixir
+config :snakebridge,
+  signature_sources: [:runtime, :text_signature, :runtime_hints, :stub, :stubgen, :variadic],
+  stub_search_paths: ["priv/python/stubs"],
+  use_typeshed: true,
+  typeshed_path: "/path/to/typeshed",
+  stubgen: [enabled: true, cache_dir: ".snakebridge/stubgen_cache"]
+```
+
+### Strict Signature Thresholds
+
+Use `strict_signatures` and `min_signature_tier` (global or per-library) to fail
+builds when any symbol falls below the minimum tier.
+
+```elixir
+config :snakebridge,
+  strict_signatures: true,
+  min_signature_tier: :stub
+
+defp python_deps do
+  [
+    {:pandas, "2.2.0",
+     generate: :all,
+     strict_signatures: true,
+     min_signature_tier: :stub}
+  ]
+end
+```
+
+### Coverage Reports
+
+Enable coverage reports to capture tier counts and issues without warnings:
+
+```elixir
+config :snakebridge,
+  coverage_report: [output_dir: ".snakebridge/coverage"]
+```
+
+Reports are written as `*.coverage.json` and `*.coverage.md`.
 
 ## Generated Module Structure
 
@@ -273,6 +354,9 @@ Or in config:
 config :snakebridge, strict: true
 ```
 
+This strict mode verifies manifest coverage and generated files. For signature tier
+enforcement, see the "Strict Signature Thresholds" section above.
+
 ### Strict Mode Behavior
 
 1. Load existing manifest (no new introspection)
@@ -312,9 +396,9 @@ The `snakebridge.lock` captures environment state:
 
 ```json
 {
-  "version": "0.9.0",
+  "version": "0.10.0",
   "environment": {
-    "snakebridge_version": "0.9.0",
+    "snakebridge_version": "0.10.0",
     "generator_hash": "a1b2c3...",
     "python_version": "3.12.3",
     "elixir_version": "1.18.4",

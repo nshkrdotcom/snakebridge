@@ -12,9 +12,15 @@ defmodule Mix.Tasks.Compile.Snakebridge do
   def run(_args) do
     Mix.Task.run("loadconfig")
 
+    if Mix.env() in [:dev, :test] do
+      SnakeBridge.CompileShell.install()
+    end
+
     if skip_generation?() do
       {:ok, []}
     else
+      Mix.shell().info("SnakeBridge: preparing Python bindings (this can take a minute)...")
+
       config = Config.load()
       Pipeline.run(config)
     end

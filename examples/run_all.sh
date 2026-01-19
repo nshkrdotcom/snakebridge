@@ -248,6 +248,8 @@ EXAMPLES=(
     "twenty_libraries"
     "wrapper_args_example"
     "signature_showcase"
+    "coverage_report_example"
+    "stub_fallback_example"
     "class_resolution_example"
     "class_constructor_example"
     "dynamic_dispatch_example"

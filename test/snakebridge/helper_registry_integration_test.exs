@@ -39,7 +39,7 @@ defmodule SnakeBridge.HelperRegistryIntegrationTest do
 
       assert {:ok, helpers} = result
       assert is_list(helpers)
-      assert length(helpers) > 0
+      assert helpers != []
 
       # Verify helper structure
       first_helper = hd(helpers)

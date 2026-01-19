@@ -29,12 +29,15 @@ defmodule Mix.Tasks.Snakebridge.Setup do
 
     if requirements == [] do
       Mix.shell().info("No Python packages required (all stdlib)")
+      ensure_python_runtime!()
+      install_snakebridge_requirements(opts)
       :ok
     else
       if opts[:check] do
         run_check(requirements)
       else
         ensure_python_runtime!()
+        install_snakebridge_requirements(opts)
         run_install(requirements, opts)
       end
     end
@@ -62,6 +65,17 @@ defmodule Mix.Tasks.Snakebridge.Setup do
     Mix.shell().info("Done. #{length(requirements)} package(s) ready.")
   end
 
+  defp install_snakebridge_requirements(opts) do
+    case snakebridge_requirements_path() do
+      nil ->
+        :ok
+
+      path ->
+        install_opts = [upgrade: opts[:upgrade] || false, quiet: !opts[:verbose]]
+        python_packages_module().ensure!({:file, path}, python_packages_opts(install_opts))
+    end
+  end
+
   defp ensure_python_runtime! do
     python_config = Application.get_env(:snakepit, :python, [])
 
@@ -86,5 +100,16 @@ defmodule Mix.Tasks.Snakebridge.Setup do
 
   defp python_runtime_module do
     Application.get_env(:snakebridge, :python_runtime, Snakepit.PythonRuntime)
+  end
+
+  defp snakebridge_requirements_path do
+    case :code.priv_dir(:snakebridge) do
+      {:error, _} ->
+        nil
+
+      priv_dir ->
+        path = Path.join([to_string(priv_dir), "python", "requirements.txt"])
+        if File.exists?(path), do: path, else: nil
+    end
   end
 end

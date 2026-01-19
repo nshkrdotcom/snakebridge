@@ -30,7 +30,8 @@ defmodule StrictModeExample.MixProject do
       {:strict_mode, :stdlib,
        python_name: "strict_mode_example",
        module_name: StrictModeExample,
-       include: ["add", "multiply"]}
+       generate: :all,
+       signature_sources: [:runtime, :text_signature, :runtime_hints, :stub, :variadic]}
     ]
   end
 end

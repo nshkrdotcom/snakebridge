@@ -196,7 +196,7 @@ data_stream
 
 ## Generators in Containers (Graceful Serialization)
 
-With graceful serialization (v0.9.0+), generators embedded in containers are preserved
+With graceful serialization (v0.10.0+), generators embedded in containers are preserved
 as StreamRefs while the container structure remains intact:
 
 ```python

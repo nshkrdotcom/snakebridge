@@ -295,7 +295,7 @@ defmodule SnakeBridge.Generator do
         summary =
           info["docstring"] |> normalize_docstring() |> String.split("\n") |> List.first() || ""
 
-        "{:#{name}, #{arity}, __MODULE__, #{inspect(summary)}}"
+        "{:#{name}, #{arity}, __MODULE__, #{inspect(summary, limit: :infinity, printable_limit: :infinity)}}"
       end)
 
     class_list =
@@ -303,7 +303,7 @@ defmodule SnakeBridge.Generator do
       |> Enum.map_join(",\n      ", fn info ->
         module = class_module_name(info, nil)
         doc = info["docstring"] |> normalize_docstring()
-        "{#{module}, #{inspect(doc)}}"
+        "{#{module}, #{inspect(doc, limit: :infinity, printable_limit: :infinity)}}"
       end)
 
     """
@@ -732,17 +732,21 @@ defmodule SnakeBridge.Generator do
     end
   end
 
-  defp ensure_identifier(<<first::utf8, _rest::binary>> = name)
-       when first in ?a..?z or first == ?_ do
-    name
-  end
+  defp ensure_identifier(name) when is_binary(name) do
+    trimmed = String.trim_leading(name, "_")
+    trimmed = if trimmed == "", do: "param", else: trimmed
 
-  defp ensure_identifier(<<first::utf8, _rest::binary>> = name) when first in ?0..?9 do
-    "_" <> name
-  end
+    case trimmed do
+      <<first::utf8, _rest::binary>> when first in ?a..?z ->
+        trimmed
 
-  defp ensure_identifier(""), do: "_unnamed"
-  defp ensure_identifier(name), do: "_" <> name
+      <<first::utf8, _rest::binary>> when first in ?0..?9 ->
+        "param_" <> trimmed
+
+      _ ->
+        "param_" <> trimmed
+    end
+  end
 
   defp module_to_string(module) when is_atom(module),
     do: module |> Module.split() |> Enum.join(".")

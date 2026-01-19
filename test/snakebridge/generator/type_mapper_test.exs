@@ -262,6 +262,22 @@ defmodule SnakeBridge.Generator.TypeMapperTest do
       assert Macro.to_string(spec_ast) == "Example.Prediction.t()"
     end
 
+    test "camelizes lowercase module segments for class mapping" do
+      context =
+        TypeMapper.build_context([
+          %{
+            "python_module" => "example",
+            "class" => "dotdict",
+            "module" => "Example.Utils.dotdict"
+          }
+        ])
+
+      python_type = %{"type" => "class", "name" => "dotdict", "module" => "example"}
+      spec_ast = TypeMapper.to_spec(python_type, context)
+
+      assert Macro.to_string(spec_ast) == "Example.Utils.Dotdict.t()"
+    end
+
     test "maps class by name when module is missing and unique" do
       context =
         TypeMapper.build_context([

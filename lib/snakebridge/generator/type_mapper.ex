@@ -304,14 +304,27 @@ defmodule SnakeBridge.Generator.TypeMapper do
   defp resolve_class_module(_python_type, _context), do: nil
 
   defp module_type_ast(module) do
-    module_alias =
+    segments =
       module
       |> String.split(".")
-      |> Enum.map(&String.to_atom/1)
-      |> then(&{:__aliases__, [alias: false], &1})
+      |> Enum.map(&Macro.camelize/1)
 
-    {{:., [], [module_alias, :t]}, [], []}
+    if Enum.all?(segments, &valid_alias_segment?/1) do
+      module_alias =
+        segments
+        |> Enum.map(&String.to_atom/1)
+        |> then(&{:__aliases__, [alias: false], &1})
+
+      {{:., [], [module_alias, :t]}, [], []}
+    else
+      quote(do: term())
+    end
   end
+
+  defp valid_alias_segment?(<<first::utf8, _rest::binary>>),
+    do: first in ?A..?Z or first == ?_
+
+  defp valid_alias_segment?(_segment), do: false
 
   defp module_from_qualified(type) do
     type

@@ -21,9 +21,13 @@
         "strides"
       ],
       "class": "ndarray",
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
       "docstring": "ndarray(shape, dtype=float, buffer=None, offset=0, strides=None, order=None)\n\nAn array object represents a multidimensional, homogeneous array\nof fixed-size items.  An associated data-type object describes the\nformat of each element in the array (its byte-order, how many bytes it\noccupies in memory, whether it is an integer, a floating point number,\nor something else, etc.)\n\nArrays should be constructed using `array`, `zeros` or `empty` (refer\nto the See Also section below).  The parameters given here refer to\na low-level method (`ndarray(...)`) for instantiating an array.\n\nFor more information, refer to the `numpy` module and examine the\nmethods and attributes of an array.\n\nParameters\n----------\n(for the __new__ method; see Notes below)\n\nshape : tuple of ints\n    Shape of created array.\ndtype : data-type, optional\n    Any object that can be interpreted as a numpy data type.\n    Default is `numpy.float64`.\nbuffer : object exposing buffer interface, optional\n    Used to fill the array with data.\noffset : int, optional\n    Offset of array data in buffer.\nstrides : tuple of ints, optional\n    Strides of data in memory.\norder : {'C', 'F'}, optional\n    Row-major (C-style) or column-major (Fortran-style) order.\n\nAttributes\n----------\nT : ndarray\n    Transpose of the array.\ndata : buffer\n    The array's elements, in memory.\ndtype : dtype object\n    Describes the format of the elements in the array.\nflags : dict\n    Dictionary containing information related to memory use, e.g.,\n    'C_CONTIGUOUS', 'OWNDATA', 'WRITEABLE', etc.\nflat : numpy.flatiter object\n    Flattened version of the array as an iterator.  The iterator\n    allows assignments, e.g., ``x.flat = 3`` (See `ndarray.flat` for\n    assignment examples; TODO).\nimag : ndarray\n    Imaginary part of the array.\nreal : ndarray\n    Real part of the array.\nsize : int\n    Number of elements in the array.\nitemsize : int\n    The memory use of each array element in bytes.\nnbytes : int\n    The total number of bytes required to store the array data,\n    i.e., ``itemsize * size``.\nndim : int\n    The array's number of dimensions.\nshape : tuple of ints\n    Shape of the array.\nstrides : tuple of ints\n    The step-size required to move from one element to the next in\n    memory. For example, a contiguous ``(3, 4)`` array of type\n    ``int16`` in C-order has strides ``(8, 2)``.  This implies that\n    to move from element to element in memory requires jumps of 2 bytes.\n    To move from row-to-row, one needs to jump 8 bytes at a time\n    (``2 * 4``).\nctypes : ctypes object\n    Class containing properties of the array needed for interaction\n    with ctypes.\nbase : ndarray\n    If the array is a view into another array, that array is its `base`\n    (unless that array is also a view).  The `base` array is where the\n    array data is actually stored.\n\nSee Also\n--------\narray : Construct an array.\nzeros : Create an array, each element of which is zero.\nempty : Create an array, but leave its allocated memory unchanged (i.e.,\n        it contains \"garbage\").\ndtype : Create a data-type.\nnumpy.typing.NDArray : An ndarray alias :term:`generic <generic type>`\n                       w.r.t. its `dtype.type <numpy.dtype.type>`.\n\nNotes\n-----\nThere are two modes of creating an array using ``__new__``:\n\n1. If `buffer` is None, then only `shape`, `dtype`, and `order`\n   are used.\n2. If `buffer` is an object exposing the buffer interface, then\n   all keywords are interpreted.\n\nNo ``__init__`` method is needed because the array is fully initialized\nafter the ``__new__`` method.\n\nExamples\n--------\nThese examples illustrate the low-level `ndarray` constructor.  Refer\nto the `See Also` section above for easier ways of constructing an\nndarray.\n\nFirst mode, `buffer` is None:\n\n>>> import numpy as np\n>>> np.ndarray(shape=(2,2), dtype=float, order='F')\narray([[0.0e+000, 0.0e+000], # random\n       [     nan, 2.5e-323]])\n\nSecond mode:\n\n>>> np.ndarray((2,), buffer=np.array([1,2,3]),\n...            offset=np.int_().itemsize,\n...            dtype=int) # offset = 1*itemsize, i.e. skip first element\narray([2, 3])",
       "methods": [
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "Initialize self.  See help(type(self)) for accurate signature.",
           "elixir_name": "new",
           "has_var_keyword": true,
@@ -32,6 +36,7 @@
           "minimum_arity": 0,
           "name": "__init__",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "VAR_POSITIONAL",
@@ -54,9 +59,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.all(axis=None, out=None, *, keepdims=<no value>, where=<no value>)\n\nReturns True if all elements evaluate to True.\n\nRefer to `numpy.all` for full documentation.\n\nSee Also\n--------\nnumpy.all : equivalent function",
           "elixir_name": "all",
           "has_var_keyword": false,
@@ -67,6 +83,7 @@
           "optional_keyword_only": [
             "where"
           ],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -107,9 +124,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.any(axis=None, out=None, *, keepdims=<no value>, where=<no value>)\n\nReturns True if any of the elements of `a` evaluate to True.\n\nRefer to `numpy.any` for full documentation.\n\nSee Also\n--------\nnumpy.any : equivalent function",
           "elixir_name": "any",
           "has_var_keyword": false,
@@ -120,6 +148,7 @@
           "optional_keyword_only": [
             "where"
           ],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -160,9 +189,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.argmax(axis=None, out=None, *, keepdims=False)\n\nReturn indices of the maximum values along the given axis.\n\nRefer to `numpy.argmax` for full documentation.\n\nSee Also\n--------\nnumpy.argmax : equivalent function",
           "elixir_name": "argmax",
           "has_var_keyword": false,
@@ -173,6 +213,7 @@
           "optional_keyword_only": [
             "keepdims"
           ],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -205,9 +246,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.argmin(axis=None, out=None, *, keepdims=False)\n\nReturn indices of the minimum values along the given axis.\n\nRefer to `numpy.argmin` for detailed documentation.\n\nSee Also\n--------\nnumpy.argmin : equivalent function",
           "elixir_name": "argmin",
           "has_var_keyword": false,
@@ -218,6 +270,7 @@
           "optional_keyword_only": [
             "keepdims"
           ],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -250,9 +303,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.argpartition(kth, axis=-1, kind='introselect', order=None)\n\nReturns the indices that would partition this array.\n\nRefer to `numpy.argpartition` for full documentation.\n\nSee Also\n--------\nnumpy.argpartition : equivalent function",
           "elixir_name": "argpartition",
           "has_var_keyword": false,
@@ -261,6 +325,7 @@
           "minimum_arity": 2,
           "name": "argpartition",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_ONLY",
@@ -300,9 +365,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.argsort(axis=-1, kind=None, order=None, *, stable=None)\n\nReturns the indices that would sort this array.\n\nRefer to `numpy.argsort` for full documentation.\n\nSee Also\n--------\nnumpy.argsort : equivalent function",
           "elixir_name": "argsort",
           "has_var_keyword": false,
@@ -313,6 +389,7 @@
           "optional_keyword_only": [
             "stable"
           ],
+          "overload_count": null,
           "parameters": [
             {
               "default": "-1",
@@ -353,9 +430,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.astype(dtype, order='K', casting='unsafe', subok=True, copy=True)\n\nCopy of the array, cast to a specified type.\n\nParameters\n----------\ndtype : str or dtype\n    Typecode or data-type to which the array is cast.\norder : {'C', 'F', 'A', 'K'}, optional\n    Controls the memory layout order of the result.\n    'C' means C order, 'F' means Fortran order, 'A'\n    means 'F' order if all the arrays are Fortran contiguous,\n    'C' order otherwise, and 'K' means as close to the\n    order the array elements appear in memory as possible.\n    Default is 'K'.\ncasting : {'no', 'equiv', 'safe', 'same_kind', 'same_value', 'unsafe'}, optional\n    Controls what kind of data casting may occur. Defaults to 'unsafe'\n    for backwards compatibility.\n\n    * 'no' means the data types should not be cast at all.\n    * 'equiv' means only byte-order changes are allowed.\n    * 'safe' means only casts which can preserve values are allowed.\n    * 'same_kind' means only safe casts or casts within a kind,\n      like float64 to float32, are allowed.\n    * 'unsafe' means any data conversions may be done.\n    * 'same_value' means any data conversions may be done, but the values\n      must not change, including rounding of floats or overflow of ints\n\n    .. versionadded:: 2.4\n        Support for ``'same_value'`` was added.\n\nsubok : bool, optional\n    If True, then sub-classes will be passed-through (default), otherwise\n    the returned array will be forced to be a base-class array.\ncopy : bool, optional\n    By default, astype always returns a newly allocated array. If this\n    is set to false, and the `dtype`, `order`, and `subok`\n    requirements are satisfied, the input array is returned instead\n    of a copy.\n\nReturns\n-------\narr_t : ndarray\n    Unless `copy` is False and the other conditions for returning the input\n    array are satisfied (see description for `copy` input parameter), `arr_t`\n    is a new array of the same shape as the input array, with dtype, order\n    given by `dtype`, `order`.\n\nRaises\n------\nComplexWarning\n    When casting from complex to float or int. To avoid this,\n    one should use ``a.real.astype(t)``.\nValueError\n    When casting using ``'same_value'`` and the values change or would\n    overflow\n\nExamples\n--------\n>>> import numpy as np\n>>> x = np.array([1, 2, 2.5])\n>>> x\narray([1. ,  2. ,  2.5])\n\n>>> x.astype(int)\narray([1, 2, 2])\n\n>>> x.astype(int, casting=\"same_value\")\nTraceback (most recent call last):\n...\nValueError: could not cast 'same_value' double to long\n\n>>> x[:2].astype(int, casting=\"same_value\")\narray([1, 2])",
           "elixir_name": "astype",
           "has_var_keyword": false,
@@ -364,6 +452,7 @@
           "minimum_arity": 2,
           "name": "astype",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_OR_KEYWORD",
@@ -411,9 +500,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.byteswap(inplace=False)\n\nSwap the bytes of the array elements\n\nToggle between low-endian and big-endian data representation by\nreturning a byteswapped array, optionally swapped in-place.\nArrays of byte-strings are not swapped. The real and imaginary\nparts of a complex number are swapped individually.\n\nParameters\n----------\ninplace : bool, optional\n    If ``True``, swap bytes in-place, default is ``False``.\n\nReturns\n-------\nout : ndarray\n    The byteswapped array. If `inplace` is ``True``, this is\n    a view to self.\n\nExamples\n--------\n>>> import numpy as np\n>>> A = np.array([1, 256, 8755], dtype=np.int16)\n>>> list(map(hex, A))\n['0x1', '0x100', '0x2233']\n>>> A.byteswap(inplace=True)\narray([  256,     1, 13090], dtype=int16)\n>>> list(map(hex, A))\n['0x100', '0x1', '0x3322']\n\nArrays of byte-strings are not swapped\n\n>>> A = np.array([b'ceg', b'fac'])\n>>> A.byteswap()\narray([b'ceg', b'fac'], dtype='|S3')\n\n``A.view(A.dtype.newbyteorder()).byteswap()`` produces an array with\nthe same values but different representation in memory\n\n>>> A = np.array([1, 2, 3],dtype=np.int64)\n>>> A.view(np.uint8)\narray([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,\n       0, 0], dtype=uint8)\n>>> A.view(A.dtype.newbyteorder()).byteswap(inplace=True)\narray([1, 2, 3], dtype='>i8')\n>>> A.view(np.uint8)\narray([0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0,\n       0, 3], dtype=uint8)",
           "elixir_name": "byteswap",
           "has_var_keyword": false,
@@ -422,6 +522,7 @@
           "minimum_arity": 1,
           "name": "byteswap",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "False",
@@ -438,9 +539,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.choose(choices, out=None, mode='raise')\n\nUse an index array to construct a new array from a set of choices.\n\nRefer to `numpy.choose` for full documentation.\n\nSee Also\n--------\nnumpy.choose : equivalent function",
           "elixir_name": "choose",
           "has_var_keyword": false,
@@ -449,6 +561,7 @@
           "minimum_arity": 2,
           "name": "choose",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_OR_KEYWORD",
@@ -480,9 +593,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.clip(min=<no value>, max=<no value>, out=None, **kwargs)\n\nReturn an array whose values are limited to ``[min, max]``.\nOne of max or min must be given.\n\nRefer to `numpy.clip` for full documentation.\n\nSee Also\n--------\nnumpy.clip : equivalent function",
           "elixir_name": "clip",
           "has_var_keyword": true,
@@ -491,6 +615,7 @@
           "minimum_arity": 1,
           "name": "clip",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -530,9 +655,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.compress(condition, axis=None, out=None)\n\nReturn selected slices of this array along given axis.\n\nRefer to `numpy.compress` for full documentation.\n\nSee Also\n--------\nnumpy.compress : equivalent function",
           "elixir_name": "compress",
           "has_var_keyword": false,
@@ -541,6 +677,7 @@
           "minimum_arity": 2,
           "name": "compress",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_OR_KEYWORD",
@@ -572,9 +709,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.conj()\n\nComplex-conjugate all elements.\n\nRefer to `numpy.conjugate` for full documentation.\n\nSee Also\n--------\nnumpy.conjugate : equivalent function",
           "elixir_name": "conj",
           "has_var_keyword": false,
@@ -583,6 +731,7 @@
           "minimum_arity": 1,
           "name": "conj",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [],
           "python_name": "conj",
           "required_arity": 1,
@@ -590,9 +739,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.conjugate()\n\nReturn the complex conjugate, element-wise.\n\nRefer to `numpy.conjugate` for full documentation.\n\nSee Also\n--------\nnumpy.conjugate : equivalent function",
           "elixir_name": "conjugate",
           "has_var_keyword": false,
@@ -601,6 +761,7 @@
           "minimum_arity": 1,
           "name": "conjugate",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [],
           "python_name": "conjugate",
           "required_arity": 1,
@@ -608,9 +769,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.copy(order='C')\n\nReturn a copy of the array.\n\nParameters\n----------\norder : {'C', 'F', 'A', 'K'}, optional\n    Controls the memory layout of the copy. 'C' means C-order,\n    'F' means F-order, 'A' means 'F' if `a` is Fortran contiguous,\n    'C' otherwise. 'K' means match the layout of `a` as closely\n    as possible. (Note that this function and :func:`numpy.copy` are very\n    similar but have different default values for their order=\n    arguments, and this function always passes sub-classes through.)\n\nSee also\n--------\nnumpy.copy : Similar function with different default behavior\nnumpy.copyto\n\nNotes\n-----\nThis function is the preferred method for creating an array copy.  The\nfunction :func:`numpy.copy` is similar, but it defaults to using order 'K',\nand will not pass sub-classes through by default.\n\nExamples\n--------\n>>> import numpy as np\n>>> x = np.array([[1,2,3],[4,5,6]], order='F')\n\n>>> y = x.copy()\n\n>>> x.fill(0)\n\n>>> x\narray([[0, 0, 0],\n       [0, 0, 0]])\n\n>>> y\narray([[1, 2, 3],\n       [4, 5, 6]])\n\n>>> y.flags['C_CONTIGUOUS']\nTrue\n\nFor arrays containing Python objects (e.g. dtype=object),\nthe copy is a shallow one. The new array will contain the\nsame object which may lead to surprises if that object can\nbe modified (is mutable):\n\n>>> a = np.array([1, 'm', [2, 3, 4]], dtype=object)\n>>> b = a.copy()\n>>> b[2][0] = 10\n>>> a\narray([1, 'm', list([10, 3, 4])], dtype=object)\n\nTo ensure all elements within an ``object`` array are copied,\nuse `copy.deepcopy`:\n\n>>> import copy\n>>> a = np.array([1, 'm', [2, 3, 4]], dtype=object)\n>>> c = copy.deepcopy(a)\n>>> c[2][0] = 10\n>>> c\narray([1, 'm', list([10, 3, 4])], dtype=object)\n>>> a\narray([1, 'm', list([2, 3, 4])], dtype=object)",
           "elixir_name": "copy",
           "has_var_keyword": false,
@@ -619,6 +791,7 @@
           "minimum_arity": 1,
           "name": "copy",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "'C'",
@@ -635,9 +808,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.cumprod(axis=None, dtype=None, out=None)\n\nReturn the cumulative product of the elements along the given axis.\n\nRefer to `numpy.cumprod` for full documentation.\n\nSee Also\n--------\nnumpy.cumprod : equivalent function",
           "elixir_name": "cumprod",
           "has_var_keyword": false,
@@ -646,6 +830,7 @@
           "minimum_arity": 1,
           "name": "cumprod",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -678,9 +863,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.cumsum(axis=None, dtype=None, out=None)\n\nReturn the cumulative sum of the elements along the given axis.\n\nRefer to `numpy.cumsum` for full documentation.\n\nSee Also\n--------\nnumpy.cumsum : equivalent function",
           "elixir_name": "cumsum",
           "has_var_keyword": false,
@@ -689,6 +885,7 @@
           "minimum_arity": 1,
           "name": "cumsum",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -721,9 +918,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.diagonal(offset=0, axis1=0, axis2=1)\n\nReturn specified diagonals. In NumPy 1.9 the returned array is a\nread-only view instead of a copy as in previous NumPy versions.  In\na future version the read-only restriction will be removed.\n\nRefer to :func:`numpy.diagonal` for full documentation.\n\nSee Also\n--------\nnumpy.diagonal : equivalent function",
           "elixir_name": "diagonal",
           "has_var_keyword": false,
@@ -732,6 +940,7 @@
           "minimum_arity": 1,
           "name": "diagonal",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "0",
@@ -764,9 +973,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.dot(other, /, out=None)\n\nRefer to :func:`numpy.dot` for full documentation.\n\nSee Also\n--------\nnumpy.dot : equivalent function",
           "elixir_name": "dot",
           "has_var_keyword": false,
@@ -775,6 +995,7 @@
           "minimum_arity": 2,
           "name": "dot",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_ONLY",
@@ -798,9 +1019,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.dump(file)\n\nDump a pickle of the array to the specified file.\nThe array can be read back with pickle.load or numpy.load.\n\nParameters\n----------\nfile : str or Path\n    A string naming the dump file.",
           "elixir_name": "dump",
           "has_var_keyword": false,
@@ -809,6 +1041,7 @@
           "minimum_arity": 2,
           "name": "dump",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_OR_KEYWORD",
@@ -824,9 +1057,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.dumps()\n\nReturns the pickle of the array as a string.\n``pickle.loads`` will convert the string back to an array.\n\nParameters\n----------\nNone",
           "elixir_name": "dumps",
           "has_var_keyword": false,
@@ -835,6 +1079,7 @@
           "minimum_arity": 1,
           "name": "dumps",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [],
           "python_name": "dumps",
           "required_arity": 1,
@@ -842,9 +1087,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.fill(value)\n\nFill the array with a scalar value.\n\nParameters\n----------\nvalue : scalar\n    All elements of `a` will be assigned this value.\n\nExamples\n--------\n>>> import numpy as np\n>>> a = np.array([1, 2])\n>>> a.fill(0)\n>>> a\narray([0, 0])\n>>> a = np.empty(2)\n>>> a.fill(1)\n>>> a\narray([1.,  1.])\n\nFill expects a scalar value and always behaves the same as assigning\nto a single array element.  The following is a rare example where this\ndistinction is important:\n\n>>> a = np.array([None, None], dtype=object)\n>>> a[0] = np.array(3)\n>>> a\narray([array(3), None], dtype=object)\n>>> a.fill(np.array(3))\n>>> a\narray([array(3), array(3)], dtype=object)\n\nWhere other forms of assignments will unpack the array being assigned:\n\n>>> a[...] = np.array(3)\n>>> a\narray([3, 3], dtype=object)",
           "elixir_name": "fill",
           "has_var_keyword": false,
@@ -853,6 +1109,7 @@
           "minimum_arity": 2,
           "name": "fill",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_OR_KEYWORD",
@@ -868,9 +1125,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.flatten(order='C')\n\nReturn a copy of the array collapsed into one dimension.\n\nParameters\n----------\norder : {'C', 'F', 'A', 'K'}, optional\n    'C' means to flatten in row-major (C-style) order.\n    'F' means to flatten in column-major (Fortran-\n    style) order. 'A' means to flatten in column-major\n    order if `a` is Fortran *contiguous* in memory,\n    row-major order otherwise. 'K' means to flatten\n    `a` in the order the elements occur in memory.\n    The default is 'C'.\n\nReturns\n-------\ny : ndarray\n    A copy of the input array, flattened to one dimension.\n\nSee Also\n--------\nravel : Return a flattened array.\nflat : A 1-D flat iterator over the array.\n\nExamples\n--------\n>>> import numpy as np\n>>> a = np.array([[1,2], [3,4]])\n>>> a.flatten()\narray([1, 2, 3, 4])\n>>> a.flatten('F')\narray([1, 3, 2, 4])",
           "elixir_name": "flatten",
           "has_var_keyword": false,
@@ -879,6 +1147,7 @@
           "minimum_arity": 1,
           "name": "flatten",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "'C'",
@@ -895,9 +1164,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.getfield(dtype, offset=0)\n\nReturns a field of the given array as a certain type.\n\nA field is a view of the array data with a given data-type. The values in\nthe view are determined by the given type and the offset into the current\narray in bytes. The offset needs to be such that the view dtype fits in the\narray dtype; for example an array of dtype complex128 has 16-byte elements.\nIf taking a view with a 32-bit integer (4 bytes), the offset needs to be\nbetween 0 and 12 bytes.\n\nParameters\n----------\ndtype : str or dtype\n    The data type of the view. The dtype size of the view can not be larger\n    than that of the array itself.\noffset : int\n    Number of bytes to skip before beginning the element view.\n\nExamples\n--------\n>>> import numpy as np\n>>> x = np.diag([1.+1.j]*2)\n>>> x[1, 1] = 2 + 4.j\n>>> x\narray([[1.+1.j,  0.+0.j],\n       [0.+0.j,  2.+4.j]])\n>>> x.getfield(np.float64)\narray([[1.,  0.],\n       [0.,  2.]])\n\nBy choosing an offset of 8 bytes we can select the complex part of the\narray for our view:\n\n>>> x.getfield(np.float64, offset=8)\narray([[1.,  0.],\n       [0.,  4.]])",
           "elixir_name": "getfield",
           "has_var_keyword": false,
@@ -906,6 +1186,7 @@
           "minimum_arity": 2,
           "name": "getfield",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_OR_KEYWORD",
@@ -929,9 +1210,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.item(*args)\n\nCopy an element of an array to a standard Python scalar and return it.\n\nParameters\n----------\n\\*args : Arguments (variable number and type)\n\n    * none: in this case, the method only works for arrays\n      with one element (`a.size == 1`), which element is\n      copied into a standard Python scalar object and returned.\n\n    * int_type: this argument is interpreted as a flat index into\n      the array, specifying which element to copy and return.\n\n    * tuple of int_types: functions as does a single int_type argument,\n      except that the argument is interpreted as an nd-index into the\n      array.\n\nReturns\n-------\nz : Standard Python scalar object\n    A copy of the specified element of the array as a suitable\n    Python scalar\n\nNotes\n-----\nWhen the data type of `a` is longdouble or clongdouble, item() returns\na scalar array object because there is no available Python scalar that\nwould not lose information. Void arrays return a buffer object for item(),\nunless fields are defined, in which case a tuple is returned.\n\n`item` is very similar to a[args], except, instead of an array scalar,\na standard Python scalar is returned. This can be useful for speeding up\naccess to elements of the array and doing arithmetic on elements of the\narray using Python's optimized math.\n\nExamples\n--------\n>>> import numpy as np\n>>> np.random.seed(123)\n>>> x = np.random.randint(9, size=(3, 3))\n>>> x\narray([[2, 2, 6],\n       [1, 3, 6],\n       [1, 0, 1]])\n>>> x.item(3)\n1\n>>> x.item(7)\n0\n>>> x.item((0, 1))\n2\n>>> x.item((2, 2))\n1\n\nFor an array with object dtype, elements are returned as-is.\n\n>>> a = np.array([np.int64(1)], dtype=object)\n>>> a.item() #return np.int64\nnp.int64(1)",
           "elixir_name": "item",
           "has_var_keyword": false,
@@ -940,6 +1232,7 @@
           "minimum_arity": 1,
           "name": "item",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "VAR_POSITIONAL",
@@ -955,9 +1248,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.max(axis=None, out=None, *, keepdims=<no value>, initial=<no value>, where=<no value>)\n\nReturn the maximum along a given axis.\n\nRefer to `numpy.amax` for full documentation.\n\nSee Also\n--------\nnumpy.amax : equivalent function",
           "elixir_name": "max",
           "has_var_keyword": true,
@@ -966,6 +1270,7 @@
           "minimum_arity": 1,
           "name": "max",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -997,9 +1302,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.mean(axis=None, dtype=None, out=None, *, keepdims=<no value>, where=<no value>)\n\nReturns the average of the array elements along given axis.\n\nRefer to `numpy.mean` for full documentation.\n\nSee Also\n--------\nnumpy.mean : equivalent function",
           "elixir_name": "mean",
           "has_var_keyword": true,
@@ -1008,6 +1324,7 @@
           "minimum_arity": 1,
           "name": "mean",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -1047,9 +1364,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.min(axis=None, out=None, *, keepdims=<no value>, initial=<no value>, where=<no value>)\n\nReturn the minimum along a given axis.\n\nRefer to `numpy.amin` for full documentation.\n\nSee Also\n--------\nnumpy.amin : equivalent function",
           "elixir_name": "min",
           "has_var_keyword": true,
@@ -1058,6 +1386,7 @@
           "minimum_arity": 1,
           "name": "min",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -1089,9 +1418,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.nonzero()\n\nReturn the indices of the elements that are non-zero.\n\nRefer to `numpy.nonzero` for full documentation.\n\nSee Also\n--------\nnumpy.nonzero : equivalent function",
           "elixir_name": "nonzero",
           "has_var_keyword": false,
@@ -1100,6 +1440,7 @@
           "minimum_arity": 1,
           "name": "nonzero",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [],
           "python_name": "nonzero",
           "required_arity": 1,
@@ -1107,9 +1448,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.partition(kth, axis=-1, kind='introselect', order=None)\n\nPartially sorts the elements in the array in such a way that the value of\nthe element in k-th position is in the position it would be in a sorted\narray. In the output array, all elements smaller than the k-th element\nare located to the left of this element and all equal or greater are\nlocated to its right. The ordering of the elements in the two partitions\non the either side of the k-th element in the output array is undefined.\n\nParameters\n----------\nkth : int or sequence of ints\n    Element index to partition by. The kth element value will be in its\n    final sorted position and all smaller elements will be moved before it\n    and all equal or greater elements behind it.\n    The order of all elements in the partitions is undefined.\n    If provided with a sequence of kth it will partition all elements\n    indexed by kth of them into their sorted position at once.\n\n    .. deprecated:: 1.22.0\n        Passing booleans as index is deprecated.\naxis : int, optional\n    Axis along which to sort. Default is -1, which means sort along the\n    last axis.\nkind : {'introselect'}, optional\n    Selection algorithm. Default is 'introselect'.\norder : str or list of str, optional\n    When `a` is an array with fields defined, this argument specifies\n    which fields to compare first, second, etc. A single field can\n    be specified as a string, and not all fields need to be specified,\n    but unspecified fields will still be used, in the order in which\n    they come up in the dtype, to break ties.\n\nSee Also\n--------\nnumpy.partition : Return a partitioned copy of an array.\nargpartition : Indirect partition.\nsort : Full sort.\n\nNotes\n-----\nSee ``np.partition`` for notes on the different algorithms.\n\nExamples\n--------\n>>> import numpy as np\n>>> a = np.array([3, 4, 2, 1])\n>>> a.partition(3)\n>>> a\narray([2, 1, 3, 4]) # may vary\n\n>>> a.partition((1, 3))\n>>> a\narray([1, 2, 3, 4])",
           "elixir_name": "partition",
           "has_var_keyword": false,
@@ -1118,6 +1470,7 @@
           "minimum_arity": 2,
           "name": "partition",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_ONLY",
@@ -1157,9 +1510,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.prod(axis=None, dtype=None, out=None, *, keepdims=<no value>, initial=<no value>, where=<no value>)\n\nReturn the product of the array elements over the given axis\n\nRefer to `numpy.prod` for full documentation.\n\nSee Also\n--------\nnumpy.prod : equivalent function",
           "elixir_name": "prod",
           "has_var_keyword": true,
@@ -1168,6 +1532,7 @@
           "minimum_arity": 1,
           "name": "prod",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -1207,9 +1572,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.put(indices, values, mode='raise')\n\nSet ``a.flat[n] = values[n]`` for all ``n`` in indices.\n\nRefer to `numpy.put` for full documentation.\n\nSee Also\n--------\nnumpy.put : equivalent function",
           "elixir_name": "put",
           "has_var_keyword": false,
@@ -1218,6 +1594,7 @@
           "minimum_arity": 3,
           "name": "put",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_ONLY",
@@ -1248,9 +1625,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.ravel(order='C')\n\nReturn a flattened array.\n\nRefer to `numpy.ravel` for full documentation.\n\nSee Also\n--------\nnumpy.ravel : equivalent function\nndarray.flat : a flat iterator on the array.",
           "elixir_name": "ravel",
           "has_var_keyword": false,
@@ -1259,6 +1647,7 @@
           "minimum_arity": 1,
           "name": "ravel",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "'C'",
@@ -1275,9 +1664,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.repeat(repeats, axis=None)\n\nRepeat elements of an array.\n\nRefer to `numpy.repeat` for full documentation.\n\nSee Also\n--------\nnumpy.repeat : equivalent function",
           "elixir_name": "repeat",
           "has_var_keyword": false,
@@ -1286,6 +1686,7 @@
           "minimum_arity": 2,
           "name": "repeat",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_ONLY",
@@ -1309,9 +1710,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.reshape(shape, /, *, order='C', copy=None)\na.reshape(*shape, order='C', copy=None)\n\nReturns an array containing the same data with a new shape.\n\nRefer to `numpy.reshape` for full documentation.\n\nSee Also\n--------\nnumpy.reshape : equivalent function\n\nNotes\n-----\nUnlike the free function `numpy.reshape`, this method on `ndarray` allows\nthe elements of the shape parameter to be passed in as separate arguments.\nFor example, ``a.reshape(4, 2)`` is equivalent to ``a.reshape((4, 2))``.",
           "elixir_name": "reshape",
           "has_var_keyword": false,
@@ -1323,6 +1735,7 @@
             "order",
             "copy"
           ],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "VAR_POSITIONAL",
@@ -1354,9 +1767,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.resize(new_shape, /, *, refcheck=True)\na.resize(*new_shape, refcheck=True)\n\nChange shape and size of array in-place.\n\nParameters\n----------\nnew_shape : tuple of ints, or `n` ints\n    Shape of resized array.\nrefcheck : bool, optional\n    If False, reference count will not be checked. Default is True.\n\nReturns\n-------\nNone\n\nRaises\n------\nValueError\n    If `a` does not own its own data or references or views to it exist,\n    and the data memory must be changed.\n    PyPy only: will always raise if the data memory must be changed, since\n    there is no reliable way to determine if references or views to it\n    exist.\n\nSystemError\n    If the `order` keyword argument is specified. This behaviour is a\n    bug in NumPy.\n\nSee Also\n--------\nresize : Return a new array with the specified shape.\n\nNotes\n-----\nThis reallocates space for the data area if necessary.\n\nOnly contiguous arrays (data elements consecutive in memory) can be\nresized.\n\nThe purpose of the reference count check is to make sure you\ndo not use this array as a buffer for another Python object and then\nreallocate the memory. However, reference counts can increase in\nother ways so if you are sure that you have not shared the memory\nfor this array with another Python object, then you may safely set\n`refcheck` to False.\n\nExamples\n--------\nShrinking an array: array is flattened (in the order that the data are\nstored in memory), resized, and reshaped:\n\n>>> import numpy as np\n\n>>> a = np.array([[0, 1], [2, 3]], order='C')\n>>> a.resize((2, 1))\n>>> a\narray([[0],\n       [1]])\n\n>>> a = np.array([[0, 1], [2, 3]], order='F')\n>>> a.resize((2, 1))\n>>> a\narray([[0],\n       [2]])\n\nEnlarging an array: as above, but missing entries are filled with zeros:\n\n>>> b = np.array([[0, 1], [2, 3]])\n>>> b.resize(2, 3) # new_shape parameter doesn't have to be a tuple\n>>> b\narray([[0, 1, 2],\n       [3, 0, 0]])\n\nReferencing an array prevents resizing...\n\n>>> c = a\n>>> a.resize((1, 1))\nTraceback (most recent call last):\n...\nValueError: cannot resize an array that references or is referenced ...\n\nUnless `refcheck` is False:\n\n>>> a.resize((1, 1), refcheck=False)\n>>> a\narray([[0]])\n>>> c\narray([[0]])",
           "elixir_name": "resize",
           "has_var_keyword": false,
@@ -1367,6 +1791,7 @@
           "optional_keyword_only": [
             "refcheck"
           ],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "VAR_POSITIONAL",
@@ -1390,9 +1815,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.round(decimals=0, out=None)\n\nReturn `a` with each element rounded to the given number of decimals.\n\nRefer to `numpy.around` for full documentation.\n\nSee Also\n--------\nnumpy.around : equivalent function",
           "elixir_name": "round",
           "has_var_keyword": false,
@@ -1401,6 +1837,7 @@
           "minimum_arity": 1,
           "name": "round",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "0",
@@ -1425,9 +1862,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.searchsorted(v, side='left', sorter=None)\n\nFind indices where elements of `v` should be inserted in `a` to maintain order.\n\nFor full documentation, see `numpy.searchsorted`.\n\nSee Also\n--------\nnumpy.searchsorted : equivalent function",
           "elixir_name": "searchsorted",
           "has_var_keyword": false,
@@ -1436,6 +1884,7 @@
           "minimum_arity": 2,
           "name": "searchsorted",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_ONLY",
@@ -1467,9 +1916,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.setfield(val, dtype, offset=0)\n\nPut a value into a specified place in a field defined by a data-type.\n\nPlace `val` into `a`'s field defined by `dtype` and beginning `offset`\nbytes into the field.\n\nParameters\n----------\nval : object\n    Value to be placed in field.\ndtype : dtype object\n    Data-type of the field in which to place `val`.\noffset : int, optional\n    The number of bytes into the field at which to place `val`.\n\nReturns\n-------\nNone\n\nSee Also\n--------\ngetfield\n\nExamples\n--------\n>>> import numpy as np\n>>> x = np.eye(3)\n>>> x.getfield(np.float64)\narray([[1.,  0.,  0.],\n       [0.,  1.,  0.],\n       [0.,  0.,  1.]])\n>>> x.setfield(3, np.int32)\n>>> x.getfield(np.int32)\narray([[3, 3, 3],\n       [3, 3, 3],\n       [3, 3, 3]], dtype=int32)\n>>> x\narray([[1.0e+000, 1.5e-323, 1.5e-323],\n       [1.5e-323, 1.0e+000, 1.5e-323],\n       [1.5e-323, 1.5e-323, 1.0e+000]])\n>>> x.setfield(np.eye(3), np.int32)\n>>> x\narray([[1.,  0.,  0.],\n       [0.,  1.,  0.],\n       [0.,  0.,  1.]])",
           "elixir_name": "setfield",
           "has_var_keyword": false,
@@ -1478,6 +1938,7 @@
           "minimum_arity": 3,
           "name": "setfield",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_ONLY",
@@ -1508,9 +1969,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.setflags(write=None, align=None, uic=None)\n\nSet array flags WRITEABLE, ALIGNED, WRITEBACKIFCOPY,\nrespectively.\n\nThese Boolean-valued flags affect how numpy interprets the memory\narea used by `a` (see Notes below). The ALIGNED flag can only\nbe set to True if the data is actually aligned according to the type.\nThe WRITEBACKIFCOPY flag can never be set\nto True. The flag WRITEABLE can only be set to True if the array owns its\nown memory, or the ultimate owner of the memory exposes a writeable buffer\ninterface, or is a string. (The exception for string is made so that\nunpickling can be done without copying memory.)\n\nParameters\n----------\nwrite : bool, optional\n    Describes whether or not `a` can be written to.\nalign : bool, optional\n    Describes whether or not `a` is aligned properly for its type.\nuic : bool, optional\n    Describes whether or not `a` is a copy of another \"base\" array.\n\nNotes\n-----\nArray flags provide information about how the memory area used\nfor the array is to be interpreted. There are 7 Boolean flags\nin use, only three of which can be changed by the user:\nWRITEBACKIFCOPY, WRITEABLE, and ALIGNED.\n\nWRITEABLE (W) the data area can be written to;\n\nALIGNED (A) the data and strides are aligned appropriately for the hardware\n(as determined by the compiler);\n\nWRITEBACKIFCOPY (X) this array is a copy of some other array (referenced\nby .base). When the C-API function PyArray_ResolveWritebackIfCopy is\ncalled, the base array will be updated with the contents of this array.\n\nAll flags can be accessed using the single (upper case) letter as well\nas the full name.\n\nExamples\n--------\n>>> import numpy as np\n>>> y = np.array([[3, 1, 7],\n...               [2, 0, 0],\n...               [8, 5, 9]])\n>>> y\narray([[3, 1, 7],\n       [2, 0, 0],\n       [8, 5, 9]])\n>>> y.flags\n  C_CONTIGUOUS : True\n  F_CONTIGUOUS : False\n  OWNDATA : True\n  WRITEABLE : True\n  ALIGNED : True\n  WRITEBACKIFCOPY : False\n>>> y.setflags(write=0, align=0)\n>>> y.flags\n  C_CONTIGUOUS : True\n  F_CONTIGUOUS : False\n  OWNDATA : True\n  WRITEABLE : False\n  ALIGNED : False\n  WRITEBACKIFCOPY : False\n>>> y.setflags(uic=1)\nTraceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\nValueError: cannot set WRITEBACKIFCOPY flag to True",
           "elixir_name": "setflags",
           "has_var_keyword": false,
@@ -1523,6 +1995,7 @@
             "align",
             "uic"
           ],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -1555,9 +2028,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.sort(axis=-1, kind=None, order=None, *, stable=None)\n\nSort an array in-place. Refer to `numpy.sort` for full documentation.\n\nParameters\n----------\naxis : int, optional\n    Axis along which to sort. Default is -1, which means sort along the\n    last axis.\nkind : {'quicksort', 'mergesort', 'heapsort', 'stable'}, optional\n    Sorting algorithm. The default is 'quicksort'. Note that both 'stable'\n    and 'mergesort' use timsort under the covers and, in general, the\n    actual implementation will vary with datatype. The 'mergesort' option\n    is retained for backwards compatibility.\norder : str or list of str, optional\n    When `a` is an array with fields defined, this argument specifies\n    which fields to compare first, second, etc.  A single field can\n    be specified as a string, and not all fields need be specified,\n    but unspecified fields will still be used, in the order in which\n    they come up in the dtype, to break ties.\nstable : bool, optional\n    Sort stability. If ``True``, the returned array will maintain\n    the relative order of ``a`` values which compare as equal.\n    If ``False`` or ``None``, this is not guaranteed. Internally,\n    this option selects ``kind='stable'``. Default: ``None``.\n\n    .. versionadded:: 2.0.0\n\nSee Also\n--------\nnumpy.sort : Return a sorted copy of an array.\nnumpy.argsort : Indirect sort.\nnumpy.lexsort : Indirect stable sort on multiple keys.\nnumpy.searchsorted : Find elements in sorted array.\nnumpy.partition: Partial sort.\n\nNotes\n-----\nSee `numpy.sort` for notes on the different sorting algorithms.\n\nExamples\n--------\n>>> import numpy as np\n>>> a = np.array([[1,4], [3,1]])\n>>> a.sort(axis=1)\n>>> a\narray([[1, 4],\n       [1, 3]])\n>>> a.sort(axis=0)\n>>> a\narray([[1, 3],\n       [1, 4]])\n\nUse the `order` keyword to specify a field to use when sorting a\nstructured array:\n\n>>> a = np.array([('a', 2), ('c', 1)], dtype=[('x', 'S1'), ('y', int)])\n>>> a.sort(order='y')\n>>> a\narray([(b'c', 1), (b'a', 2)],\n      dtype=[('x', 'S1'), ('y', '<i8')])",
           "elixir_name": "sort",
           "has_var_keyword": false,
@@ -1568,6 +2052,7 @@
           "optional_keyword_only": [
             "stable"
           ],
+          "overload_count": null,
           "parameters": [
             {
               "default": "-1",
@@ -1608,9 +2093,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.squeeze(axis=None)\n\nRemove axes of length one from `a`.\n\nRefer to `numpy.squeeze` for full documentation.\n\nSee Also\n--------\nnumpy.squeeze : equivalent function",
           "elixir_name": "squeeze",
           "has_var_keyword": false,
@@ -1619,6 +2115,7 @@
           "minimum_arity": 1,
           "name": "squeeze",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -1635,9 +2132,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.std(axis=None, dtype=None, out=None, ddof=0, *, keepdims=<no value>, where=<no value>, mean=<no value>)\n\nReturns the standard deviation of the array elements along given axis.\n\nRefer to `numpy.std` for full documentation.\n\nSee Also\n--------\nnumpy.std : equivalent function",
           "elixir_name": "std",
           "has_var_keyword": true,
@@ -1646,6 +2154,7 @@
           "minimum_arity": 1,
           "name": "std",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -1693,9 +2202,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.sum(axis=None, dtype=None, out=None, *, keepdims=<no value>, initial=<no value>, where=<no value>)\n\nReturn the sum of the array elements over the given axis.\n\nRefer to `numpy.sum` for full documentation.\n\nSee Also\n--------\nnumpy.sum : equivalent function",
           "elixir_name": "sum",
           "has_var_keyword": true,
@@ -1704,6 +2224,7 @@
           "minimum_arity": 1,
           "name": "sum",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -1743,9 +2264,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.swapaxes(axis1, axis2, /)\n\nReturn a view of the array with `axis1` and `axis2` interchanged.\n\nRefer to `numpy.swapaxes` for full documentation.\n\nSee Also\n--------\nnumpy.swapaxes : equivalent function",
           "elixir_name": "swapaxes",
           "has_var_keyword": false,
@@ -1754,6 +2286,7 @@
           "minimum_arity": 3,
           "name": "swapaxes",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_ONLY",
@@ -1776,9 +2309,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.take(indices, axis=None, out=None, mode='raise')\n\nReturn an array formed from the elements of `a` at the given indices.\n\nRefer to `numpy.take` for full documentation.\n\nSee Also\n--------\nnumpy.take : equivalent function",
           "elixir_name": "take",
           "has_var_keyword": false,
@@ -1787,6 +2331,7 @@
           "minimum_arity": 2,
           "name": "take",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_ONLY",
@@ -1826,9 +2371,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.to_device(device, /, *, stream=None)\n\nFor Array API compatibility.  Since NumPy only supports CPU arrays, this\nmethod is a no-op that returns the same array.\n\nParameters\n----------\ndevice : \"cpu\"\n    Must be ``\"cpu\"``.\nstream : None, optional\n    Currently unsupported.\n\nReturns\n-------\nout : Self\n    Returns the same array.",
           "elixir_name": "to_device",
           "has_var_keyword": false,
@@ -1839,6 +2395,7 @@
           "optional_keyword_only": [
             "stream"
           ],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_ONLY",
@@ -1862,9 +2419,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.tobytes(order='C')\n\nConstruct Python bytes containing the raw data bytes in the array.\n\nConstructs Python bytes showing a copy of the raw contents of\ndata memory. The bytes object is produced in C-order by default.\nThis behavior is controlled by the ``order`` parameter.\n\nParameters\n----------\norder : {'C', 'F', 'A'}, optional\n    Controls the memory layout of the bytes object. 'C' means C-order,\n    'F' means F-order, 'A' (short for *Any*) means 'F' if `a` is\n    Fortran contiguous, 'C' otherwise. Default is 'C'.\n\nReturns\n-------\ns : bytes\n    Python bytes exhibiting a copy of `a`'s raw data.\n\nSee also\n--------\nfrombuffer\n    Inverse of this operation, construct a 1-dimensional array from Python\n    bytes.\n\nExamples\n--------\n>>> import numpy as np\n>>> x = np.array([[0, 1], [2, 3]], dtype='<u2')\n>>> x.tobytes()\nb'\\x00\\x00\\x01\\x00\\x02\\x00\\x03\\x00'\n>>> x.tobytes('C') == x.tobytes()\nTrue\n>>> x.tobytes('F')\nb'\\x00\\x00\\x02\\x00\\x01\\x00\\x03\\x00'",
           "elixir_name": "tobytes",
           "has_var_keyword": false,
@@ -1873,6 +2441,7 @@
           "minimum_arity": 1,
           "name": "tobytes",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "'C'",
@@ -1889,9 +2458,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.tofile(fid, /, sep='', format='%s')\n\nWrite array to a file as text or binary (default).\n\nData is always written in 'C' order, independent of the order of `a`.\nThe data produced by this method can be recovered using the function\nfromfile().\n\nParameters\n----------\nfid : file or str or Path\n    An open file object, or a string containing a filename.\nsep : str\n    Separator between array items for text output.\n    If \"\" (empty), a binary file is written, equivalent to\n    ``file.write(a.tobytes())``.\nformat : str\n    Format string for text file output.\n    Each entry in the array is formatted to text by first converting\n    it to the closest Python type, and then using \"format\" % item.\n\nNotes\n-----\nThis is a convenience function for quick storage of array data.\nInformation on endianness and precision is lost, so this method is not a\ngood choice for files intended to archive data or transport data between\nmachines with different endianness. Some of these problems can be overcome\nby outputting the data as text files, at the expense of speed and file\nsize.\n\nWhen fid is a file object, array contents are directly written to the\nfile, bypassing the file object's ``write`` method. As a result, tofile\ncannot be used with files objects supporting compression (e.g., GzipFile)\nor file-like objects that do not support ``fileno()`` (e.g., BytesIO).",
           "elixir_name": "tofile",
           "has_var_keyword": false,
@@ -1900,6 +2480,7 @@
           "minimum_arity": 2,
           "name": "tofile",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_ONLY",
@@ -1931,9 +2512,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.tolist()\n\nReturn the array as an ``a.ndim``-levels deep nested list of Python scalars.\n\nReturn a copy of the array data as a (nested) Python list.\nData items are converted to the nearest compatible builtin Python type, via\nthe `~numpy.ndarray.item` method.\n\nIf ``a.ndim`` is 0, then since the depth of the nested list is 0, it will\nnot be a list at all, but a simple Python scalar.\n\nParameters\n----------\nnone\n\nReturns\n-------\ny : object, or list of object, or list of list of object, or ...\n    The possibly nested list of array elements.\n\nNotes\n-----\nThe array may be recreated via ``a = np.array(a.tolist())``, although this\nmay sometimes lose precision.\n\nExamples\n--------\nFor a 1D array, ``a.tolist()`` is almost the same as ``list(a)``,\nexcept that ``tolist`` changes numpy scalars to Python scalars:\n\n>>> import numpy as np\n>>> a = np.uint32([1, 2])\n>>> a_list = list(a)\n>>> a_list\n[np.uint32(1), np.uint32(2)]\n>>> type(a_list[0])\n<class 'numpy.uint32'>\n>>> a_tolist = a.tolist()\n>>> a_tolist\n[1, 2]\n>>> type(a_tolist[0])\n<class 'int'>\n\nAdditionally, for a 2D array, ``tolist`` applies recursively:\n\n>>> a = np.array([[1, 2], [3, 4]])\n>>> list(a)\n[array([1, 2]), array([3, 4])]\n>>> a.tolist()\n[[1, 2], [3, 4]]\n\nThe base case for this recursion is a 0D array:\n\n>>> a = np.array(1)\n>>> list(a)\nTraceback (most recent call last):\n  ...\nTypeError: iteration over a 0-d array\n>>> a.tolist()\n1",
           "elixir_name": "tolist",
           "has_var_keyword": false,
@@ -1942,6 +2534,7 @@
           "minimum_arity": 1,
           "name": "tolist",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [],
           "python_name": "tolist",
           "required_arity": 1,
@@ -1949,9 +2542,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.trace(offset=0, axis1=0, axis2=1, dtype=None, out=None)\n\nReturn the sum along diagonals of the array.\n\nRefer to `numpy.trace` for full documentation.\n\nSee Also\n--------\nnumpy.trace : equivalent function",
           "elixir_name": "trace",
           "has_var_keyword": false,
@@ -1960,6 +2564,7 @@
           "minimum_arity": 1,
           "name": "trace",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "0",
@@ -2008,9 +2613,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.transpose(*axes)\n\nReturns a view of the array with axes transposed.\n\nRefer to `numpy.transpose` for full documentation.\n\nParameters\n----------\naxes : None, tuple of ints, or `n` ints\n\n * None or no argument: reverses the order of the axes.\n\n * tuple of ints: `i` in the `j`-th place in the tuple means that the\n   array's `i`-th axis becomes the transposed array's `j`-th axis.\n\n * `n` ints: same as an n-tuple of the same ints (this form is\n   intended simply as a \"convenience\" alternative to the tuple form).\n\nReturns\n-------\np : ndarray\n    View of the array with its axes suitably permuted.\n\nSee Also\n--------\ntranspose : Equivalent function.\nndarray.T : Array property returning the array transposed.\nndarray.reshape : Give a new shape to an array without changing its data.\n\nExamples\n--------\n>>> import numpy as np\n>>> a = np.array([[1, 2], [3, 4]])\n>>> a\narray([[1, 2],\n       [3, 4]])\n>>> a.transpose()\narray([[1, 3],\n       [2, 4]])\n>>> a.transpose((1, 0))\narray([[1, 3],\n       [2, 4]])\n>>> a.transpose(1, 0)\narray([[1, 3],\n       [2, 4]])\n\n>>> a = np.array([1, 2, 3, 4])\n>>> a\narray([1, 2, 3, 4])\n>>> a.transpose()\narray([1, 2, 3, 4])",
           "elixir_name": "transpose",
           "has_var_keyword": false,
@@ -2019,6 +2635,7 @@
           "minimum_arity": 1,
           "name": "transpose",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "VAR_POSITIONAL",
@@ -2034,9 +2651,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.var(axis=None, dtype=None, out=None, ddof=0, *, keepdims=<no value>, where=<no value>, mean=<no value>)\n\nReturns the variance of the array elements, along given axis.\n\nRefer to `numpy.var` for full documentation.\n\nSee Also\n--------\nnumpy.var : equivalent function",
           "elixir_name": "var",
           "has_var_keyword": true,
@@ -2045,6 +2673,7 @@
           "minimum_arity": 1,
           "name": "var",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "default": "None",
@@ -2092,9 +2721,20 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         },
         {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
           "docstring": "a.view([dtype][, type])\n\nNew view of array with the same data.\n\n.. note::\n    Passing None for ``dtype`` is different from omitting the parameter,\n    since the former invokes ``dtype(None)`` which is an alias for\n    ``dtype('float64')``.\n\nParameters\n----------\ndtype : data-type or ndarray sub-class, optional\n    Data-type descriptor of the returned view, e.g., float32 or int16.\n    Omitting it results in the view having the same data-type as `a`.\n    This argument can also be specified as an ndarray sub-class, which\n    then specifies the type of the returned object (this is equivalent to\n    setting the ``type`` parameter).\ntype : Python type, optional\n    Type of the returned view, e.g., ndarray or matrix.  Again, omission\n    of the parameter results in type preservation.\n\nNotes\n-----\n``a.view()`` is used two different ways:\n\n``a.view(some_dtype)`` or ``a.view(dtype=some_dtype)`` constructs a view\nof the array's memory with a different data-type.  This can cause a\nreinterpretation of the bytes of memory.\n\n``a.view(ndarray_subclass)`` or ``a.view(type=ndarray_subclass)`` just\nreturns an instance of `ndarray_subclass` that looks at the same array\n(same shape, dtype, etc.)  This does not cause a reinterpretation of the\nmemory.\n\nFor ``a.view(some_dtype)``, if ``some_dtype`` has a different number of\nbytes per entry than the previous dtype (for example, converting a regular\narray to a structured array), then the last axis of ``a`` must be\ncontiguous. This axis will be resized in the result.\n\n.. versionchanged:: 1.23.0\n   Only the last axis needs to be contiguous. Previously, the entire array\n   had to be C-contiguous.\n\nExamples\n--------\n>>> import numpy as np\n>>> x = np.array([(-1, 2)], dtype=[('a', np.int8), ('b', np.int8)])\n\nViewing array data using a different type and dtype:\n\n>>> nonneg = np.dtype([(\"a\", np.uint8), (\"b\", np.uint8)])\n>>> y = x.view(dtype=nonneg, type=np.recarray)\n>>> x[\"a\"]\narray([-1], dtype=int8)\n>>> y.a\narray([255], dtype=uint8)\n\nCreating a view on a structured array so it can be used in calculations\n\n>>> x = np.array([(1, 2),(3,4)], dtype=[('a', np.int8), ('b', np.int8)])\n>>> xv = x.view(dtype=np.int8).reshape(-1,2)\n>>> xv\narray([[1, 2],\n       [3, 4]], dtype=int8)\n>>> xv.mean(0)\narray([2.,  3.])\n\nMaking changes to the view changes the underlying array\n\n>>> xv[0,1] = 20\n>>> x\narray([(1, 20), (3,  4)], dtype=[('a', 'i1'), ('b', 'i1')])\n\nUsing a view to convert an array to a recarray:\n\n>>> z = x.view(np.recarray)\n>>> z.a\narray([1, 3], dtype=int8)\n\nViews share data:\n\n>>> x[0] = (9, 10)\n>>> z[0]\nnp.record((9, 10), dtype=[('a', 'i1'), ('b', 'i1')])\n\nViews that change the dtype size (bytes per entry) should normally be\navoided on arrays defined by slices, transposes, fortran-ordering, etc.:\n\n>>> x = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.int16)\n>>> y = x[:, ::2]\n>>> y\narray([[1, 3],\n       [4, 6]], dtype=int16)\n>>> y.view(dtype=[('width', np.int16), ('length', np.int16)])\nTraceback (most recent call last):\n    ...\nValueError: To change to a dtype of a different size, the last axis must be contiguous\n>>> z = y.copy()\n>>> z.view(dtype=[('width', np.int16), ('length', np.int16)])\narray([[(1, 3)],\n       [(4, 6)]], dtype=[('width', '<i2'), ('length', '<i2')])\n\nHowever, views that change dtype are totally fine for arrays with a\ncontiguous last axis, even if the rest of the axes are not C-contiguous:\n\n>>> x = np.arange(2 * 3 * 4, dtype=np.int8).reshape(2, 3, 4)\n>>> x.transpose(1, 0, 2).view(np.int16)\narray([[[ 256,  770],\n        [3340, 3854]],\n<BLANKLINE>\n       [[1284, 1798],\n        [4368, 4882]],\n<BLANKLINE>\n       [[2312, 2826],\n        [5396, 5910]]], dtype=int16)",
           "elixir_name": "view",
           "has_var_keyword": true,
@@ -2103,6 +2743,7 @@
           "minimum_arity": 1,
           "name": "view",
           "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "VAR_POSITIONAL",
@@ -2125,7 +2766,16 @@
           "return_type": {
             "type": "any"
           },
-          "signature_available": true
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         }
       ],
       "module": "Numpy.ndarray",

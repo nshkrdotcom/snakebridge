@@ -27,14 +27,17 @@ defmodule SnakeBridge.Generator.Class do
         render_constructor(plan, args_name)
       end
 
-    methods_source =
+    methods =
       methods
       |> Enum.reject(fn method -> method["name"] == "__init__" end)
       |> deduplicate_methods()
-      |> Enum.map_join("\n\n", &render_method/1)
+
+    methods_source = Enum.map_join(methods, "\n\n", &render_method/1)
+    method_names = resolved_method_names(methods)
 
     attrs_source =
       attrs
+      |> resolve_attribute_names(method_names)
       |> Enum.map_join("\n\n", &render_attribute/1)
 
     """
@@ -128,15 +131,54 @@ defmodule SnakeBridge.Generator.Class do
     """
   end
 
-  defp render_attribute(attr) do
-    {elixir_name, python_name} = sanitize_attribute_name(attr)
-
+  defp render_attribute({elixir_name, python_name}) do
     """
         @spec #{elixir_name}(SnakeBridge.Ref.t()) :: {:ok, term()} | {:error, Snakepit.Error.t()}
         def #{elixir_name}(ref) do
           SnakeBridge.Runtime.get_attr(ref, :#{python_name})
         end
     """
+  end
+
+  defp resolve_attribute_names(attrs, method_names) do
+    {resolved, _used} =
+      Enum.map_reduce(attrs, MapSet.new(method_names), fn attr, used ->
+        {elixir_name, python_name} = sanitize_attribute_name(attr)
+        {unique_name, used} = ensure_unique_attr_name(elixir_name, used)
+        {{unique_name, python_name}, used}
+      end)
+
+    resolved
+  end
+
+  defp ensure_unique_attr_name(name, used) do
+    if MapSet.member?(used, name) do
+      unique_attr_name(name <> "_attr", used, 2)
+    else
+      {name, MapSet.put(used, name)}
+    end
+  end
+
+  defp unique_attr_name(candidate, used, counter) do
+    if MapSet.member?(used, candidate) do
+      unique_attr_name(candidate <> Integer.to_string(counter), used, counter + 1)
+    else
+      {candidate, MapSet.put(used, candidate)}
+    end
+  end
+
+  defp resolved_method_names(methods) do
+    methods
+    |> Enum.map(fn method ->
+      python_name = method["python_name"] || method["name"] || method[:name] || ""
+
+      case resolve_method_name(method, python_name) do
+        {elixir_name, _python_name} -> elixir_name
+        _ -> nil
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> MapSet.new()
   end
 
   defp sanitize_attribute_name(attr) do

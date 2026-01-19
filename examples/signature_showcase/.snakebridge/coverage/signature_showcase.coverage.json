@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-01-19T23:49:45.783586Z",
+  "issues": [],
+  "library": "signature_showcase",
+  "stubs": {
+    "count": 0,
+    "sources": []
+  },
+  "summary": {
+    "class_methods": 0,
+    "doc_coverage_ratio": 1.0,
+    "doc_tiers": {
+      "runtime": 4
+    },
+    "functions": 4,
+    "non_variadic_ratio": 1.0,
+    "signature_tiers": {
+      "runtime": 4
+    },
+    "symbols_total": 4
+  }
+}

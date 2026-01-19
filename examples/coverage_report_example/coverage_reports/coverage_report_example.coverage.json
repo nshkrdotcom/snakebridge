@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-01-19T23:49:56.059878Z",
+  "issues": [],
+  "library": "coverage_report_example",
+  "stubs": {
+    "count": 0,
+    "sources": []
+  },
+  "summary": {
+    "class_methods": 2,
+    "doc_coverage_ratio": 1.0,
+    "doc_tiers": {
+      "module": 1,
+      "runtime": 3
+    },
+    "functions": 2,
+    "non_variadic_ratio": 1.0,
+    "signature_tiers": {
+      "runtime": 4
+    },
+    "symbols_total": 4
+  }
+}

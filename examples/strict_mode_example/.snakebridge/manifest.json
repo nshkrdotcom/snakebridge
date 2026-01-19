@@ -2,40 +2,133 @@
   "classes": {},
   "symbols": {
     "StrictModeExample.add/2": {
-      "docstring": "",
+      "doc_missing_reason": "runtime docstring missing",
+      "doc_source": "module",
+      "docstring": "Local module for strict mode example.",
+      "elixir_name": "add",
       "function": "add",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 3,
+      "minimum_arity": 2,
       "module": "StrictModeExample",
       "name": "add",
+      "optional_keyword_only": [],
+      "overload_count": null,
       "parameters": [
         {
           "kind": "POSITIONAL_OR_KEYWORD",
-          "name": "a"
+          "name": "a",
+          "type": {
+            "type": "any"
+          }
         },
         {
           "kind": "POSITIONAL_OR_KEYWORD",
-          "name": "b"
+          "name": "b",
+          "type": {
+            "type": "any"
+          }
         }
       ],
       "python_module": "strict_mode_example",
-      "return_annotation": null
+      "python_name": "add",
+      "required_arity": 2,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true,
+      "signature_detail": "inspect.signature",
+      "signature_missing_reason": [
+        "runtime: no type info",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found"
+      ],
+      "signature_source": "runtime"
     },
     "StrictModeExample.multiply/2": {
-      "docstring": "",
+      "doc_missing_reason": "runtime docstring missing",
+      "doc_source": "module",
+      "docstring": "Local module for strict mode example.",
+      "elixir_name": "multiply",
       "function": "multiply",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 3,
+      "minimum_arity": 2,
       "module": "StrictModeExample",
       "name": "multiply",
+      "optional_keyword_only": [],
+      "overload_count": null,
       "parameters": [
         {
           "kind": "POSITIONAL_OR_KEYWORD",
-          "name": "a"
+          "name": "a",
+          "type": {
+            "type": "any"
+          }
         },
         {
           "kind": "POSITIONAL_OR_KEYWORD",
-          "name": "b"
+          "name": "b",
+          "type": {
+            "type": "any"
+          }
         }
       ],
       "python_module": "strict_mode_example",
-      "return_annotation": null
+      "python_name": "multiply",
+      "required_arity": 2,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true,
+      "signature_detail": "inspect.signature",
+      "signature_missing_reason": [
+        "runtime: no type info",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found"
+      ],
+      "signature_source": "runtime"
+    },
+    "StrictModeExample.mystery/0": {
+      "doc_missing_reason": "runtime docstring missing",
+      "doc_source": "module",
+      "docstring": "Local module for strict mode example.",
+      "elixir_name": "mystery",
+      "function": "mystery",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 9,
+      "minimum_arity": 0,
+      "module": "StrictModeExample",
+      "name": "mystery",
+      "optional_keyword_only": [],
+      "overload_count": null,
+      "parameters": [],
+      "python_module": "strict_mode_example",
+      "python_name": "mystery",
+      "required_arity": 0,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": false,
+      "signature_detail": null,
+      "signature_missing_reason": [
+        "runtime: signature unavailable",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found"
+      ],
+      "signature_source": "variadic"
     }
   },
   "version": "0.7.0"

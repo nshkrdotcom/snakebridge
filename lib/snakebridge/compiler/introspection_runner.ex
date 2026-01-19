@@ -3,7 +3,7 @@ defmodule SnakeBridge.Compiler.IntrospectionRunner do
 
   alias SnakeBridge.Introspector
 
-  @spec run(list()) :: list()
+  @spec run(list()) :: {list(), list()}
   def run(targets) do
     {updates, errors} =
       targets
@@ -14,17 +14,12 @@ defmodule SnakeBridge.Compiler.IntrospectionRunner do
             {[{library, python_module, infos} | acc], errs}
 
           {:error, reason} ->
-            log_introspection_error(library, python_module, reason)
             emit_introspection_error_telemetry(library, python_module, reason)
             {acc, [{library, python_module, reason} | errs]}
         end
       end)
 
-    if errors != [] do
-      show_introspection_summary(errors)
-    end
-
-    Enum.reverse(updates)
+    {Enum.reverse(updates), Enum.reverse(errors)}
   end
 
   @doc false
@@ -91,29 +86,5 @@ defmodule SnakeBridge.Compiler.IntrospectionRunner do
         reason: reason
       }
     )
-  end
-
-  defp show_introspection_summary(errors) do
-    count = length(errors)
-
-    message = """
-
-    ================================================================================
-    SnakeBridge Introspection Summary
-    ================================================================================
-    #{count} introspection error(s) occurred. Some symbols may be missing from
-    the generated bindings.
-
-    To resolve:
-      1. Check the errors above for details
-      2. Ensure Python packages are installed: mix snakebridge.setup
-      3. Check for import errors in your Python dependencies
-      4. Re-run: mix compile
-
-    The compilation will continue, but affected symbols will not be available.
-    ================================================================================
-    """
-
-    Mix.shell().info(message)
   end
 end

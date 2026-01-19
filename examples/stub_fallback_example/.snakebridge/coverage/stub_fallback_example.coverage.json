@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-01-19T23:50:04.577807Z",
+  "issues": [],
+  "library": "stub_fallback_example",
+  "stubs": {
+    "count": 1,
+    "sources": [
+      "/home/home/p/g/n/snakebridge/examples/stub_fallback_example/priv/python/stub_fallback_example/__init__.pyi"
+    ]
+  },
+  "summary": {
+    "class_methods": 0,
+    "doc_coverage_ratio": 1.0,
+    "doc_tiers": {
+      "stub": 1
+    },
+    "functions": 1,
+    "non_variadic_ratio": 1.0,
+    "signature_tiers": {
+      "stub": 1
+    },
+    "symbols_total": 1
+  }
+}

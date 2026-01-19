@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-01-19T23:50:54.606894Z",
+  "issues": [],
+  "library": "streaming_example",
+  "stubs": {
+    "count": 0,
+    "sources": []
+  },
+  "summary": {
+    "class_methods": 0,
+    "doc_coverage_ratio": 1.0,
+    "doc_tiers": {
+      "runtime": 1
+    },
+    "functions": 1,
+    "non_variadic_ratio": 1.0,
+    "signature_tiers": {
+      "runtime": 1
+    },
+    "symbols_total": 1
+  }
+}

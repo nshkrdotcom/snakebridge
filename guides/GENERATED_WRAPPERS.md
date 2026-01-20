@@ -112,7 +112,7 @@ Results cache in `.snakebridge/manifest.json`:
 
 ```json
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "symbols": {
     "Numpy.mean/1": {
       "module": "Numpy",
@@ -396,9 +396,9 @@ The `snakebridge.lock` captures environment state:
 
 ```json
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "environment": {
-    "snakebridge_version": "0.10.0",
+    "snakebridge_version": "0.11.0",
     "generator_hash": "a1b2c3...",
     "python_version": "3.12.3",
     "elixir_version": "1.18.4",

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-01-19
+
+### Fixed
+- SnakeBridge compiler now short-circuits when bindings are already up to date (manifest/lock/generated files).
+- Suppressed the compile-time "preparing bindings" banner and the extra compile hint by default.
+- Examples now enable Snakepit's Python dependency auto-install to prevent missing gRPC/protobuf imports when running stdlib-only demos.
+
 ## [0.10.0] - 2026-01-19
 
 ### Added
@@ -661,6 +668,7 @@ Numpy.compute(data, __runtime__: [timeout: 600_000])
 - Type system mapper
 - Basic code generation
 
+[0.10.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.2...v0.8.3

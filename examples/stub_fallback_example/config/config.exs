@@ -7,3 +7,6 @@ config :snakebridge,
 
 config :logger,
   level: :warning
+
+config :snakepit,
+  auto_install_python_deps: true

@@ -23,7 +23,7 @@ def project do
 end
 
 defp deps do
-  [{:snakebridge, "~> 0.11.0"}]
+  [{:snakebridge, "~> 0.12.0"}]
 end
 
 defp python_deps do
@@ -184,11 +184,15 @@ end
 # config/config.exs
 config :snakebridge,
   generated_dir: "lib/snakebridge_generated",
+  generated_layout: :split,  # :split (default) | :single
   metadata_dir: ".snakebridge",
   strict: false,
   error_mode: :raw,  # :raw | :translated | :raise_translated
   atom_allowlist: ["ok", "error"]
 ```
+
+Generated files mirror Python module structure (`dspy/predict/__init__.ex` for `Dspy.Predict`).
+See [Generated Wrappers](guides/GENERATED_WRAPPERS.md) for details.
 
 ### Runtime Options
 

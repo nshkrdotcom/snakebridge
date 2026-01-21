@@ -6,7 +6,7 @@ defmodule Mix.Tasks.Compile.Snakebridge do
   use Mix.Task.Compiler
 
   alias SnakeBridge.Compiler.Pipeline
-  alias SnakeBridge.{Config, Helpers, Lock, Manifest}
+  alias SnakeBridge.{Config, Generator.PathMapper, Helpers, Lock, Manifest}
 
   @impl Mix.Task.Compiler
   def run(_args) do
@@ -38,6 +38,9 @@ defmodule Mix.Tasks.Compile.Snakebridge do
 
   @doc false
   defdelegate verify_generated_files_exist!(config), to: Pipeline
+
+  @doc false
+  defdelegate verify_generated_files_exist!(config, manifest), to: Pipeline
 
   @doc false
   defdelegate verify_symbols_present!(config, manifest), to: Pipeline
@@ -128,10 +131,52 @@ defmodule Mix.Tasks.Compile.Snakebridge do
   defp normalize_version(value), do: to_string(value)
 
   defp generated_files_present?(config) do
-    Enum.all?(config.libraries, fn library ->
-      path = Path.join(config.generated_dir, "#{library.python_name}.ex")
-      File.exists?(path)
-    end)
+    _ = SnakeBridge.Registry.load()
+
+    Enum.all?(config.libraries, &generated_files_present_for_library?(config, &1))
+  end
+
+  defp generated_files_present_for_library?(config, library) do
+    legacy_single = Path.join(config.generated_dir, "#{library.python_name}.ex")
+
+    if config.generated_layout == :split and File.exists?(legacy_single) do
+      false
+    else
+      case registry_entry_paths(config, library) do
+        {:ok, paths} -> Enum.all?(paths, &File.exists?/1)
+        :error -> fallback_generated_files_present?(config, library)
+      end
+    end
+  end
+
+  defp registry_entry_paths(config, library) do
+    case SnakeBridge.Registry.get(library.python_name) do
+      %{path: base, files: files} when is_list(files) and files != [] ->
+        base = Path.expand(base)
+        config_base = Path.expand(config.generated_dir)
+
+        if base == config_base do
+          {:ok, Enum.map(files, &Path.join(base, &1))}
+        else
+          :error
+        end
+
+      _ ->
+        :error
+    end
+  end
+
+  defp fallback_generated_files_present?(config, library) do
+    case config.generated_layout do
+      :single ->
+        path = Path.join(config.generated_dir, "#{library.python_name}.ex")
+        File.exists?(path)
+
+      :split ->
+        path = PathMapper.module_to_path(library.python_name, config.generated_dir)
+
+        File.exists?(path)
+    end
   end
 
   defp helpers_present?(config) do

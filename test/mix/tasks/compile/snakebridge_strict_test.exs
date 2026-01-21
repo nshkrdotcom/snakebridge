@@ -15,6 +15,7 @@ defmodule Mix.Tasks.Compile.SnakebridgeStrictTest do
           }
         ],
         generated_dir: Path.join(tmp_dir, "generated"),
+        generated_layout: :single,
         metadata_dir: Path.join(tmp_dir, "metadata"),
         strict: true
       }
@@ -24,7 +25,7 @@ defmodule Mix.Tasks.Compile.SnakebridgeStrictTest do
       manifest = %{"version" => "0.7.0", "symbols" => %{}, "classes" => %{}}
       File.write!(Path.join(config.metadata_dir, "manifest.json"), Jason.encode!(manifest))
 
-      assert_raise SnakeBridge.CompileError, ~r/Generated file missing/, fn ->
+      assert_raise SnakeBridge.CompileError, ~r/Generated files missing/, fn ->
         Snakebridge.verify_generated_files_exist!(config)
       end
     end
@@ -39,6 +40,7 @@ defmodule Mix.Tasks.Compile.SnakebridgeStrictTest do
           }
         ],
         generated_dir: Path.join(tmp_dir, "generated"),
+        generated_layout: :single,
         metadata_dir: Path.join(tmp_dir, "metadata"),
         strict: true
       }
@@ -82,6 +84,7 @@ defmodule Mix.Tasks.Compile.SnakebridgeStrictTest do
           }
         ],
         generated_dir: Path.join(tmp_dir, "generated"),
+        generated_layout: :single,
         metadata_dir: Path.join(tmp_dir, "metadata"),
         strict: true
       }
@@ -131,6 +134,7 @@ defmodule Mix.Tasks.Compile.SnakebridgeStrictTest do
           }
         ],
         generated_dir: Path.join(tmp_dir, "generated"),
+        generated_layout: :single,
         metadata_dir: Path.join(tmp_dir, "metadata"),
         strict: true
       }
@@ -177,6 +181,7 @@ defmodule Mix.Tasks.Compile.SnakebridgeStrictTest do
           }
         ],
         generated_dir: Path.join(tmp_dir, "generated"),
+        generated_layout: :single,
         metadata_dir: Path.join(tmp_dir, "metadata"),
         strict: true
       }
@@ -223,6 +228,7 @@ defmodule Mix.Tasks.Compile.SnakebridgeStrictTest do
           }
         ],
         generated_dir: Path.join(tmp_dir, "generated"),
+        generated_layout: :single,
         metadata_dir: Path.join(tmp_dir, "metadata"),
         strict: true
       }
@@ -256,6 +262,114 @@ defmodule Mix.Tasks.Compile.SnakebridgeStrictTest do
         }
       }
 
+      assert :ok == Snakebridge.verify_symbols_present!(config, manifest)
+    end
+  end
+
+  describe "strict mode verification (split layout)" do
+    @describetag :tmp_dir
+    test "fails when split layout files are missing", %{tmp_dir: tmp_dir} do
+      config = %SnakeBridge.Config{
+        libraries: [
+          %SnakeBridge.Config.Library{
+            name: :testlib,
+            python_name: "testlib",
+            module_name: Testlib
+          }
+        ],
+        generated_dir: Path.join(tmp_dir, "generated"),
+        generated_layout: :split,
+        metadata_dir: Path.join(tmp_dir, "metadata"),
+        strict: true
+      }
+
+      manifest = %{
+        "version" => "0.7.0",
+        "symbols" => %{
+          "Testlib.Sub.compute/1" => %{
+            "name" => "compute",
+            "python_module" => "testlib.sub",
+            "module" => "Testlib.Sub"
+          }
+        },
+        "classes" => %{}
+      }
+
+      assert_raise SnakeBridge.CompileError, ~r/Generated files missing/, fn ->
+        Snakebridge.verify_generated_files_exist!(config, manifest)
+      end
+    end
+
+    test "passes when symbols are present across split layout files", %{tmp_dir: tmp_dir} do
+      config = %SnakeBridge.Config{
+        libraries: [
+          %SnakeBridge.Config.Library{
+            name: :testlib,
+            python_name: "testlib",
+            module_name: Testlib
+          }
+        ],
+        generated_dir: Path.join(tmp_dir, "generated"),
+        generated_layout: :split,
+        metadata_dir: Path.join(tmp_dir, "metadata"),
+        strict: true
+      }
+
+      File.mkdir_p!(Path.join(config.generated_dir, "testlib"))
+      File.mkdir_p!(Path.join(config.generated_dir, "testlib/sub"))
+
+      File.write!(
+        Path.join(config.generated_dir, "testlib/__init__.ex"),
+        """
+        defmodule Testlib do
+          @moduledoc false
+        end
+        """
+      )
+
+      File.write!(
+        Path.join(config.generated_dir, "testlib/sub/__init__.ex"),
+        """
+        defmodule Testlib.Sub do
+          def compute(x, opts \\\\ []) do
+            SnakeBridge.Runtime.call(__MODULE__, :compute, [x], opts)
+          end
+        end
+        """
+      )
+
+      File.write!(
+        Path.join(config.generated_dir, "testlib/widget.ex"),
+        """
+        defmodule Testlib.Widget do
+          def new(opts \\\\ []), do: :ok
+          def scale(ref, opts \\\\ []), do: {:ok, ref}
+          def size(ref), do: {:ok, ref}
+        end
+        """
+      )
+
+      manifest = %{
+        "version" => "0.7.0",
+        "symbols" => %{
+          "Testlib.Sub.compute/1" => %{
+            "name" => "compute",
+            "python_module" => "testlib.sub",
+            "module" => "Testlib.Sub"
+          }
+        },
+        "classes" => %{
+          "Testlib.Widget" => %{
+            "module" => "Testlib.Widget",
+            "class" => "Widget",
+            "python_module" => "testlib",
+            "methods" => [%{"name" => "__init__", "parameters" => []}, %{"name" => "scale"}],
+            "attributes" => ["size"]
+          }
+        }
+      }
+
+      assert :ok == Snakebridge.verify_generated_files_exist!(config, manifest)
       assert :ok == Snakebridge.verify_symbols_present!(config, manifest)
     end
   end

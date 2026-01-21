@@ -4,6 +4,7 @@ defmodule SnakeBridge.Compiler.Pipeline do
   alias SnakeBridge.{
     Config,
     Generator,
+    Generator.PathMapper,
     HelperGenerator,
     Helpers,
     Lock,
@@ -596,6 +597,7 @@ defmodule SnakeBridge.Compiler.Pipeline do
   end
 
   defp run_strict(config) do
+    _ = SnakeBridge.Registry.load()
     manifest = Manifest.load(config)
     detected = scanner_module().scan_project(config)
     missing = Manifest.missing(manifest, detected)
@@ -619,7 +621,7 @@ defmodule SnakeBridge.Compiler.Pipeline do
       """
     end
 
-    verify_generated_files_exist!(config)
+    verify_generated_files_exist!(config, manifest)
     verify_symbols_present!(config, manifest)
 
     {:ok, []}
@@ -631,6 +633,7 @@ defmodule SnakeBridge.Compiler.Pipeline do
     Telemetry.compile_start(libraries, false)
 
     try do
+      _ = SnakeBridge.Registry.load()
       manifest = Manifest.load(config)
 
       # First, handle libraries with generate: :all
@@ -960,14 +963,16 @@ defmodule SnakeBridge.Compiler.Pipeline do
   defp library_name(name) when is_binary(name), do: name
   defp library_name(_), do: :unknown
 
-  @spec verify_generated_files_exist!(Config.t()) :: :ok
-  def verify_generated_files_exist!(config) do
+  @spec verify_generated_files_exist!(Config.t(), map() | nil) :: :ok
+  def verify_generated_files_exist!(config, manifest \\ nil) do
     Enum.each(config.libraries, fn library ->
-      path = Path.join(config.generated_dir, "#{library.python_name}.ex")
+      paths = generated_paths_for_library(config, library, manifest)
+      missing = Enum.reject(paths, &File.exists?/1)
 
-      unless File.exists?(path) do
+      if missing != [] do
         raise SnakeBridge.CompileError, """
-        Strict mode: Generated file missing: #{path}
+        Strict mode: Generated files missing for #{library.python_name}:
+        #{format_missing_files(missing)}
 
         Run `mix compile` locally and commit the generated files.
         """
@@ -980,16 +985,15 @@ defmodule SnakeBridge.Compiler.Pipeline do
   @spec verify_symbols_present!(Config.t(), map()) :: :ok
   def verify_symbols_present!(config, manifest) do
     Enum.each(config.libraries, fn library ->
-      path = Path.join(config.generated_dir, "#{library.python_name}.ex")
-      content = read_generated_file!(path)
-      defs = parse_definitions!(content, path)
+      paths = generated_paths_for_library(config, library, manifest)
+      defs = parse_definitions_from_paths!(paths)
 
       missing_functions = missing_functions_for_library(manifest, library, defs)
       classes_for_library = classes_for_library(manifest, library)
       missing_classes = missing_classes_for_library(classes_for_library, defs)
       missing_class_members = missing_class_members_for_library(classes_for_library, defs)
 
-      maybe_raise_missing!(path, missing_functions, missing_classes, missing_class_members)
+      maybe_raise_missing!(paths, missing_functions, missing_classes, missing_class_members)
     end)
 
     :ok
@@ -1042,10 +1046,13 @@ defmodule SnakeBridge.Compiler.Pipeline do
     end)
   end
 
-  defp maybe_raise_missing!(path, missing_functions, missing_classes, missing_class_members) do
+  defp maybe_raise_missing!(paths, missing_functions, missing_classes, missing_class_members) do
     if missing_functions != [] or missing_classes != [] or missing_class_members != [] do
       raise SnakeBridge.CompileError, """
-      Strict mode: Generated file #{path} is missing expected bindings.
+      Strict mode: Generated files are missing expected bindings.
+
+      Files checked:
+      #{format_missing_files(paths)}
 
       #{missing_functions_message(missing_functions)}\
       #{missing_classes_message(missing_classes)}\
@@ -1053,6 +1060,108 @@ defmodule SnakeBridge.Compiler.Pipeline do
       Run `mix compile` locally to regenerate and commit the updated files.
       """
     end
+  end
+
+  defp generated_paths_for_library(config, library, manifest) do
+    layout = config.generated_layout || :split
+
+    case layout do
+      :single -> single_layout_paths(config, library)
+      :split -> split_layout_paths(config, library, manifest)
+      _ -> split_layout_paths(config, library, manifest)
+    end
+  end
+
+  defp single_layout_paths(config, library) do
+    [Path.join(config.generated_dir, "#{library.python_name}.ex")]
+  end
+
+  defp split_layout_paths(config, library, %{} = manifest) do
+    functions = functions_for_library(manifest, library)
+    classes = classes_for_library(manifest, library)
+
+    function_modules =
+      functions
+      |> Enum.map(&(&1["python_module"] || library.python_name))
+      |> Enum.uniq()
+
+    class_modules =
+      classes
+      |> Enum.map(&(&1["python_module"] || library.python_name))
+      |> Enum.uniq()
+
+    module_modules =
+      [library.python_name | function_modules ++ class_modules]
+      |> Enum.uniq()
+      |> Enum.sort()
+
+    module_paths = Enum.map(module_modules, &PathMapper.module_to_path(&1, config.generated_dir))
+
+    class_paths =
+      classes
+      |> Enum.map(fn info ->
+        python_module = info["python_module"] || library.python_name
+        class_name = info["class"] || info["name"] || "Class"
+        PathMapper.class_file_path(python_module, class_name, config.generated_dir)
+      end)
+
+    Enum.uniq(module_paths ++ class_paths)
+  end
+
+  defp split_layout_paths(config, library, _manifest) do
+    registry_or_layout_paths(config, library)
+  end
+
+  defp registry_or_layout_paths(config, library) do
+    case SnakeBridge.Registry.get(library.python_name) do
+      %{path: base, files: files} when is_list(files) and files != [] ->
+        resolve_registry_paths(base, files, config, library)
+
+      _ ->
+        fallback_layout_paths(config, library)
+    end
+  end
+
+  defp resolve_registry_paths(base, files, config, library) do
+    base = Path.expand(base)
+    config_base = Path.expand(config.generated_dir)
+
+    if base == config_base do
+      Enum.map(files, &Path.join(base, &1))
+    else
+      fallback_layout_paths(config, library)
+    end
+  end
+
+  defp fallback_layout_paths(config, library) do
+    layout = config.generated_layout || :split
+
+    case layout do
+      :single -> single_layout_paths(config, library)
+      :split -> [PathMapper.module_to_path(library.python_name, config.generated_dir)]
+      _ -> [PathMapper.module_to_path(library.python_name, config.generated_dir)]
+    end
+  end
+
+  defp parse_definitions_from_paths!(paths) do
+    Enum.reduce(paths, %{}, fn path, acc ->
+      content = read_generated_file!(path)
+      defs = parse_definitions!(content, path)
+      merge_definitions(acc, defs)
+    end)
+  end
+
+  defp merge_definitions(left, right) do
+    Map.merge(left, right, fn _module, left_defs, right_defs ->
+      MapSet.union(left_defs, right_defs)
+    end)
+  end
+
+  defp format_missing_files(paths) do
+    paths
+    |> Enum.map(&Path.expand/1)
+    |> Enum.sort()
+    |> Enum.map_join("\n", fn path -> "  - #{path}" end)
   end
 
   defp required_arity(params) do

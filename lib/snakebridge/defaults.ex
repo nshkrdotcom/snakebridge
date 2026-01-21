@@ -104,6 +104,7 @@ defmodule SnakeBridge.Defaults do
   # Code generation
   def variadic_max_arity, do: get(:variadic_max_arity, 8)
   def generated_dir, do: get(:generated_dir, "lib/snakebridge_generated")
+  def generated_layout, do: get(:generated_layout, :split)
   def metadata_dir, do: get(:metadata_dir, ".snakebridge")
 
   # ============================================================================
@@ -201,6 +202,7 @@ defmodule SnakeBridge.Defaults do
       min_supported_version: min_supported_version(),
       variadic_max_arity: variadic_max_arity(),
       generated_dir: generated_dir(),
+      generated_layout: generated_layout(),
       metadata_dir: metadata_dir(),
       runtime_default_timeout: runtime_default_timeout(),
       runtime_default_stream_timeout: runtime_default_stream_timeout(),

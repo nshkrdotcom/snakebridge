@@ -1,64 +1,1772 @@
 {
   "classes": {
-    "Json.Encoder.JSONEncoder": {
+    "Json.Decoder.JSONDecodeError": {
       "attributes": [
-        "item_separator"
+        "args"
       ],
-      "class": "JSONEncoder",
-      "docstring": "Extensible JSON encoder for Python data structures.",
+      "class": "JSONDecodeError",
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Subclass of ValueError with the following additional properties:\n\nmsg: The unformatted error message\ndoc: The JSON document being parsed\npos: The start index of doc where parsing failed\nlineno: The line corresponding to pos\ncolno: The column corresponding to pos",
       "methods": [
         {
-          "docstring": "",
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Initialize self.  See help(type(self)) for accurate signature.",
+          "elixir_name": "new",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 4,
+          "minimum_arity": 3,
           "name": "__init__",
-          "parameters": []
-        },
-        {
-          "docstring": "Return a JSON string representation.",
-          "name": "encode",
+          "optional_keyword_only": [],
+          "overload_count": null,
           "parameters": [
             {
               "kind": "POSITIONAL_OR_KEYWORD",
-              "name": "o"
+              "name": "msg",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "doc",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "pos",
+              "type": {
+                "type": "any"
+              }
             }
-          ]
+          ],
+          "python_name": "__init__",
+          "required_arity": 3,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        },
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Exception.add_note(note) --\nadd a note to the exception",
+          "elixir_name": "add_note",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 10,
+          "minimum_arity": 1,
+          "name": "add_note",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [],
+          "python_name": "add_note",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": false,
+          "signature_detail": null,
+          "signature_missing_reason": [
+            "runtime: signature unavailable",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: not found"
+          ],
+          "signature_source": "variadic"
+        },
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Exception.with_traceback(tb) --\nset self.__traceback__ to tb and return self.",
+          "elixir_name": "with_traceback",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 10,
+          "minimum_arity": 1,
+          "name": "with_traceback",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [],
+          "python_name": "with_traceback",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": false,
+          "signature_detail": null,
+          "signature_missing_reason": [
+            "runtime: signature unavailable",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: not found"
+          ],
+          "signature_source": "variadic"
+        }
+      ],
+      "module": "Json.Decoder.JSONDecodeError",
+      "python_module": "json.decoder"
+    },
+    "Json.Decoder.JSONDecoder": {
+      "attributes": [],
+      "class": "JSONDecoder",
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Simple JSON <https://json.org> decoder\n\nPerforms the following translations in decoding by default:\n\n+---------------+-------------------+\n| JSON          | Python            |\n+===============+===================+\n| object        | dict              |\n+---------------+-------------------+\n| array         | list              |\n+---------------+-------------------+\n| string        | str               |\n+---------------+-------------------+\n| number (int)  | int               |\n+---------------+-------------------+\n| number (real) | float             |\n+---------------+-------------------+\n| true          | True              |\n+---------------+-------------------+\n| false         | False             |\n+---------------+-------------------+\n| null          | None              |\n+---------------+-------------------+\n\nIt also understands ``NaN``, ``Infinity``, and ``-Infinity`` as\ntheir corresponding ``float`` values, which is outside the JSON spec.",
+      "methods": [
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "``object_hook``, if specified, will be called with the result\nof every JSON object decoded and its return value will be used in\nplace of the given ``dict``.  This can be used to provide custom\ndeserializations (e.g. to support JSON-RPC class hinting).\n\n``object_pairs_hook``, if specified will be called with the result of\nevery JSON object decoded with an ordered list of pairs.  The return\nvalue of ``object_pairs_hook`` will be used instead of the ``dict``.\nThis feature can be used to implement custom decoders.\nIf ``object_hook`` is also defined, the ``object_pairs_hook`` takes\npriority.\n\n``parse_float``, if specified, will be called with the string\nof every JSON float to be decoded. By default this is equivalent to\nfloat(num_str). This can be used to use another datatype or parser\nfor JSON floats (e.g. decimal.Decimal).\n\n``parse_int``, if specified, will be called with the string\nof every JSON int to be decoded. By default this is equivalent to\nint(num_str). This can be used to use another datatype or parser\nfor JSON integers (e.g. float).\n\n``parse_constant``, if specified, will be called with one of the\nfollowing strings: -Infinity, Infinity, NaN.\nThis can be used to raise an exception if invalid JSON numbers\nare encountered.\n\nIf ``strict`` is false (true is the default), then control\ncharacters will be allowed inside strings.  Control characters in\nthis context are those with character codes in the 0-31 range,\nincluding ``'\\t'`` (tab), ``'\\n'``, ``'\\r'`` and ``'\\0'``.",
+          "elixir_name": "new",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 1,
+          "minimum_arity": 0,
+          "name": "__init__",
+          "optional_keyword_only": [
+            "object_hook",
+            "parse_float",
+            "parse_int",
+            "parse_constant",
+            "strict",
+            "object_pairs_hook"
+          ],
+          "overload_count": null,
+          "parameters": [
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "object_hook",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "parse_float",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "parse_int",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "parse_constant",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "True",
+              "kind": "KEYWORD_ONLY",
+              "name": "strict",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "object_pairs_hook",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "__init__",
+          "required_arity": 0,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        },
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Return the Python representation of ``s`` (a ``str`` instance\ncontaining a JSON document).",
+          "elixir_name": "decode",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 4,
+          "minimum_arity": 2,
+          "name": "decode",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "s",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "<built-in method match of re.Pattern object at 0x7bda4b4c7920>",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "_w",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "decode",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        },
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Decode a JSON document from ``s`` (a ``str`` beginning with\na JSON document) and return a 2-tuple of the Python\nrepresentation and the index in ``s`` where the document ended.\n\nThis can be used to decode a JSON document from a string that may\nhave extraneous data at the end.",
+          "elixir_name": "raw_decode",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 4,
+          "minimum_arity": 2,
+          "name": "raw_decode",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "s",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "0",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "idx",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "raw_decode",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        }
+      ],
+      "module": "Json.Decoder.JSONDecoder",
+      "python_module": "json.decoder"
+    },
+    "Json.Encoder.JSONEncoder": {
+      "attributes": [
+        "item_separator",
+        "key_separator"
+      ],
+      "class": "JSONEncoder",
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Extensible JSON <https://json.org> encoder for Python data structures.\n\nSupports the following objects and types by default:\n\n+-------------------+---------------+\n| Python            | JSON          |\n+===================+===============+\n| dict              | object        |\n+-------------------+---------------+\n| list, tuple       | array         |\n+-------------------+---------------+\n| str               | string        |\n+-------------------+---------------+\n| int, float        | number        |\n+-------------------+---------------+\n| True              | true          |\n+-------------------+---------------+\n| False             | false         |\n+-------------------+---------------+\n| None              | null          |\n+-------------------+---------------+\n\nTo extend this to recognize other objects, subclass and implement a\n``.default()`` method with another method that returns a serializable\nobject for ``o`` if possible, otherwise it should call the superclass\nimplementation (to raise ``TypeError``).",
+      "methods": [
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Constructor for JSONEncoder, with sensible defaults.\n\nIf skipkeys is false, then it is a TypeError to attempt\nencoding of keys that are not str, int, float or None.  If\nskipkeys is True, such items are simply skipped.\n\nIf ensure_ascii is true, the output is guaranteed to be str\nobjects with all incoming non-ASCII characters escaped.  If\nensure_ascii is false, the output can contain non-ASCII characters.\n\nIf check_circular is true, then lists, dicts, and custom encoded\nobjects will be checked for circular references during encoding to\nprevent an infinite recursion (which would cause an RecursionError).\nOtherwise, no such check takes place.\n\nIf allow_nan is true, then NaN, Infinity, and -Infinity will be\nencoded as such.  This behavior is not JSON specification compliant,\nbut is consistent with most JavaScript based encoders and decoders.\nOtherwise, it will be a ValueError to encode such floats.\n\nIf sort_keys is true, then the output of dictionaries will be\nsorted by key; this is useful for regression tests to ensure\nthat JSON serializations can be compared on a day-to-day basis.\n\nIf indent is a non-negative integer, then JSON array\nelements and object members will be pretty-printed with that\nindent level.  An indent level of 0 will only insert newlines.\nNone is the most compact representation.\n\nIf specified, separators should be an (item_separator, key_separator)\ntuple.  The default is (', ', ': ') if *indent* is ``None`` and\n(',', ': ') otherwise.  To get the most compact JSON representation,\nyou should specify (',', ':') to eliminate whitespace.\n\nIf specified, default is a function that gets called for objects\nthat can't otherwise be serialized.  It should return a JSON encodable\nversion of the object or raise a ``TypeError``.",
+          "elixir_name": "new",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 1,
+          "minimum_arity": 0,
+          "name": "__init__",
+          "optional_keyword_only": [
+            "skipkeys",
+            "ensure_ascii",
+            "check_circular",
+            "allow_nan",
+            "sort_keys",
+            "indent",
+            "separators",
+            "default"
+          ],
+          "overload_count": null,
+          "parameters": [
+            {
+              "default": "False",
+              "kind": "KEYWORD_ONLY",
+              "name": "skipkeys",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "True",
+              "kind": "KEYWORD_ONLY",
+              "name": "ensure_ascii",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "True",
+              "kind": "KEYWORD_ONLY",
+              "name": "check_circular",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "True",
+              "kind": "KEYWORD_ONLY",
+              "name": "allow_nan",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "False",
+              "kind": "KEYWORD_ONLY",
+              "name": "sort_keys",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "indent",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "separators",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "default",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "__init__",
+          "required_arity": 0,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        },
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Implement this method in a subclass such that it returns\na serializable object for ``o``, or calls the base implementation\n(to raise a ``TypeError``).\n\nFor example, to support arbitrary iterators, you could\nimplement default like this::\n\n    def default(self, o):\n        try:\n            iterable = iter(o)\n        except TypeError:\n            pass\n        else:\n            return list(iterable)\n        # Let the base class default method raise the TypeError\n        return super().default(o)",
+          "elixir_name": "default",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "default",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "o",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "default",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        },
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Return a JSON string representation of a Python data structure.\n\n>>> from json.encoder import JSONEncoder\n>>> JSONEncoder().encode({\"foo\": [\"bar\", \"baz\"]})\n'{\"foo\": [\"bar\", \"baz\"]}'",
+          "elixir_name": "encode",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "encode",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "o",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "encode",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        },
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Encode the given object and yield each string\nrepresentation as available.\n\nFor example::\n\n    for chunk in JSONEncoder().iterencode(bigobject):\n        mysocket.write(chunk)",
+          "elixir_name": "iterencode",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 4,
+          "minimum_arity": 2,
+          "name": "iterencode",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "o",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "False",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "_one_shot",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "iterencode",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
         }
       ],
       "module": "Json.Encoder.JSONEncoder",
       "python_module": "json.encoder"
+    },
+    "Json.JSONDecodeError": {
+      "attributes": [
+        "args"
+      ],
+      "class": "JSONDecodeError",
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Subclass of ValueError with the following additional properties:\n\nmsg: The unformatted error message\ndoc: The JSON document being parsed\npos: The start index of doc where parsing failed\nlineno: The line corresponding to pos\ncolno: The column corresponding to pos",
+      "methods": [
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Initialize self.  See help(type(self)) for accurate signature.",
+          "elixir_name": "new",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 4,
+          "minimum_arity": 3,
+          "name": "__init__",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "msg",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "doc",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "pos",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "__init__",
+          "required_arity": 3,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        },
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Exception.add_note(note) --\nadd a note to the exception",
+          "elixir_name": "add_note",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 10,
+          "minimum_arity": 1,
+          "name": "add_note",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [],
+          "python_name": "add_note",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": false,
+          "signature_detail": null,
+          "signature_missing_reason": [
+            "runtime: signature unavailable",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: not found"
+          ],
+          "signature_source": "variadic"
+        },
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Exception.with_traceback(tb) --\nset self.__traceback__ to tb and return self.",
+          "elixir_name": "with_traceback",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 10,
+          "minimum_arity": 1,
+          "name": "with_traceback",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [],
+          "python_name": "with_traceback",
+          "required_arity": 1,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": false,
+          "signature_detail": null,
+          "signature_missing_reason": [
+            "runtime: signature unavailable",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: not found"
+          ],
+          "signature_source": "variadic"
+        }
+      ],
+      "module": "Json.JSONDecodeError",
+      "python_module": "json"
+    },
+    "Json.JSONDecoder": {
+      "attributes": [],
+      "class": "JSONDecoder",
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Simple JSON <https://json.org> decoder\n\nPerforms the following translations in decoding by default:\n\n+---------------+-------------------+\n| JSON          | Python            |\n+===============+===================+\n| object        | dict              |\n+---------------+-------------------+\n| array         | list              |\n+---------------+-------------------+\n| string        | str               |\n+---------------+-------------------+\n| number (int)  | int               |\n+---------------+-------------------+\n| number (real) | float             |\n+---------------+-------------------+\n| true          | True              |\n+---------------+-------------------+\n| false         | False             |\n+---------------+-------------------+\n| null          | None              |\n+---------------+-------------------+\n\nIt also understands ``NaN``, ``Infinity``, and ``-Infinity`` as\ntheir corresponding ``float`` values, which is outside the JSON spec.",
+      "methods": [
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "``object_hook``, if specified, will be called with the result\nof every JSON object decoded and its return value will be used in\nplace of the given ``dict``.  This can be used to provide custom\ndeserializations (e.g. to support JSON-RPC class hinting).\n\n``object_pairs_hook``, if specified will be called with the result of\nevery JSON object decoded with an ordered list of pairs.  The return\nvalue of ``object_pairs_hook`` will be used instead of the ``dict``.\nThis feature can be used to implement custom decoders.\nIf ``object_hook`` is also defined, the ``object_pairs_hook`` takes\npriority.\n\n``parse_float``, if specified, will be called with the string\nof every JSON float to be decoded. By default this is equivalent to\nfloat(num_str). This can be used to use another datatype or parser\nfor JSON floats (e.g. decimal.Decimal).\n\n``parse_int``, if specified, will be called with the string\nof every JSON int to be decoded. By default this is equivalent to\nint(num_str). This can be used to use another datatype or parser\nfor JSON integers (e.g. float).\n\n``parse_constant``, if specified, will be called with one of the\nfollowing strings: -Infinity, Infinity, NaN.\nThis can be used to raise an exception if invalid JSON numbers\nare encountered.\n\nIf ``strict`` is false (true is the default), then control\ncharacters will be allowed inside strings.  Control characters in\nthis context are those with character codes in the 0-31 range,\nincluding ``'\\t'`` (tab), ``'\\n'``, ``'\\r'`` and ``'\\0'``.",
+          "elixir_name": "new",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 1,
+          "minimum_arity": 0,
+          "name": "__init__",
+          "optional_keyword_only": [
+            "object_hook",
+            "parse_float",
+            "parse_int",
+            "parse_constant",
+            "strict",
+            "object_pairs_hook"
+          ],
+          "overload_count": null,
+          "parameters": [
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "object_hook",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "parse_float",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "parse_int",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "parse_constant",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "True",
+              "kind": "KEYWORD_ONLY",
+              "name": "strict",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "object_pairs_hook",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "__init__",
+          "required_arity": 0,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        },
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Return the Python representation of ``s`` (a ``str`` instance\ncontaining a JSON document).",
+          "elixir_name": "decode",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 4,
+          "minimum_arity": 2,
+          "name": "decode",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "s",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "<built-in method match of re.Pattern object at 0x7bda4b4c7920>",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "_w",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "decode",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        },
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Decode a JSON document from ``s`` (a ``str`` beginning with\na JSON document) and return a 2-tuple of the Python\nrepresentation and the index in ``s`` where the document ended.\n\nThis can be used to decode a JSON document from a string that may\nhave extraneous data at the end.",
+          "elixir_name": "raw_decode",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 4,
+          "minimum_arity": 2,
+          "name": "raw_decode",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "s",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "0",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "idx",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "raw_decode",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        }
+      ],
+      "module": "Json.JSONDecoder",
+      "python_module": "json"
+    },
+    "Json.JSONEncoder": {
+      "attributes": [
+        "item_separator",
+        "key_separator"
+      ],
+      "class": "JSONEncoder",
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Extensible JSON <https://json.org> encoder for Python data structures.\n\nSupports the following objects and types by default:\n\n+-------------------+---------------+\n| Python            | JSON          |\n+===================+===============+\n| dict              | object        |\n+-------------------+---------------+\n| list, tuple       | array         |\n+-------------------+---------------+\n| str               | string        |\n+-------------------+---------------+\n| int, float        | number        |\n+-------------------+---------------+\n| True              | true          |\n+-------------------+---------------+\n| False             | false         |\n+-------------------+---------------+\n| None              | null          |\n+-------------------+---------------+\n\nTo extend this to recognize other objects, subclass and implement a\n``.default()`` method with another method that returns a serializable\nobject for ``o`` if possible, otherwise it should call the superclass\nimplementation (to raise ``TypeError``).",
+      "methods": [
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Constructor for JSONEncoder, with sensible defaults.\n\nIf skipkeys is false, then it is a TypeError to attempt\nencoding of keys that are not str, int, float or None.  If\nskipkeys is True, such items are simply skipped.\n\nIf ensure_ascii is true, the output is guaranteed to be str\nobjects with all incoming non-ASCII characters escaped.  If\nensure_ascii is false, the output can contain non-ASCII characters.\n\nIf check_circular is true, then lists, dicts, and custom encoded\nobjects will be checked for circular references during encoding to\nprevent an infinite recursion (which would cause an RecursionError).\nOtherwise, no such check takes place.\n\nIf allow_nan is true, then NaN, Infinity, and -Infinity will be\nencoded as such.  This behavior is not JSON specification compliant,\nbut is consistent with most JavaScript based encoders and decoders.\nOtherwise, it will be a ValueError to encode such floats.\n\nIf sort_keys is true, then the output of dictionaries will be\nsorted by key; this is useful for regression tests to ensure\nthat JSON serializations can be compared on a day-to-day basis.\n\nIf indent is a non-negative integer, then JSON array\nelements and object members will be pretty-printed with that\nindent level.  An indent level of 0 will only insert newlines.\nNone is the most compact representation.\n\nIf specified, separators should be an (item_separator, key_separator)\ntuple.  The default is (', ', ': ') if *indent* is ``None`` and\n(',', ': ') otherwise.  To get the most compact JSON representation,\nyou should specify (',', ':') to eliminate whitespace.\n\nIf specified, default is a function that gets called for objects\nthat can't otherwise be serialized.  It should return a JSON encodable\nversion of the object or raise a ``TypeError``.",
+          "elixir_name": "new",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 1,
+          "minimum_arity": 0,
+          "name": "__init__",
+          "optional_keyword_only": [
+            "skipkeys",
+            "ensure_ascii",
+            "check_circular",
+            "allow_nan",
+            "sort_keys",
+            "indent",
+            "separators",
+            "default"
+          ],
+          "overload_count": null,
+          "parameters": [
+            {
+              "default": "False",
+              "kind": "KEYWORD_ONLY",
+              "name": "skipkeys",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "True",
+              "kind": "KEYWORD_ONLY",
+              "name": "ensure_ascii",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "True",
+              "kind": "KEYWORD_ONLY",
+              "name": "check_circular",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "True",
+              "kind": "KEYWORD_ONLY",
+              "name": "allow_nan",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "False",
+              "kind": "KEYWORD_ONLY",
+              "name": "sort_keys",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "indent",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "separators",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "None",
+              "kind": "KEYWORD_ONLY",
+              "name": "default",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "__init__",
+          "required_arity": 0,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        },
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Implement this method in a subclass such that it returns\na serializable object for ``o``, or calls the base implementation\n(to raise a ``TypeError``).\n\nFor example, to support arbitrary iterators, you could\nimplement default like this::\n\n    def default(self, o):\n        try:\n            iterable = iter(o)\n        except TypeError:\n            pass\n        else:\n            return list(iterable)\n        # Let the base class default method raise the TypeError\n        return super().default(o)",
+          "elixir_name": "default",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "default",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "o",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "default",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        },
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Return a JSON string representation of a Python data structure.\n\n>>> from json.encoder import JSONEncoder\n>>> JSONEncoder().encode({\"foo\": [\"bar\", \"baz\"]})\n'{\"foo\": [\"bar\", \"baz\"]}'",
+          "elixir_name": "encode",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 3,
+          "minimum_arity": 2,
+          "name": "encode",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "o",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "encode",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        },
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Encode the given object and yield each string\nrepresentation as available.\n\nFor example::\n\n    for chunk in JSONEncoder().iterencode(bigobject):\n        mysocket.write(chunk)",
+          "elixir_name": "iterencode",
+          "has_var_keyword": false,
+          "has_var_positional": false,
+          "maximum_arity": 4,
+          "minimum_arity": 2,
+          "name": "iterencode",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [
+            {
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "o",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "default": "False",
+              "kind": "POSITIONAL_OR_KEYWORD",
+              "name": "_one_shot",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "iterencode",
+          "required_arity": 2,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: unavailable",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        }
+      ],
+      "module": "Json.JSONEncoder",
+      "python_module": "json"
+    },
+    "Json.Scanner.MakeScanner": {
+      "attributes": [
+        "object_hook",
+        "object_pairs_hook",
+        "parse_constant",
+        "parse_float",
+        "parse_int",
+        "strict"
+      ],
+      "class": "make_scanner",
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "JSON scanner object",
+      "methods": [
+        {
+          "doc_missing_reason": null,
+          "doc_source": "runtime",
+          "docstring": "Initialize self.  See help(type(self)) for accurate signature.",
+          "elixir_name": "new",
+          "has_var_keyword": true,
+          "has_var_positional": true,
+          "maximum_arity": "unbounded",
+          "minimum_arity": 0,
+          "name": "__init__",
+          "optional_keyword_only": [],
+          "overload_count": null,
+          "parameters": [
+            {
+              "kind": "VAR_POSITIONAL",
+              "name": "args",
+              "type": {
+                "type": "any"
+              }
+            },
+            {
+              "kind": "VAR_KEYWORD",
+              "name": "kwargs",
+              "type": {
+                "type": "any"
+              }
+            }
+          ],
+          "python_name": "__init__",
+          "required_arity": 0,
+          "required_keyword_only": [],
+          "return_type": {
+            "type": "any"
+          },
+          "signature_available": true,
+          "signature_detail": "inspect.signature",
+          "signature_missing_reason": [
+            "runtime: no type info",
+            "text_signature: no type info",
+            "runtime_hints: unavailable",
+            "stub: not found",
+            "stubgen: skipped (signature already found)"
+          ],
+          "signature_source": "runtime"
+        }
+      ],
+      "module": "Json.Scanner.MakeScanner",
+      "python_module": "json.scanner"
     }
   },
   "symbols": {
-    "Json.dumps/1": {
-      "docstring": "Serialize obj to a JSON formatted str.",
-      "function": "dumps",
-      "module": "Json",
-      "name": "dumps",
+    "Json.Encoder.py_encode_basestring/1": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Return a JSON representation of a Python string\n\n    ",
+      "elixir_name": "py_encode_basestring",
+      "function": "py_encode_basestring",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 2,
+      "minimum_arity": 1,
+      "module": "Json.Encoder",
+      "name": "py_encode_basestring",
+      "optional_keyword_only": [],
+      "overload_count": null,
       "parameters": [
         {
           "kind": "POSITIONAL_OR_KEYWORD",
-          "name": "obj"
+          "name": "s",
+          "type": {
+            "type": "any"
+          }
+        }
+      ],
+      "python_module": "json.encoder",
+      "python_name": "py_encode_basestring",
+      "required_arity": 1,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true,
+      "signature_detail": "inspect.signature",
+      "signature_missing_reason": [
+        "runtime: no type info",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found",
+        "stubgen: skipped (signature already found)"
+      ],
+      "signature_source": "runtime"
+    },
+    "Json.Encoder.py_encode_basestring_ascii/1": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Return an ASCII-only JSON representation of a Python string\n\n    ",
+      "elixir_name": "py_encode_basestring_ascii",
+      "function": "py_encode_basestring_ascii",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 2,
+      "minimum_arity": 1,
+      "module": "Json.Encoder",
+      "name": "py_encode_basestring_ascii",
+      "optional_keyword_only": [],
+      "overload_count": null,
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "s",
+          "type": {
+            "type": "any"
+          }
+        }
+      ],
+      "python_module": "json.encoder",
+      "python_name": "py_encode_basestring_ascii",
+      "required_arity": 1,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true,
+      "signature_detail": "inspect.signature",
+      "signature_missing_reason": [
+        "runtime: no type info",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found",
+        "stubgen: skipped (signature already found)"
+      ],
+      "signature_source": "runtime"
+    },
+    "Json.Tool.main/0": {
+      "doc_missing_reason": "runtime docstring missing",
+      "doc_source": "module",
+      "docstring": "Command-line tool to validate and pretty-print JSON\n\nUsage::\n\n    $ echo '{\"json\":\"obj\"}' | python -m json.tool\n    {\n        \"json\": \"obj\"\n    }\n    $ echo '{ 1.2:3.4}' | python -m json.tool\n    Expecting property name enclosed in double quotes: line 1 column 3 (char 2)",
+      "elixir_name": "main",
+      "function": "main",
+      "has_var_keyword": false,
+      "has_var_positional": false,
+      "maximum_arity": 1,
+      "minimum_arity": 0,
+      "module": "Json.Tool",
+      "name": "main",
+      "optional_keyword_only": [],
+      "overload_count": null,
+      "parameters": [],
+      "python_module": "json.tool",
+      "python_name": "main",
+      "required_arity": 0,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true,
+      "signature_detail": "inspect.signature",
+      "signature_missing_reason": [
+        "runtime: no type info",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found",
+        "stubgen: skipped (signature already found)"
+      ],
+      "signature_source": "runtime"
+    },
+    "Json.dump/2": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Serialize ``obj`` as a JSON formatted stream to ``fp`` (a\n``.write()``-supporting file-like object).\n\nIf ``skipkeys`` is true then ``dict`` keys that are not basic types\n(``str``, ``int``, ``float``, ``bool``, ``None``) will be skipped\ninstead of raising a ``TypeError``.\n\nIf ``ensure_ascii`` is false, then the strings written to ``fp`` can\ncontain non-ASCII characters if they appear in strings contained in\n``obj``. Otherwise, all such characters are escaped in JSON strings.\n\nIf ``check_circular`` is false, then the circular reference check\nfor container types will be skipped and a circular reference will\nresult in an ``RecursionError`` (or worse).\n\nIf ``allow_nan`` is false, then it will be a ``ValueError`` to\nserialize out of range ``float`` values (``nan``, ``inf``, ``-inf``)\nin strict compliance of the JSON specification, instead of using the\nJavaScript equivalents (``NaN``, ``Infinity``, ``-Infinity``).\n\nIf ``indent`` is a non-negative integer, then JSON array elements and\nobject members will be pretty-printed with that indent level. An indent\nlevel of 0 will only insert newlines. ``None`` is the most compact\nrepresentation.\n\nIf specified, ``separators`` should be an ``(item_separator, key_separator)``\ntuple.  The default is ``(', ', ': ')`` if *indent* is ``None`` and\n``(',', ': ')`` otherwise.  To get the most compact JSON representation,\nyou should specify ``(',', ':')`` to eliminate whitespace.\n\n``default(obj)`` is a function that should return a serializable version\nof obj or raise TypeError. The default simply raises TypeError.\n\nIf *sort_keys* is true (default: ``False``), then the output of\ndictionaries will be sorted by key.\n\nTo use a custom ``JSONEncoder`` subclass (e.g. one that overrides the\n``.default()`` method to serialize additional types), specify it with\nthe ``cls`` kwarg; otherwise ``JSONEncoder`` is used.",
+      "elixir_name": "dump",
+      "function": "dump",
+      "has_var_keyword": true,
+      "has_var_positional": false,
+      "maximum_arity": 3,
+      "minimum_arity": 2,
+      "module": "Json",
+      "name": "dump",
+      "optional_keyword_only": [
+        "skipkeys",
+        "ensure_ascii",
+        "check_circular",
+        "allow_nan",
+        "cls",
+        "indent",
+        "separators",
+        "default",
+        "sort_keys"
+      ],
+      "overload_count": null,
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "obj",
+          "type": {
+            "type": "any"
+          }
         },
         {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "fp",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "False",
           "kind": "KEYWORD_ONLY",
-          "name": "skipkeys"
+          "name": "skipkeys",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "True",
+          "kind": "KEYWORD_ONLY",
+          "name": "ensure_ascii",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "True",
+          "kind": "KEYWORD_ONLY",
+          "name": "check_circular",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "True",
+          "kind": "KEYWORD_ONLY",
+          "name": "allow_nan",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "cls",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "indent",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "separators",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "default",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "False",
+          "kind": "KEYWORD_ONLY",
+          "name": "sort_keys",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "kind": "VAR_KEYWORD",
+          "name": "kw",
+          "type": {
+            "type": "any"
+          }
         }
       ],
       "python_module": "json",
-      "return_annotation": null
+      "python_name": "dump",
+      "required_arity": 2,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true,
+      "signature_detail": "inspect.signature",
+      "signature_missing_reason": [
+        "runtime: no type info",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found",
+        "stubgen: skipped (signature already found)"
+      ],
+      "signature_source": "runtime"
     },
-    "Json.loads/1": {
-      "docstring": "Deserialize s to a Python object.",
-      "function": "loads",
+    "Json.dumps/1": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Serialize ``obj`` to a JSON formatted ``str``.\n\nIf ``skipkeys`` is true then ``dict`` keys that are not basic types\n(``str``, ``int``, ``float``, ``bool``, ``None``) will be skipped\ninstead of raising a ``TypeError``.\n\nIf ``ensure_ascii`` is false, then the return value can contain non-ASCII\ncharacters if they appear in strings contained in ``obj``. Otherwise, all\nsuch characters are escaped in JSON strings.\n\nIf ``check_circular`` is false, then the circular reference check\nfor container types will be skipped and a circular reference will\nresult in an ``RecursionError`` (or worse).\n\nIf ``allow_nan`` is false, then it will be a ``ValueError`` to\nserialize out of range ``float`` values (``nan``, ``inf``, ``-inf``) in\nstrict compliance of the JSON specification, instead of using the\nJavaScript equivalents (``NaN``, ``Infinity``, ``-Infinity``).\n\nIf ``indent`` is a non-negative integer, then JSON array elements and\nobject members will be pretty-printed with that indent level. An indent\nlevel of 0 will only insert newlines. ``None`` is the most compact\nrepresentation.\n\nIf specified, ``separators`` should be an ``(item_separator, key_separator)``\ntuple.  The default is ``(', ', ': ')`` if *indent* is ``None`` and\n``(',', ': ')`` otherwise.  To get the most compact JSON representation,\nyou should specify ``(',', ':')`` to eliminate whitespace.\n\n``default(obj)`` is a function that should return a serializable version\nof obj or raise TypeError. The default simply raises TypeError.\n\nIf *sort_keys* is true (default: ``False``), then the output of\ndictionaries will be sorted by key.\n\nTo use a custom ``JSONEncoder`` subclass (e.g. one that overrides the\n``.default()`` method to serialize additional types), specify it with\nthe ``cls`` kwarg; otherwise ``JSONEncoder`` is used.",
+      "elixir_name": "dumps",
+      "function": "dumps",
+      "has_var_keyword": true,
+      "has_var_positional": false,
+      "maximum_arity": 2,
+      "minimum_arity": 1,
       "module": "Json",
-      "name": "loads",
+      "name": "dumps",
+      "optional_keyword_only": [
+        "skipkeys",
+        "ensure_ascii",
+        "check_circular",
+        "allow_nan",
+        "cls",
+        "indent",
+        "separators",
+        "default",
+        "sort_keys"
+      ],
+      "overload_count": null,
       "parameters": [
         {
           "kind": "POSITIONAL_OR_KEYWORD",
-          "name": "s"
+          "name": "obj",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "False",
+          "kind": "KEYWORD_ONLY",
+          "name": "skipkeys",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "True",
+          "kind": "KEYWORD_ONLY",
+          "name": "ensure_ascii",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "True",
+          "kind": "KEYWORD_ONLY",
+          "name": "check_circular",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "True",
+          "kind": "KEYWORD_ONLY",
+          "name": "allow_nan",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "cls",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "indent",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "separators",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "default",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "False",
+          "kind": "KEYWORD_ONLY",
+          "name": "sort_keys",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "kind": "VAR_KEYWORD",
+          "name": "kw",
+          "type": {
+            "type": "any"
+          }
         }
       ],
       "python_module": "json",
-      "return_annotation": null
+      "python_name": "dumps",
+      "required_arity": 1,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true,
+      "signature_detail": "inspect.signature",
+      "signature_missing_reason": [
+        "runtime: no type info",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found",
+        "stubgen: skipped (signature already found)"
+      ],
+      "signature_source": "runtime"
+    },
+    "Json.load/1": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Deserialize ``fp`` (a ``.read()``-supporting file-like object containing\na JSON document) to a Python object.\n\n``object_hook`` is an optional function that will be called with the\nresult of any object literal decode (a ``dict``). The return value of\n``object_hook`` will be used instead of the ``dict``. This feature\ncan be used to implement custom decoders (e.g. JSON-RPC class hinting).\n\n``object_pairs_hook`` is an optional function that will be called with the\nresult of any object literal decoded with an ordered list of pairs.  The\nreturn value of ``object_pairs_hook`` will be used instead of the ``dict``.\nThis feature can be used to implement custom decoders.  If ``object_hook``\nis also defined, the ``object_pairs_hook`` takes priority.\n\nTo use a custom ``JSONDecoder`` subclass, specify it with the ``cls``\nkwarg; otherwise ``JSONDecoder`` is used.",
+      "elixir_name": "load",
+      "function": "load",
+      "has_var_keyword": true,
+      "has_var_positional": false,
+      "maximum_arity": 2,
+      "minimum_arity": 1,
+      "module": "Json",
+      "name": "load",
+      "optional_keyword_only": [
+        "cls",
+        "object_hook",
+        "parse_float",
+        "parse_int",
+        "parse_constant",
+        "object_pairs_hook"
+      ],
+      "overload_count": null,
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "fp",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "cls",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "object_hook",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "parse_float",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "parse_int",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "parse_constant",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "object_pairs_hook",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "kind": "VAR_KEYWORD",
+          "name": "kw",
+          "type": {
+            "type": "any"
+          }
+        }
+      ],
+      "python_module": "json",
+      "python_name": "load",
+      "required_arity": 1,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true,
+      "signature_detail": "inspect.signature",
+      "signature_missing_reason": [
+        "runtime: no type info",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found",
+        "stubgen: skipped (signature already found)"
+      ],
+      "signature_source": "runtime"
+    },
+    "Json.loads/1": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Deserialize ``s`` (a ``str``, ``bytes`` or ``bytearray`` instance\ncontaining a JSON document) to a Python object.\n\n``object_hook`` is an optional function that will be called with the\nresult of any object literal decode (a ``dict``). The return value of\n``object_hook`` will be used instead of the ``dict``. This feature\ncan be used to implement custom decoders (e.g. JSON-RPC class hinting).\n\n``object_pairs_hook`` is an optional function that will be called with the\nresult of any object literal decoded with an ordered list of pairs.  The\nreturn value of ``object_pairs_hook`` will be used instead of the ``dict``.\nThis feature can be used to implement custom decoders.  If ``object_hook``\nis also defined, the ``object_pairs_hook`` takes priority.\n\n``parse_float``, if specified, will be called with the string\nof every JSON float to be decoded. By default this is equivalent to\nfloat(num_str). This can be used to use another datatype or parser\nfor JSON floats (e.g. decimal.Decimal).\n\n``parse_int``, if specified, will be called with the string\nof every JSON int to be decoded. By default this is equivalent to\nint(num_str). This can be used to use another datatype or parser\nfor JSON integers (e.g. float).\n\n``parse_constant``, if specified, will be called with one of the\nfollowing strings: -Infinity, Infinity, NaN.\nThis can be used to raise an exception if invalid JSON numbers\nare encountered.\n\nTo use a custom ``JSONDecoder`` subclass, specify it with the ``cls``\nkwarg; otherwise ``JSONDecoder`` is used.",
+      "elixir_name": "loads",
+      "function": "loads",
+      "has_var_keyword": true,
+      "has_var_positional": false,
+      "maximum_arity": 2,
+      "minimum_arity": 1,
+      "module": "Json",
+      "name": "loads",
+      "optional_keyword_only": [
+        "cls",
+        "object_hook",
+        "parse_float",
+        "parse_int",
+        "parse_constant",
+        "object_pairs_hook"
+      ],
+      "overload_count": null,
+      "parameters": [
+        {
+          "kind": "POSITIONAL_OR_KEYWORD",
+          "name": "s",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "cls",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "object_hook",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "parse_float",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "parse_int",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "parse_constant",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "default": "None",
+          "kind": "KEYWORD_ONLY",
+          "name": "object_pairs_hook",
+          "type": {
+            "type": "any"
+          }
+        },
+        {
+          "kind": "VAR_KEYWORD",
+          "name": "kw",
+          "type": {
+            "type": "any"
+          }
+        }
+      ],
+      "python_module": "json",
+      "python_name": "loads",
+      "required_arity": 1,
+      "required_keyword_only": [],
+      "return_annotation": null,
+      "return_type": {
+        "type": "any"
+      },
+      "signature_available": true,
+      "signature_detail": "inspect.signature",
+      "signature_missing_reason": [
+        "runtime: no type info",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found",
+        "stubgen: skipped (signature already found)"
+      ],
+      "signature_source": "runtime"
     },
     "Math.cos/1": {
       "docstring": "Return the cosine of x.",

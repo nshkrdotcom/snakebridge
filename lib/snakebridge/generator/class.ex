@@ -56,6 +56,71 @@ defmodule SnakeBridge.Generator.Class do
     """
   end
 
+  @doc """
+  Renders a class as a standalone top-level module for split layout.
+
+  Unlike `render_class/2` which renders with a relative module name for nesting,
+  this function uses the fully-qualified module name for standalone files.
+  """
+  @spec render_class_standalone(map(), SnakeBridge.Config.Library.t(), module() | String.t()) ::
+          String.t()
+  def render_class_standalone(class_info, library, elixir_module) do
+    class_name = Generator.class_name(class_info)
+    python_module = Generator.class_python_module(class_info, library)
+    module_name = module_to_string(elixir_module)
+
+    methods = class_info["methods"] || []
+    attrs = class_info["attributes"] || []
+
+    init_method = Enum.find(methods, fn method -> method["name"] == "__init__" end)
+    init_params = if init_method, do: init_method["parameters"] || [], else: []
+    init_params = drop_self_param(init_params)
+    plan = Generator.build_params(init_params, init_method || %{})
+    param_names = Enum.map(plan.required, & &1.name)
+    args_name = Generator.extra_args_name(param_names)
+
+    constructor =
+      if plan.is_variadic do
+        render_variadic_constructor(plan, args_name)
+      else
+        render_constructor(plan, args_name)
+      end
+
+    methods =
+      methods
+      |> Enum.reject(fn method -> method["name"] == "__init__" end)
+      |> deduplicate_methods()
+
+    methods_source = Enum.map_join(methods, "\n\n", &render_method/1)
+    method_names = resolved_method_names(methods)
+
+    attrs_source =
+      attrs
+      |> resolve_attribute_names(method_names)
+      |> Enum.map_join("\n\n", &render_attribute/1)
+
+    """
+    defmodule #{module_name} do
+      def __snakebridge_python_name__, do: "#{python_module}"
+      def __snakebridge_python_class__, do: "#{class_name}"
+      def __snakebridge_library__, do: "#{library.python_name}"
+      @opaque t :: SnakeBridge.Ref.t()
+
+    #{Generator.indent(constructor, 2)}
+
+    #{Generator.indent(methods_source, 2)}
+
+    #{Generator.indent(attrs_source, 2)}
+    end
+    """
+  end
+
+  defp module_to_string(module) when is_atom(module) do
+    module |> Module.split() |> Enum.join(".")
+  end
+
+  defp module_to_string(module) when is_binary(module), do: module
+
   defp render_constructor(plan, args_name) do
     param_names = Enum.map(plan.required, & &1.name)
     args = Generator.args_expr(param_names, plan.has_args, args_name)

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-01-20
+
+### Added
+- **Split layout generation mode**: New `generated_layout: :split` config option (now default) produces Python-shaped directory structure with `__init__.ex` files for package modules.
+  - Mirrors Python module paths: `dspy.predict` → `dspy/predict/__init__.ex`
+  - Class modules get separate files: `Dspy.Predict.RLM` → `dspy/predict/rlm.ex`
+  - Registry tracks all generated files for split layout
+- **`Generator.PathMapper` module**: New path mapping utilities for Python-to-Elixir file path conversion.
+- **`Generator.render_module_file/5`**: Renders individual module files for split layout.
+- **`Generator.render_class_file/4`**: Renders standalone class module files.
+- **`Class.render_class_standalone/3`**: Renders classes as top-level modules for split layout.
+
+### Changed
+- **Default layout is now `:split`**: Generated wrappers use Python-shaped directory structure by default.
+- Legacy single-file layout (`:single`) remains available via `config :snakebridge, generated_layout: :single`.
+- Registry entries now contain relative file paths from `generated_dir` for split layout.
+
 ## [0.11.0] - 2026-01-19
 
 ### Fixed
@@ -668,7 +685,8 @@ Numpy.compute(data, __runtime__: [timeout: 600_000])
 - Type system mapper
 - Basic code generation
 
-[0.10.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.10.0...v0.10.1
+[0.12.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.2...v0.8.3

@@ -33,9 +33,12 @@ when no explicit options are provided.
 
 ```
 lib/snakebridge_generated/
-├── sympy.ex
-├── pylatexenc.ex
-└── math_verify.ex
+├── math_verify/
+│   └── __init__.ex
+├── pylatexenc/
+│   └── __init__.ex
+└── sympy/
+    └── __init__.ex
 
 .snakebridge/manifest.json
 snakebridge.lock
@@ -61,6 +64,6 @@ iex> ProofPipeline.run(ProofPipeline.sample_input())
 | `mix.exs` | Declares Python libraries via `python_deps` |
 | `lib/proof_pipeline.ex` | Pipeline logic |
 | `lib/demo.ex` | Demo script |
-| `lib/snakebridge_generated/*.ex` | Generated bindings |
+| `lib/snakebridge_generated/**/*.ex` | Generated bindings |
 | `.snakebridge/manifest.json` | Symbol manifest |
 | `snakebridge.lock` | Runtime identity lock |

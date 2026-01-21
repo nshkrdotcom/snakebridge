@@ -28,8 +28,20 @@ override exit behavior when no explicit options are provided.
 
 ```
 lib/snakebridge_generated/
-├── json.ex
-└── math.ex
+├── json/
+│   ├── __init__.ex
+│   ├── decoder/
+│   │   ├── __init__.ex
+│   │   └── json_decoder.ex
+│   ├── encoder/
+│   │   ├── __init__.ex
+│   │   └── json_encoder.ex
+│   ├── scanner/
+│   │   └── __init__.ex
+│   └── tool/
+│       └── __init__.ex
+└── math/
+    └── __init__.ex
 
 .snakebridge/manifest.json
 snakebridge.lock
@@ -53,7 +65,7 @@ iex> Json.__classes__()
 [...]
 
 iex> MathDemo.generated_structure()
-{:ok, %{root: ".../lib/snakebridge_generated", libraries: ["json", "math"]}}
+{:ok, %{root: ".../lib/snakebridge_generated", libraries: ["json", "math"], files: ["json/__init__.ex", "json/decoder/__init__.ex", "json/encoder/__init__.ex", "math/__init__.ex", "..."]}}
 
 iex> MathDemo.discover()
 :ok
@@ -68,7 +80,7 @@ iex> MathDemo.compute_sample()
 |------|---------|
 | `mix.exs` | Declares Python libraries via `python_deps` |
 | `config/config.exs` | Compile-time options only |
-| `lib/snakebridge_generated/*.ex` | Generated bindings (committed) |
+| `lib/snakebridge_generated/**/*.ex` | Generated bindings (committed) |
 | `.snakebridge/manifest.json` | Symbol manifest (committed) |
 | `snakebridge.lock` | Runtime identity lock (committed) |
 | `lib/demo.ex` | Demo script |

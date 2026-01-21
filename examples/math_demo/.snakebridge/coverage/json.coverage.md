@@ -1,13 +1,13 @@
 # Coverage Report: json
 
-Generated at: 2026-01-20T05:49:27.152026Z
+Generated at: 2026-01-21T22:48:10.641750Z
 
 ## Summary
 
-- Symbols: 4
-- Functions: 2
-- Class methods: 2
-- Non-variadic ratio: 1.00
+- Symbols: 28
+- Functions: 7
+- Class methods: 21
+- Non-variadic ratio: 0.86
 - Doc coverage ratio: 1.00
 
 ## Stubs Used
@@ -16,12 +16,17 @@ No stubs used.
 
 ## Signature Tiers
 
-- runtime: 4
+- runtime: 24
+- variadic: 4
 
 ## Doc Tiers
 
-- runtime: 4
+- module: 1
+- runtime: 27
 
 ## Issues
 
-No issues detected.
+- [signature_missing] Json.Decoder.JSONDecodeError.add_note (reason=["runtime: signature unavailable", "text_signature: unavailable", "runtime_hints: unavailable", "stub: not found", "stubgen: not found"] source="variadic")
+- [signature_missing] Json.Decoder.JSONDecodeError.with_traceback (reason=["runtime: signature unavailable", "text_signature: unavailable", "runtime_hints: unavailable", "stub: not found", "stubgen: not found"] source="variadic")
+- [signature_missing] Json.JSONDecodeError.add_note (reason=["runtime: signature unavailable", "text_signature: unavailable", "runtime_hints: unavailable", "stub: not found", "stubgen: not found"] source="variadic")
+- [signature_missing] Json.JSONDecodeError.with_traceback (reason=["runtime: signature unavailable", "text_signature: unavailable", "runtime_hints: unavailable", "stub: not found", "stubgen: not found"] source="variadic")

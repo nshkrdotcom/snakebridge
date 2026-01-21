@@ -45,12 +45,33 @@ defmodule MathDemo do
 
     case File.ls(root) do
       {:ok, entries} ->
-        files =
+        root_files =
           entries
           |> Enum.filter(&String.ends_with?(&1, ".ex"))
           |> Enum.sort()
 
-        libraries = Enum.map(files, &Path.rootname/1)
+        library_dirs =
+          entries
+          |> Enum.filter(&File.dir?(Path.join(root, &1)))
+          |> Enum.sort()
+
+        nested_files =
+          library_dirs
+          |> Enum.flat_map(fn dir ->
+            Path.join([root, dir, "**", "*.ex"])
+            |> Path.wildcard()
+            |> Enum.map(&Path.relative_to(&1, root))
+          end)
+
+        files =
+          (root_files ++ nested_files)
+          |> Enum.uniq()
+          |> Enum.sort()
+
+        libraries =
+          (Enum.map(root_files, &Path.rootname/1) ++ library_dirs)
+          |> Enum.uniq()
+          |> Enum.sort()
 
         {:ok, %{root: root, libraries: libraries, files: files}}
 

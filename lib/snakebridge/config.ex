@@ -7,6 +7,7 @@ defmodule SnakeBridge.Config do
     :libraries,
     :auto_install,
     :generated_dir,
+    :generated_layout,
     :metadata_dir,
     :helper_paths,
     :helper_pack_enabled,
@@ -90,6 +91,7 @@ defmodule SnakeBridge.Config do
           libraries: [Library.t()],
           auto_install: :never | :dev | :dev_test | :always,
           generated_dir: String.t(),
+          generated_layout: :single | :split,
           metadata_dir: String.t(),
           helper_paths: [String.t()],
           helper_pack_enabled: boolean(),
@@ -147,6 +149,7 @@ defmodule SnakeBridge.Config do
       auto_install: Application.get_env(:snakebridge, :auto_install, :dev_test),
       generated_dir:
         Application.get_env(:snakebridge, :generated_dir, "lib/snakebridge_generated"),
+      generated_layout: Application.get_env(:snakebridge, :generated_layout, :split),
       metadata_dir: Application.get_env(:snakebridge, :metadata_dir, ".snakebridge"),
       helper_paths: Application.get_env(:snakebridge, :helper_paths, ["priv/python/helpers"]),
       helper_pack_enabled: Application.get_env(:snakebridge, :helper_pack_enabled, true),

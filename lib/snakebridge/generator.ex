@@ -36,49 +36,7 @@ defmodule SnakeBridge.Generator do
     # Library: #{library.python_name} #{library.version || "unknown"}
     """
 
-    moduledoc = """
-      @moduledoc \"\"\"
-      SnakeBridge bindings for `#{library.python_name}`.
-
-      ## Runtime Options
-
-      All functions accept a `__runtime__` option for controlling execution behavior:
-
-          #{library.module_name}.some_function(args, __runtime__: [timeout: 120_000])
-
-      ### Supported runtime options
-
-      - `:timeout` - Call timeout in milliseconds (default: 120,000ms / 2 minutes)
-      - `:timeout_profile` - Use a named profile (`:default`, `:ml_inference`, `:batch_job`, `:streaming`)
-      - `:stream_timeout` - Timeout for streaming operations (default: 1,800,000ms / 30 minutes)
-      - `:session_id` - Override the session ID for this call
-      - `:pool_name` - Target a specific Snakepit pool (multi-pool setups)
-      - `:affinity` - Override session affinity (`:hint`, `:strict_queue`, `:strict_fail_fast`)
-
-      ### Timeout Profiles
-
-      - `:default` - 2 minute timeout for regular calls
-      - `:ml_inference` - 10 minute timeout for ML/LLM workloads
-      - `:batch_job` - Unlimited timeout for long-running jobs
-      - `:streaming` - 2 minute timeout, 30 minute stream_timeout
-
-      ### Example with timeout override
-
-          # For a long-running ML inference call
-          #{library.module_name}.predict(data, __runtime__: [timeout_profile: :ml_inference])
-
-          # Or explicit timeout
-          #{library.module_name}.predict(data, __runtime__: [timeout: 600_000])
-
-          # Route to a pool and enforce strict affinity
-          #{library.module_name}.predict(data, __runtime__: [pool_name: :strict_pool, affinity: :strict_queue])
-
-      See `SnakeBridge.Defaults` for global timeout configuration.
-      \"\"\"
-
-      def __snakebridge_python_name__, do: "#{library.python_name}"
-      def __snakebridge_library__, do: "#{library.python_name}"
-    """
+    moduledoc = root_moduledoc(library)
 
     functions_by_module =
       functions
@@ -128,6 +86,15 @@ defmodule SnakeBridge.Generator do
   @spec generate_library(SnakeBridge.Config.Library.t(), list(), list(), SnakeBridge.Config.t()) ::
           :ok
   def generate_library(library, functions, classes, config) do
+    case config.generated_layout do
+      :single -> generate_single_file(library, functions, classes, config)
+      :split -> generate_split_layout(library, functions, classes, config)
+      _ -> generate_split_layout(library, functions, classes, config)
+    end
+  end
+
+  # Legacy single-file generation
+  defp generate_single_file(library, functions, classes, config) do
     start_time = System.monotonic_time()
     File.mkdir_p!(config.generated_dir)
     path = Path.join(config.generated_dir, "#{library.python_name}.ex")
@@ -136,7 +103,8 @@ defmodule SnakeBridge.Generator do
       render_library(library, functions, classes, version: Application.spec(:snakebridge, :vsn))
 
     result = write_if_changed(path, source)
-    register_generated_library(library, functions, classes, config, path)
+    cleanup_stale_generated_files(library, config, [path])
+    register_generated_library(library, functions, classes, config, [path])
 
     bytes_written = if result == :written, do: byte_size(source), else: 0
 
@@ -150,6 +118,249 @@ defmodule SnakeBridge.Generator do
     )
 
     :ok
+  end
+
+  # Split layout: one file per Python module path
+  defp generate_split_layout(library, functions, classes, config) do
+    alias SnakeBridge.Generator.PathMapper
+
+    start_time = System.monotonic_time()
+    context = TypeMapper.build_context(classes)
+
+    TypeMapper.with_context(context, fn ->
+      do_generate_split_layout(library, functions, classes, config, start_time)
+    end)
+  end
+
+  defp do_generate_split_layout(library, functions, classes, config, start_time) do
+    alias SnakeBridge.Generator.PathMapper
+
+    # Group functions and classes by python_module
+    functions_by_module =
+      functions
+      |> Enum.map(&Map.put_new(&1, "python_module", library.python_name))
+      |> Enum.group_by(& &1["python_module"])
+
+    module_modules = split_layout_module_modules(library, functions_by_module, classes)
+    expected_paths = split_layout_expected_paths(library, module_modules, classes, config)
+
+    class_module_names =
+      classes
+      |> Enum.map(&class_module_name(&1, library))
+      |> MapSet.new()
+
+    module_files =
+      write_split_module_files(
+        library,
+        module_modules,
+        functions_by_module,
+        functions,
+        classes,
+        class_module_names,
+        config
+      )
+
+    class_files = write_split_class_files(library, classes, config)
+
+    all_paths = module_files ++ class_files
+    cleanup_stale_generated_files(library, config, expected_paths)
+    register_generated_library(library, functions, classes, config, all_paths)
+
+    total_bytes =
+      Enum.reduce(all_paths, 0, fn path, acc ->
+        case File.stat(path) do
+          {:ok, %{size: size}} -> acc + size
+          _ -> acc
+        end
+      end)
+
+    SnakeBridge.Telemetry.generate_stop(
+      start_time,
+      library.name,
+      List.first(all_paths) || config.generated_dir,
+      total_bytes,
+      length(functions),
+      length(classes)
+    )
+
+    :ok
+  end
+
+  defp split_layout_module_modules(library, functions_by_module, classes) do
+    function_modules = Map.keys(functions_by_module)
+
+    class_modules =
+      classes
+      |> Enum.map(&(&1["python_module"] || library.python_name))
+      |> Enum.reject(&is_nil/1)
+
+    [library.python_name | function_modules ++ class_modules]
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
+
+  defp split_layout_expected_paths(library, module_modules, classes, config) do
+    alias SnakeBridge.Generator.PathMapper
+
+    module_paths = Enum.map(module_modules, &PathMapper.module_to_path(&1, config.generated_dir))
+
+    class_paths =
+      classes
+      |> Enum.map(fn class ->
+        python_module = class["python_module"] || library.python_name
+        class_name = class["name"] || class["class"] || "Class"
+        PathMapper.class_file_path(python_module, class_name, config.generated_dir)
+      end)
+
+    module_paths ++ class_paths
+  end
+
+  defp write_split_module_files(
+         library,
+         module_modules,
+         functions_by_module,
+         functions,
+         classes,
+         class_module_names,
+         config
+       ) do
+    alias SnakeBridge.Generator.PathMapper
+
+    Enum.map(module_modules, fn python_module ->
+      funcs = Map.get(functions_by_module, python_module, [])
+      path = PathMapper.module_to_path(python_module, config.generated_dir)
+      File.mkdir_p!(Path.dirname(path))
+
+      elixir_module =
+        python_module
+        |> PathMapper.python_module_to_elixir_module(library.module_name)
+        |> module_to_string()
+        |> resolve_module_collision(python_module, library, class_module_names)
+
+      discovery =
+        if python_module == library.python_name do
+          {functions, classes}
+        else
+          nil
+        end
+
+      source = render_module_file(library, elixir_module, python_module, funcs, discovery)
+      write_if_changed(path, source)
+      path
+    end)
+  end
+
+  defp resolve_module_collision(elixir_module, python_module, library, class_module_names) do
+    if python_module == library.python_name do
+      elixir_module
+    else
+      if MapSet.member?(class_module_names, elixir_module) do
+        elixir_module <> ".Module"
+      else
+        elixir_module
+      end
+    end
+  end
+
+  defp write_split_class_files(library, classes, config) do
+    alias SnakeBridge.Generator.PathMapper
+
+    classes
+    |> Enum.map(fn class ->
+      python_module = class["python_module"] || library.python_name
+      class_name = class["name"] || class["class"] || "Class"
+      path = PathMapper.class_file_path(python_module, class_name, config.generated_dir)
+      File.mkdir_p!(Path.dirname(path))
+
+      elixir_module = class_module_name(class, library)
+      source = render_class_file(library, elixir_module, python_module, class)
+      write_if_changed(path, source)
+      path
+    end)
+    |> Enum.uniq()
+  end
+
+  @doc false
+  def render_module_file(library, elixir_module, python_module, functions, discovery \\ nil) do
+    version = Application.spec(:snakebridge, :vsn) |> to_string()
+    module_name = module_to_string(elixir_module)
+
+    header = """
+    # Generated by SnakeBridge v#{version} - DO NOT EDIT MANUALLY
+    # Regenerate with: mix compile
+    # Library: #{library.python_name} #{library.version || "unknown"}
+    # Python module: #{python_module}
+    """
+
+    moduledoc = build_moduledoc(library, python_module)
+
+    function_defs =
+      functions
+      |> Enum.sort_by(& &1["name"])
+      |> Enum.map_join("\n\n", &Function.render_function(&1, library))
+
+    discovery_source =
+      case discovery do
+        {discovery_functions, discovery_classes} ->
+          render_discovery(discovery_functions, discovery_classes)
+
+        _ ->
+          ""
+      end
+
+    """
+    #{header}
+    defmodule #{module_name} do
+    #{moduledoc}
+    #{function_defs}
+    #{discovery_source}
+    end
+    """
+    |> Code.format_string!()
+    |> IO.iodata_to_binary()
+    |> ensure_final_newline()
+  end
+
+  defp build_moduledoc(library, python_module) do
+    is_root = python_module == library.python_name
+
+    if is_root do
+      root_moduledoc(library)
+    else
+      """
+        @moduledoc \"\"\"
+        Submodule bindings for `#{python_module}`.
+        \"\"\"
+
+        def __snakebridge_python_name__, do: "#{python_module}"
+        def __snakebridge_library__, do: "#{library.python_name}"
+      """
+    end
+  end
+
+  @doc false
+  def render_class_file(library, elixir_module, python_module, class_info) do
+    version = Application.spec(:snakebridge, :vsn) |> to_string()
+    class_name = class_info["name"] || class_info["class"] || "Class"
+
+    header = """
+    # Generated by SnakeBridge v#{version} - DO NOT EDIT MANUALLY
+    # Regenerate with: mix compile
+    # Library: #{library.python_name} #{library.version || "unknown"}
+    # Python module: #{python_module}
+    # Python class: #{class_name}
+    """
+
+    # Render class as standalone module
+    class_source = Class.render_class_standalone(class_info, library, elixir_module)
+
+    """
+    #{header}
+    #{class_source}
+    """
+    |> Code.format_string!()
+    |> IO.iodata_to_binary()
+    |> ensure_final_newline()
   end
 
   @spec write_if_changed(String.t(), String.t()) :: :written | :unchanged
@@ -194,12 +405,156 @@ defmodule SnakeBridge.Generator do
     :global.trans(lock_key, fun)
   end
 
-  defp register_generated_library(library, functions, classes, config, path) do
-    entry = build_registry_entry(library, functions, classes, config, path)
+  defp cleanup_stale_generated_files(library, config, expected_paths) do
+    layout = config.generated_layout || :split
+    legacy_single = Path.expand(Path.join(config.generated_dir, "#{library.python_name}.ex"))
+
+    expected =
+      expected_paths
+      |> Enum.map(&Path.expand/1)
+      |> MapSet.new()
+
+    candidate_paths =
+      library_candidate_paths(library, config)
+      |> Enum.map(&Path.expand/1)
+      |> Enum.uniq()
+      |> Enum.reject(&MapSet.member?(expected, &1))
+
+    stale_paths =
+      candidate_paths
+      |> Enum.filter(fn path ->
+        if path == legacy_single and layout == :split do
+          true
+        else
+          generated_file_for_library?(path, library.python_name)
+        end
+      end)
+
+    base_dirs = cleanup_base_dirs(library, config)
+
+    Enum.each(stale_paths, fn path ->
+      _ = File.rm(path)
+      remove_empty_parent_dirs(path, base_dirs)
+    end)
+  end
+
+  defp library_candidate_paths(library, config) do
+    registry_paths = registry_paths_for_library(library, config)
+    library_dir_paths = library_dir_paths(library, config)
+    legacy_single = Path.join(config.generated_dir, "#{library.python_name}.ex")
+
+    registry_paths ++ library_dir_paths ++ [legacy_single]
+  end
+
+  defp registry_paths_for_library(library, config) do
+    case SnakeBridge.Registry.get(library.python_name) do
+      %{path: base, files: files} when is_list(files) ->
+        expand_registry_files(base, files, config.generated_dir)
+
+      _ ->
+        []
+    end
+  end
+
+  defp expand_registry_files(base, files, generated_dir) do
+    base = Path.expand(base)
+    config_base = Path.expand(generated_dir)
+
+    if base == config_base do
+      Enum.map(files, fn file ->
+        Path.expand(Path.join(base, file))
+      end)
+    else
+      []
+    end
+  end
+
+  defp library_dir_paths(library, config) do
+    alias SnakeBridge.Generator.PathMapper
+
+    dir = PathMapper.module_to_dir(library.python_name, config.generated_dir)
+
+    if File.dir?(dir) do
+      Path.wildcard(Path.join([dir, "**", "*.ex"]))
+    else
+      []
+    end
+  end
+
+  defp cleanup_base_dirs(library, config) do
+    registry_base =
+      case SnakeBridge.Registry.get(library.python_name) do
+        %{path: base} when is_binary(base) ->
+          base = Path.expand(base)
+          config_base = Path.expand(config.generated_dir)
+
+          if base == config_base do
+            [base]
+          else
+            []
+          end
+
+        _ ->
+          []
+      end
+
+    [config.generated_dir | registry_base]
+    |> Enum.map(&Path.expand/1)
+    |> Enum.uniq()
+  end
+
+  defp generated_file_for_library?(path, library_python_name) do
+    case File.read(path) do
+      {:ok, content} ->
+        header =
+          content
+          |> String.split("\n")
+          |> Enum.take(6)
+          |> Enum.join("\n")
+
+        String.contains?(header, "# Generated by SnakeBridge") and
+          String.contains?(header, "# Library: #{library_python_name}")
+
+      _ ->
+        false
+    end
+  end
+
+  defp remove_empty_parent_dirs(path, base_dirs) do
+    base_dirs
+    |> Enum.filter(&path_within_base?(path, &1))
+    |> Enum.each(fn base -> remove_empty_parent_dir(Path.dirname(path), base) end)
+  end
+
+  defp remove_empty_parent_dir(dir, base) do
+    cond do
+      dir == base ->
+        :ok
+
+      not File.dir?(dir) ->
+        :ok
+
+      File.ls(dir) == {:ok, []} ->
+        _ = File.rmdir(dir)
+        remove_empty_parent_dir(Path.dirname(dir), base)
+
+      true ->
+        :ok
+    end
+  end
+
+  defp path_within_base?(path, base) do
+    expanded_path = Path.expand(path)
+    base_prefix = base |> Path.expand() |> Path.join("")
+    String.starts_with?(expanded_path, base_prefix)
+  end
+
+  defp register_generated_library(library, functions, classes, config, paths) do
+    entry = build_registry_entry(library, functions, classes, config, paths)
     _ = SnakeBridge.Registry.register(library.python_name, entry)
   end
 
-  defp build_registry_entry(library, functions, classes, config, path) do
+  defp build_registry_entry(library, functions, classes, config, paths) when is_list(paths) do
     python_version =
       case library.version do
         nil -> "unknown"
@@ -207,13 +562,18 @@ defmodule SnakeBridge.Generator do
         value -> to_string(value)
       end
 
+    # Get relative paths from base dir
+    relative_files =
+      paths
+      |> Enum.map(&Path.relative_to(&1, config.generated_dir))
+
     %{
       python_module: library.python_name,
       python_version: python_version,
       elixir_module: module_to_string(library.module_name),
       generated_at: DateTime.utc_now(),
       path: config.generated_dir,
-      files: [Path.basename(path)],
+      files: relative_files,
       stats: %{
         functions: length(functions),
         classes: length(classes),
@@ -330,6 +690,52 @@ defmodule SnakeBridge.Generator do
       def doc(function) do
         SnakeBridge.Docs.get(__MODULE__, function)
       end
+    """
+  end
+
+  defp root_moduledoc(library) do
+    """
+      @moduledoc \"\"\"
+      SnakeBridge bindings for `#{library.python_name}`.
+
+      ## Runtime Options
+
+      All functions accept a `__runtime__` option for controlling execution behavior:
+
+          #{library.module_name}.some_function(args, __runtime__: [timeout: 120_000])
+
+      ### Supported runtime options
+
+      - `:timeout` - Call timeout in milliseconds (default: 120,000ms / 2 minutes)
+      - `:timeout_profile` - Use a named profile (`:default`, `:ml_inference`, `:batch_job`, `:streaming`)
+      - `:stream_timeout` - Timeout for streaming operations (default: 1,800,000ms / 30 minutes)
+      - `:session_id` - Override the session ID for this call
+      - `:pool_name` - Target a specific Snakepit pool (multi-pool setups)
+      - `:affinity` - Override session affinity (`:hint`, `:strict_queue`, `:strict_fail_fast`)
+
+      ### Timeout Profiles
+
+      - `:default` - 2 minute timeout for regular calls
+      - `:ml_inference` - 10 minute timeout for ML/LLM workloads
+      - `:batch_job` - Unlimited timeout for long-running jobs
+      - `:streaming` - 2 minute timeout, 30 minute stream_timeout
+
+      ### Example with timeout override
+
+          # For a long-running ML inference call
+          #{library.module_name}.predict(data, __runtime__: [timeout_profile: :ml_inference])
+
+          # Or explicit timeout
+          #{library.module_name}.predict(data, __runtime__: [timeout: 600_000])
+
+          # Route to a pool and enforce strict affinity
+          #{library.module_name}.predict(data, __runtime__: [pool_name: :strict_pool, affinity: :strict_queue])
+
+      See `SnakeBridge.Defaults` for global timeout configuration.
+      \"\"\"
+
+      def __snakebridge_python_name__, do: "#{library.python_name}"
+      def __snakebridge_library__, do: "#{library.python_name}"
     """
   end
 

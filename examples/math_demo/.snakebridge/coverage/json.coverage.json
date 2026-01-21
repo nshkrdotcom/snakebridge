@@ -1,22 +1,73 @@
 {
-  "generated_at": "2026-01-20T05:49:27.152026Z",
-  "issues": [],
+  "generated_at": "2026-01-21T22:48:10.641750Z",
+  "issues": [
+    {
+      "reason": [
+        "runtime: signature unavailable",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found",
+        "stubgen: not found"
+      ],
+      "type": "signature_missing",
+      "symbol": "Json.Decoder.JSONDecodeError.add_note",
+      "source": "variadic"
+    },
+    {
+      "reason": [
+        "runtime: signature unavailable",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found",
+        "stubgen: not found"
+      ],
+      "type": "signature_missing",
+      "symbol": "Json.Decoder.JSONDecodeError.with_traceback",
+      "source": "variadic"
+    },
+    {
+      "reason": [
+        "runtime: signature unavailable",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found",
+        "stubgen: not found"
+      ],
+      "type": "signature_missing",
+      "symbol": "Json.JSONDecodeError.add_note",
+      "source": "variadic"
+    },
+    {
+      "reason": [
+        "runtime: signature unavailable",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found",
+        "stubgen: not found"
+      ],
+      "type": "signature_missing",
+      "symbol": "Json.JSONDecodeError.with_traceback",
+      "source": "variadic"
+    }
+  ],
   "library": "json",
   "stubs": {
     "count": 0,
     "sources": []
   },
   "summary": {
-    "class_methods": 2,
+    "class_methods": 21,
     "doc_coverage_ratio": 1.0,
     "doc_tiers": {
-      "runtime": 4
+      "module": 1,
+      "runtime": 27
     },
-    "functions": 2,
-    "non_variadic_ratio": 1.0,
+    "functions": 7,
+    "non_variadic_ratio": 0.8571428571428571,
     "signature_tiers": {
-      "runtime": 4
+      "runtime": 24,
+      "variadic": 4
     },
-    "symbols_total": 4
+    "symbols_total": 28
   }
 }

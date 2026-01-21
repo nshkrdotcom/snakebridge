@@ -34,6 +34,7 @@ defmodule SnakeBridge.MaxCoverageIntegrationTest do
       libraries: [library],
       auto_install: :never,
       generated_dir: generated_dir,
+      generated_layout: :single,
       metadata_dir: metadata_dir,
       helper_paths: [],
       helper_pack_enabled: false,

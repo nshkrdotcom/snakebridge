@@ -137,6 +137,83 @@ Results cache in `.snakebridge/manifest.json`:
 
 `SnakeBridge.Lock` updates `snakebridge.lock` with environment info.
 
+## Generated File Layout
+
+SnakeBridge generates Elixir files that mirror the Python module structure. This produces
+navigable, IDE-friendly bindings that match Python's package organization.
+
+### Directory Structure
+
+Generated files are organized to match Python module paths:
+
+```
+lib/snakebridge_generated/
+├── dspy/
+│   ├── __init__.ex          # Dspy module (root functions)
+│   ├── predict/
+│   │   ├── __init__.ex       # Dspy.Predict module
+│   │   ├── chain_of_thought.ex  # Dspy.Predict.ChainOfThought (class)
+│   │   └── rlm.ex            # Dspy.Predict.Rlm (class)
+│   └── retrieve/
+│       └── __init__.ex       # Dspy.Retrieve module
+├── numpy/
+│   ├── __init__.ex           # Numpy module
+│   └── linalg/
+│       └── __init__.ex       # Numpy.Linalg module
+└── pandas/
+    ├── __init__.ex           # Pandas module
+    └── data_frame.ex         # Pandas.DataFrame (class)
+```
+
+### The `__init__.ex` Convention
+
+Following Python's `__init__.py` pattern, package modules use `__init__.ex`:
+
+| Python Module | Generated File | Elixir Module |
+|---------------|----------------|---------------|
+| `dspy` | `dspy/__init__.ex` | `Dspy` |
+| `dspy.predict` | `dspy/predict/__init__.ex` | `Dspy.Predict` |
+| `numpy.linalg` | `numpy/linalg/__init__.ex` | `Numpy.Linalg` |
+
+### Class Files
+
+Classes are generated as separate files named after the class:
+
+| Python Class | Generated File | Elixir Module |
+|--------------|----------------|---------------|
+| `dspy.predict.ChainOfThought` | `dspy/predict/chain_of_thought.ex` | `Dspy.Predict.ChainOfThought` |
+| `pandas.DataFrame` | `pandas/data_frame.ex` | `Pandas.DataFrame` |
+| `numpy.ndarray` | `numpy/ndarray.ex` | `Numpy.Ndarray` |
+
+### Benefits
+
+- **IDE Navigation**: Jump to definitions matches Python's module structure
+- **Smaller Files**: Each module is independently viewable and diffable
+- **Git-Friendly**: Changes to one submodule don't affect others
+- **Familiar Layout**: Developers familiar with Python recognize the structure
+
+### Configuration
+
+The split layout is the default. To use the legacy single-file layout:
+
+```elixir
+# config/config.exs
+config :snakebridge, generated_layout: :single
+```
+
+With `:single`, all modules for a library are nested in one file:
+
+```
+lib/snakebridge_generated/
+├── dspy.ex      # All Dspy.* modules nested inside
+├── numpy.ex     # All Numpy.* modules nested inside
+└── pandas.ex    # All Pandas.* modules nested inside
+```
+
+> **Note**: The single-file layout is preserved for backward compatibility but
+> may be deprecated in future versions.
+
+
 ## Max Coverage and Signature Tiers
 
 When `generate: :all` is enabled, SnakeBridge attempts to wrap every public symbol

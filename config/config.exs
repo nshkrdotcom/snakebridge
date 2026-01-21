@@ -3,6 +3,7 @@ import Config
 # SnakeBridge compile-time configuration.
 config :snakebridge,
   generated_dir: "lib/snakebridge_generated",
+  generated_layout: :split,
   metadata_dir: ".snakebridge",
   verbose: false,
   strict: false,

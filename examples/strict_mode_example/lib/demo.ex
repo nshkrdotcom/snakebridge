@@ -64,6 +64,10 @@ defmodule Demo do
         metadata_dir: Path.join(tmp_dir, "metadata")
     }
 
+    registry_path = Path.join(tmp_dir, "registry.json")
+    original_registry_path = Application.get_env(:snakebridge, :registry_path)
+    Application.put_env(:snakebridge, :registry_path, registry_path)
+
     try do
       Pipeline.run(config)
 
@@ -82,6 +86,11 @@ defmodule Demo do
           IO.puts("Unexpected strict mode failure: #{Exception.message(error)}")
           Examples.record_failure()
         end
+    after
+      case original_registry_path do
+        nil -> Application.delete_env(:snakebridge, :registry_path)
+        value -> Application.put_env(:snakebridge, :registry_path, value)
+      end
     end
   end
 

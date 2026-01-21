@@ -28,7 +28,7 @@ defmodule MathDemo.MixProject do
 
   defp python_deps do
     [
-      {:json, :stdlib},
+      {:json, :stdlib, generate: :all, submodules: true},
       {:math, :stdlib}
     ]
   end

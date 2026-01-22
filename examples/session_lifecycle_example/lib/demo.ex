@@ -1,4 +1,6 @@
 defmodule Demo do
+  require SnakeBridge
+
   @moduledoc """
   Session Lifecycle Example - Demonstrates session management in SnakeBridge.
 
@@ -17,7 +19,7 @@ defmodule Demo do
   alias SnakeBridge.SessionManager
 
   def run do
-    SnakeBridge.run_as_script(fn ->
+    SnakeBridge.script do
       Examples.reset_failures()
 
       IO.puts("Session Lifecycle Example")
@@ -53,7 +55,7 @@ defmodule Demo do
       IO.puts("All demos completed!")
 
       Examples.assert_no_failures!()
-    end)
+    end
     |> Examples.assert_script_ok()
   end
 

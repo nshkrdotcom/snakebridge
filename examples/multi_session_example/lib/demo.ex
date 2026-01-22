@@ -1,4 +1,6 @@
 defmodule Demo do
+  require SnakeBridge
+
   @moduledoc """
   Multi-Session Example - Multiple Snakes in the Pit!
 
@@ -33,7 +35,7 @@ defmodule Demo do
   ]
 
   def run do
-    SnakeBridge.run_as_script(fn ->
+    SnakeBridge.script do
       Examples.reset_failures()
 
       IO.puts("Multi-Session Example: Multiple Snakes in the Pit!")
@@ -69,7 +71,7 @@ defmodule Demo do
       IO.puts("All demos completed - multiple snakes, one pit!")
 
       Examples.assert_no_failures!()
-    end)
+    end
     |> Examples.assert_script_ok()
   end
 

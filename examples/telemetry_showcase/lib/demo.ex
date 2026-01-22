@@ -1,4 +1,6 @@
 defmodule Demo do
+  require SnakeBridge
+
   @moduledoc """
   SnakeBridge Telemetry Showcase Demo
 
@@ -18,7 +20,7 @@ defmodule Demo do
     # Start the telemetry handler agent
     {:ok, _pid} = TelemetryHandler.start_link()
 
-    SnakeBridge.run_as_script(fn ->
+    SnakeBridge.script do
       Examples.reset_failures()
 
       # Attach telemetry handlers AFTER Snakepit startup.
@@ -46,7 +48,7 @@ defmodule Demo do
         TelemetryHandler.detach()
         SnakeBridge.Telemetry.RuntimeForwarder.detach()
       end
-    end)
+    end
     |> Examples.assert_script_ok()
   end
 

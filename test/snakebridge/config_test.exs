@@ -20,11 +20,13 @@ defmodule SnakeBridge.ConfigTest do
           version: "~> 10.0",
           python_name: "PIL",
           pypi_package: "pillow",
+          docs_url: "https://pillow.readthedocs.io/",
           extras: ["cuda"]
         ]
       )
 
     assert library.pypi_package == "pillow"
+    assert library.docs_url == "https://pillow.readthedocs.io/"
     assert library.extras == ["cuda"]
   end
 

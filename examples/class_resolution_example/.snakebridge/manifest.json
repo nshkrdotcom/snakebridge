@@ -4366,6 +4366,27 @@
       "python_module": "pathlib"
     }
   },
+  "modules": {
+    "math": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "This module provides access to the mathematical functions\ndefined by the C standard.",
+      "python_module": "math"
+    },
+    "numpy": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "NumPy\n=====\n\nProvides\n  1. An array object of arbitrary homogeneous items\n  2. Fast mathematical operations over arrays\n  3. Linear Algebra, Fourier Transforms, Random Number Generation\n\nHow to use the documentation\n----------------------------\nDocumentation is available in two forms: docstrings provided\nwith the code, and a loose standing reference guide, available from\n`the NumPy homepage <https://numpy.org>`_.\n\nWe recommend exploring the docstrings using\n`IPython <https://ipython.org>`_, an advanced Python shell with\nTAB-completion and introspection capabilities.  See below for further\ninstructions.\n\nThe docstring examples assume that `numpy` has been imported as ``np``::\n\n  >>> import numpy as np\n\nCode snippets are indicated by three greater-than signs::\n\n  >>> x = 42\n  >>> x = x + 1\n\nUse the built-in ``help`` function to view a function's docstring::\n\n  >>> help(np.sort)\n  ... # doctest: +SKIP\n\nFor some objects, ``np.info(obj)`` may provide additional help.  This is\nparticularly true if you see the line \"Help on ufunc object:\" at the top\nof the help() page.  Ufuncs are implemented in C, not Python, for speed.\nThe native Python help() does not know how to view their help, but our\nnp.info() function does.\n\nAvailable subpackages\n---------------------\nlib\n    Basic functions used by several sub-packages.\nrandom\n    Core Random Tools\nlinalg\n    Core Linear Algebra Tools\nfft\n    Core FFT routines\npolynomial\n    Polynomial tools\ntesting\n    NumPy testing tools\ndistutils\n    Enhancements to distutils with support for\n    Fortran compilers support and more (for Python <= 3.11)\n\nUtilities\n---------\ntest\n    Run numpy unittests\nshow_config\n    Show numpy build configuration\n__version__\n    NumPy version string\n\nViewing documentation using IPython\n-----------------------------------\n\nStart IPython and import `numpy` usually under the alias ``np``: `import\nnumpy as np`.  Then, directly past or use the ``%cpaste`` magic to paste\nexamples into the shell.  To see which functions are available in `numpy`,\ntype ``np.<TAB>`` (where ``<TAB>`` refers to the TAB key), or use\n``np.*cos*?<ENTER>`` (where ``<ENTER>`` refers to the ENTER key) to narrow\ndown the list.  To view the docstring for a function, use\n``np.cos?<ENTER>`` (to view the docstring) and ``np.cos??<ENTER>`` (to view\nthe source code).\n\nCopies vs. in-place operation\n-----------------------------\nMost of the functions in `numpy` return a copy of the array argument\n(e.g., `np.sort`).  In-place versions of these functions are often\navailable as array methods, i.e. ``x = np.array([1,2,3]); x.sort()``.\nExceptions to this rule are documented.",
+      "module_version": "2.4.0",
+      "python_module": "numpy"
+    },
+    "pathlib": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Object-oriented filesystem paths.\n\nThis module provides classes to represent abstract paths and concrete\npaths with operations that have semantics appropriate for different\noperating systems.",
+      "python_module": "pathlib"
+    }
+  },
   "symbols": {
     "Math.pi/0": {
       "call_type": "module_attr",
@@ -4507,5 +4528,5 @@
       "signature_available": true
     }
   },
-  "version": "0.7.2"
+  "version": "0.13.0"
 }

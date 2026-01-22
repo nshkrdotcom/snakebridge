@@ -48,6 +48,7 @@ end
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `pypi_package` | `String` | library name | PyPI package name if different from Elixir atom |
+| `docs_url` | `String` | `nil` | Explicit docs URL for third-party libraries |
 | `extras` | `[String]` | `[]` | pip extras (e.g., `["sql", "excel"]`) |
 | `include` | `[String]` | `[]` | Only generate these symbols |
 | `exclude` | `[String]` | `[]` | Exclude these symbols from generation |
@@ -295,6 +296,10 @@ SnakeBridge.call("module", "fn", [args],
   ]
 )
 ```
+
+Runtime defaults can be set per process with `SnakeBridge.RuntimeContext.put_defaults/1`
+or scoped with `SnakeBridge.with_runtime/2`. Defaults merge under explicit `__runtime__`
+options.
 
 | Option | Type | Description |
 |--------|------|-------------|

@@ -120,6 +120,16 @@ SnakeBridge.call("module", "function", [args],
 )
 ```
 
+You can also set runtime defaults per process or scoped block:
+
+```elixir
+SnakeBridge.RuntimeContext.put_defaults(pool_name: :gpu_pool, timeout_profile: :ml_inference)
+
+SnakeBridge.with_runtime(pool_name: :gpu_pool) do
+  SnakeBridge.call("numpy", "mean", [scores])
+end
+```
+
 ### session_id
 
 Use a specific session instead of the auto-session. Sessions isolate Python object refs.

@@ -9,7 +9,8 @@ defmodule ClassResolutionExample.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       python_deps: python_deps(),
-      compilers: [:snakebridge] ++ Mix.compilers()
+      compilers: [:snakebridge] ++ Mix.compilers(),
+      docs: docs()
     ]
   end
 
@@ -32,6 +33,29 @@ defmodule ClassResolutionExample.MixProject do
       {:pathlib, :stdlib, python_name: "pathlib", module_name: Pathlib},
       {:numpy, :stdlib,
        python_name: "numpy", module_name: Numpy, include: ["nan", "array", "ndarray"]}
+    ]
+  end
+
+  defp docs do
+    groups =
+      if Code.ensure_loaded?(SnakeBridge.Docs) and
+           function_exported?(SnakeBridge.Docs, :groups_for_modules, 0) do
+        SnakeBridge.Docs.groups_for_modules()
+      else
+        []
+      end
+
+    nests =
+      if Code.ensure_loaded?(SnakeBridge.Docs) and
+           function_exported?(SnakeBridge.Docs, :nest_modules_by_prefix, 0) do
+        SnakeBridge.Docs.nest_modules_by_prefix()
+      else
+        []
+      end
+
+    [
+      groups_for_modules: groups,
+      nest_modules_by_prefix: nests
     ]
   end
 end

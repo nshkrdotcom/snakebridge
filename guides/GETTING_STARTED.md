@@ -41,7 +41,7 @@ defmodule MyApp.MixProject do
   end
 
   defp deps do
-    [{:snakebridge, "~> 0.11.0"}]
+    [{:snakebridge, "~> 0.13.0"}]
   end
 
   # Python dependencies - just like Elixir deps
@@ -190,16 +190,17 @@ end
 
 ## Running Python Code
 
-For scripts and Mix tasks, wrap your code with `run_as_script/2`:
+For scripts and Mix tasks, use `SnakeBridge.script/1`:
 
 ```elixir
-SnakeBridge.run_as_script(fn ->
+SnakeBridge.script do
   {:ok, result} = SnakeBridge.call("math", "sqrt", [16])
   IO.inspect(result)
-end)
+end
 ```
 
-This ensures proper startup and shutdown of the Python process pool.
+This ensures proper startup and shutdown of the Python process pool. For custom lifecycle
+options, use `SnakeBridge.run_as_script/2`.
 
 ## Next Steps
 

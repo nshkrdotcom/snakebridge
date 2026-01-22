@@ -8,7 +8,7 @@ defmodule SnakeBridge.CallbackRegistry do
   use GenServer
   require Logger
 
-  alias SnakeBridge.SessionContext
+  alias SnakeBridge.Runtime
   alias Snakepit.Bridge.ToolRegistry
 
   @tool_name "snakebridge.callback"
@@ -57,9 +57,11 @@ defmodule SnakeBridge.CallbackRegistry do
   Ensures the callback tool is registered for the session.
   """
   @spec ensure_tool_registered(String.t() | nil) :: :ok
-  def ensure_tool_registered(session_id) do
-    session_id = session_id || "default"
+  def ensure_tool_registered(nil) do
+    ensure_tool_registered(Runtime.current_session())
+  end
 
+  def ensure_tool_registered(session_id) do
     if Code.ensure_loaded?(ToolRegistry) and
          Process.whereis(ToolRegistry) do
       case ToolRegistry.register_elixir_tool(
@@ -190,9 +192,6 @@ defmodule SnakeBridge.CallbackRegistry do
   end
 
   defp current_session_id do
-    case SessionContext.current() do
-      %{session_id: session_id} when is_binary(session_id) -> session_id
-      _ -> "default"
-    end
+    Runtime.current_session()
   end
 end

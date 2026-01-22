@@ -27,7 +27,7 @@ defmodule SnakeBridge.Docs do
   end
 
   @doc """
-  Builds an ExDoc `groups_for_modules` map using the SnakeBridge manifest.
+  Builds an ExDoc `groups_for_modules` keyword list using the SnakeBridge manifest.
 
   This keeps HexDocs navigation aligned with Python package paths, while
   remaining purely an Elixir configuration concern.
@@ -41,7 +41,7 @@ defmodule SnakeBridge.Docs do
   - `:include_functions` - include module functions (default: true)
   - `:include_classes` - include class modules (default: true)
   """
-  @spec groups_for_modules(keyword()) :: map()
+  @spec groups_for_modules(keyword()) :: [{String.t(), [module()]}]
   def groups_for_modules(opts \\ []) do
     config = Keyword.get(opts, :config) || SnakeBridge.Config.load()
     manifest = Keyword.get(opts, :manifest) || Manifest.load(config)
@@ -67,8 +67,11 @@ defmodule SnakeBridge.Docs do
     entries
     |> Enum.reduce(%{}, fn entry, acc ->
       case process_entry(entry, libraries, depth) do
-        nil -> acc
-        {group, module} -> Map.update(acc, group, MapSet.new([module]), &MapSet.put(&1, module))
+        nil ->
+          acc
+
+        {group, module} ->
+          Map.update(acc, group, MapSet.new([module]), &MapSet.put(&1, module))
       end
     end)
     |> Enum.map(fn {group, modules} ->
@@ -80,7 +83,44 @@ defmodule SnakeBridge.Docs do
 
       {group, modules}
     end)
-    |> Map.new()
+    |> Enum.sort_by(fn {group, _} -> group end)
+  end
+
+  @doc """
+  Builds an ExDoc `nest_modules_by_prefix` list using the SnakeBridge manifest.
+
+  This keeps the navigation tree aligned with generated Python packages.
+
+  ## Options
+
+  - `:config` - `SnakeBridge.Config` struct (defaults to `SnakeBridge.Config.load/0`)
+  - `:manifest` - manifest map (defaults to `SnakeBridge.Manifest.load/1`)
+  - `:libraries` - list of library names to include (atoms or strings)
+  """
+  @spec nest_modules_by_prefix(keyword()) :: [module()]
+  def nest_modules_by_prefix(opts \\ []) do
+    config = Keyword.get(opts, :config) || SnakeBridge.Config.load()
+    manifest = Keyword.get(opts, :manifest) || Manifest.load(config)
+    only_libraries = Keyword.get(opts, :libraries)
+
+    libraries = filter_libraries(config.libraries, only_libraries)
+    module_keys = Map.keys(Map.get(manifest, "modules", %{}))
+
+    roots =
+      module_keys
+      |> Enum.map(&library_for_module(&1, libraries))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.map(& &1.module_name)
+      |> Enum.uniq()
+
+    roots =
+      if roots == [] do
+        Enum.map(libraries, & &1.module_name)
+      else
+        roots
+      end
+
+    Enum.sort(roots)
   end
 
   defp fetch_doc_with_source(module, function) do

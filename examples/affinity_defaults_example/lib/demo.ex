@@ -1,4 +1,6 @@
 defmodule Demo do
+  require SnakeBridge
+
   @moduledoc """
   Affinity Defaults Example - Single Pool
 
@@ -14,7 +16,7 @@ defmodule Demo do
   alias Snakepit.Bridge.SessionStore
 
   def run do
-    SnakeBridge.run_as_script(fn ->
+    SnakeBridge.script do
       Examples.reset_failures()
 
       IO.puts("Affinity Defaults Example: Single Pool")
@@ -34,7 +36,7 @@ defmodule Demo do
       IO.puts("All demos completed - single pool affinity behaviors")
 
       Examples.assert_no_failures!()
-    end)
+    end
     |> Examples.assert_script_ok()
   end
 

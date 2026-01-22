@@ -127,7 +127,7 @@ defmodule SnakeBridge.Runtime.Streamer do
   end
 
   defp stream_iteration_opts(runtime_opts, ref) do
-    runtime_opts = List.wrap(runtime_opts || [])
+    runtime_opts = List.wrap(runtime_opts)
     session_id = SessionResolver.resolve_session_id(runtime_opts, ref)
     [__runtime__: SessionResolver.ensure_session_opt(runtime_opts, session_id)]
   end

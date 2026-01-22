@@ -59,6 +59,33 @@ defmodule SnakeBridge.Introspector do
     result
   end
 
+  @doc """
+  Fetch module docstrings without introspecting symbols.
+  """
+  @spec introspect_module_docs(SnakeBridge.Config.Library.t() | map(), [String.t()]) ::
+          {:ok, list()} | {:error, term()}
+  def introspect_module_docs(library, modules) when is_list(modules) do
+    python_name = library_python_name(library)
+    modules_json = Jason.encode!(Enum.map(modules, &to_string/1))
+    config_json = introspection_config_json(library)
+
+    case run_script(
+           [
+             script_path(),
+             "--module",
+             python_name,
+             "--module-docs",
+             modules_json,
+             "--config",
+             config_json
+           ],
+           runner_opts()
+         ) do
+      {output, 0} -> parse_output(output, python_name)
+      {output, _status} -> handle_python_error(output, python_name)
+    end
+  end
+
   defp build_module_args(python_name, config_json, library, opts) do
     base = [script_path(), "--module", python_name, "--config", config_json]
     {submodules, discover_submodules?} = resolve_submodules(library, opts)

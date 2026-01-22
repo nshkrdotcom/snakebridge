@@ -134,7 +134,7 @@ defmodule SnakeBridge do
 
   require SnakeBridge.WithContext
 
-  alias SnakeBridge.{Bytes, Dynamic, Ref, Runtime, ScriptOptions}
+  alias SnakeBridge.{Bytes, Dynamic, Ref, Runtime, RuntimeContext, ScriptOptions}
 
   # ============================================================================
   # Script Execution
@@ -159,6 +159,42 @@ defmodule SnakeBridge do
       end,
       ScriptOptions.resolve(opts)
     )
+  end
+
+  @doc """
+  Runs a script with sensible defaults for exit/stop behavior.
+
+  This is a thin wrapper around `run_as_script/2`.
+  """
+  defmacro script(do: block) do
+    quote do
+      SnakeBridge.run_as_script(
+        fn -> unquote(block) end,
+        exit_mode: :auto,
+        stop_mode: :if_started
+      )
+    end
+  end
+
+  @doc """
+  Runs a script with explicit options.
+  """
+  defmacro script(opts, do: block) do
+    quote do
+      SnakeBridge.run_as_script(
+        fn -> unquote(block) end,
+        Keyword.merge([exit_mode: :auto, stop_mode: :if_started], unquote(opts))
+      )
+    end
+  end
+
+  @doc """
+  Executes a block with process-scoped runtime defaults.
+  """
+  defmacro with_runtime(opts, do: block) do
+    quote do
+      RuntimeContext.with_runtime(unquote(opts), fn -> unquote(block) end)
+    end
   end
 
   defp ensure_started! do
@@ -458,6 +494,57 @@ defmodule SnakeBridge do
   def bytes(data) when is_binary(data) do
     Bytes.new(data)
   end
+
+  # ============================================================================
+  # Runtime Option Helpers
+  # ============================================================================
+
+  @doc """
+  Convenience helper for building `__runtime__` options.
+  """
+  @spec rt(keyword()) :: keyword()
+  def rt(runtime_opts) when is_list(runtime_opts) do
+    [__runtime__: runtime_opts]
+  end
+
+  @doc """
+  Convenience helper for passing extra positional args.
+  """
+  @spec args(list()) :: keyword()
+  def args(args) when is_list(args) do
+    [__args__: args]
+  end
+
+  @doc """
+  Builds SnakeBridge options with explicit sections for kwargs, runtime, args, and idempotency.
+  """
+  @spec opts(keyword()) :: keyword()
+  def opts(opts) when is_list(opts) do
+    py_opts = Keyword.get(opts, :py, [])
+    runtime_opts = Keyword.get(opts, :runtime, [])
+    args = Keyword.get(opts, :args, [])
+    idempotent = Keyword.get(opts, :idempotent)
+
+    built =
+      []
+      |> maybe_put_args(args)
+      |> maybe_put_runtime(runtime_opts)
+      |> maybe_put_idempotent(idempotent)
+
+    Keyword.merge(py_opts, built)
+  end
+
+  defp maybe_put_args(opts, []), do: opts
+  defp maybe_put_args(opts, args) when is_list(args), do: Keyword.put(opts, :__args__, args)
+
+  defp maybe_put_runtime(opts, []), do: opts
+
+  defp maybe_put_runtime(opts, runtime_opts) when is_list(runtime_opts) do
+    Keyword.put(opts, :__runtime__, runtime_opts)
+  end
+
+  defp maybe_put_idempotent(opts, nil), do: opts
+  defp maybe_put_idempotent(opts, value), do: Keyword.put(opts, :idempotent, value)
 
   # ============================================================================
   # Session Management

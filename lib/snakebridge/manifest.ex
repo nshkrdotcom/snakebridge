@@ -14,7 +14,7 @@ defmodule SnakeBridge.Manifest do
         |> normalize_manifest()
 
       {:error, :enoent} ->
-        %{"version" => version(), "symbols" => %{}, "classes" => %{}}
+        %{"version" => version(), "symbols" => %{}, "classes" => %{}, "modules" => %{}}
     end
   end
 
@@ -24,6 +24,7 @@ defmodule SnakeBridge.Manifest do
     File.mkdir_p!(Path.dirname(path))
 
     manifest
+    |> Map.put("version", version())
     |> sort_manifest()
     |> Jason.encode!(pretty: true)
     |> then(&File.write!(path, &1))
@@ -240,6 +241,16 @@ defmodule SnakeBridge.Manifest do
     Map.put(manifest, "classes", classes)
   end
 
+  @spec put_modules(map(), list({String.t(), map()})) :: map()
+  def put_modules(manifest, entries) do
+    modules =
+      manifest
+      |> Map.get("modules", %{})
+      |> Map.merge(Map.new(entries))
+
+    Map.put(manifest, "modules", modules)
+  end
+
   @spec symbol_key({module(), atom(), non_neg_integer()}) :: String.t()
   def symbol_key({module, function, arity}) do
     mod = module |> Module.split() |> Enum.join(".")
@@ -265,6 +276,7 @@ defmodule SnakeBridge.Manifest do
 
   defp normalize_manifest(manifest) do
     symbols = Map.get(manifest, "symbols", %{})
+    modules = Map.get(manifest, "modules", %{})
 
     normalized_symbols =
       Enum.reduce(symbols, %{}, fn {key, value}, acc ->
@@ -277,7 +289,9 @@ defmodule SnakeBridge.Manifest do
         end
       end)
 
-    Map.put(manifest, "symbols", normalized_symbols)
+    manifest
+    |> Map.put("symbols", normalized_symbols)
+    |> Map.put("modules", modules)
   end
 
   defp normalize_symbol_key(key) when is_binary(key) do
@@ -307,6 +321,11 @@ defmodule SnakeBridge.Manifest do
     end)
     |> update_in(["classes"], fn classes ->
       classes
+      |> Enum.sort_by(fn {key, _} -> key end)
+      |> Map.new()
+    end)
+    |> Map.update("modules", %{}, fn modules ->
+      modules
       |> Enum.sort_by(fn {key, _} -> key end)
       |> Map.new()
     end)

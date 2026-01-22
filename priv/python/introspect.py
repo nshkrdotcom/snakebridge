@@ -1856,9 +1856,21 @@ def introspect_module_namespace(module_name: str, namespace: str = "", config: O
 
     config = config or _parse_config(None)
     stub_info = _resolve_stub_for_module(module_name, config)
-    module_doc = inspect.getdoc(module) or ""
-    if stub_info and stub_info.get("docstring"):
-        module_doc = stub_info.get("docstring") or module_doc
+    runtime_doc = inspect.getdoc(module) or ""
+    module_doc = runtime_doc
+    doc_source = "runtime" if runtime_doc else "empty"
+    doc_missing_reason = None if runtime_doc else "docstring missing"
+
+    if not module_doc and stub_info and stub_info.get("docstring"):
+        module_doc = stub_info.get("docstring") or ""
+        if module_doc:
+            doc_source = "stub"
+            doc_missing_reason = None
+
+    if module_doc:
+        namespace_info["docstring"] = module_doc
+    namespace_info["doc_source"] = doc_source
+    namespace_info["doc_missing_reason"] = doc_missing_reason
 
     # Get the module's __all__ if available (explicit public API)
     module_all = getattr(module, '__all__', None)
@@ -2006,7 +2018,16 @@ def introspect_module(
         }
 
     module_version = getattr(module, '__version__', None)
-    module_doc = inspect.getdoc(module) or ""
+    runtime_doc = inspect.getdoc(module) or ""
+    module_doc = runtime_doc
+    doc_source = "runtime" if runtime_doc else "empty"
+    doc_missing_reason = None if runtime_doc else "docstring missing"
+    stub_info = _resolve_stub_for_module(module_name, config)
+    if not module_doc and stub_info and stub_info.get("docstring"):
+        module_doc = stub_info.get("docstring") or ""
+        if module_doc:
+            doc_source = "stub"
+            doc_missing_reason = None
     module_file = module.__file__ if hasattr(module, '__file__') else None
 
     submodule_list: List[str] = [name for name in (submodules or []) if name]
@@ -2029,7 +2050,9 @@ def introspect_module(
         }
 
         if module_doc:
-            module_info["docstring"] = parse_docstring(module_doc)
+            module_info["docstring"] = module_doc
+        module_info["doc_source"] = doc_source
+        module_info["doc_missing_reason"] = doc_missing_reason
 
         if module_version:
             module_info["module_version"] = module_version
@@ -2065,7 +2088,9 @@ def introspect_module(
     }
 
     if module_doc:
-        module_info["docstring"] = parse_docstring(module_doc)
+        module_info["docstring"] = module_doc
+    module_info["doc_source"] = doc_source
+    module_info["doc_missing_reason"] = doc_missing_reason
 
     if module_version:
         module_info["module_version"] = module_version
@@ -2098,6 +2123,59 @@ def introspect_module(
     return module_info
 
 
+def introspect_module_docs(
+    module_names: List[str],
+    config: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Fetch docstrings for one or more modules without introspecting members.
+    """
+    config = config or _parse_config(None)
+    results: List[Dict[str, Any]] = []
+
+    for module_name in module_names:
+        if not module_name:
+            continue
+
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError as exc:
+            results.append(
+                {
+                    "module": module_name,
+                    "docstring": "",
+                    "doc_source": "error",
+                    "doc_missing_reason": f"Failed to import module '{module_name}': {str(exc)}",
+                }
+            )
+            continue
+
+        stub_info = _resolve_stub_for_module(module_name, config)
+        module_doc = inspect.getdoc(module) or ""
+        doc_source = "runtime" if module_doc else "empty"
+        doc_missing_reason = None if module_doc else "docstring missing"
+
+        if not module_doc and stub_info and stub_info.get("docstring"):
+            module_doc = stub_info.get("docstring") or ""
+            doc_source = "stub"
+            doc_missing_reason = None
+
+        info: Dict[str, Any] = {
+            "module": module_name,
+            "docstring": module_doc,
+            "doc_source": doc_source,
+            "doc_missing_reason": doc_missing_reason,
+        }
+
+        module_version = getattr(module, '__version__', None)
+        if module_version:
+            info["module_version"] = module_version
+
+        results.append(info)
+
+    return results
+
+
 def main():
     """Main entry point for the introspection script."""
     parser = argparse.ArgumentParser(
@@ -2125,6 +2203,11 @@ Examples:
     parser.add_argument(
         '--symbols',
         help='JSON array or comma-separated list of symbols to introspect',
+        default=None
+    )
+    parser.add_argument(
+        '--module-docs',
+        help='JSON array or comma-separated list of modules to fetch docstrings for',
         default=None
     )
     parser.add_argument(
@@ -2160,6 +2243,10 @@ Examples:
     try:
         if args.attribute:
             result = introspect_attribute_info(module_name, args.attribute)
+            print(json.dumps(result))
+        elif args.module_docs:
+            modules = _parse_symbols_arg(args.module_docs)
+            result = introspect_module_docs(modules, config)
             print(json.dumps(result))
         elif args.symbols:
             symbols = _parse_symbols_arg(args.symbols)

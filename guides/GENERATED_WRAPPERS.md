@@ -112,7 +112,7 @@ Results cache in `.snakebridge/manifest.json`:
 
 ```json
 {
-  "version": "0.11.0",
+  "version": "0.13.0",
   "symbols": {
     "Numpy.mean/1": {
       "module": "Numpy",
@@ -192,10 +192,23 @@ Documentation follows the same structure users see in HexDocs:
 - Module files (`__init__.ex`) define the module and carry module docs plus module-level function docs.
 - Class files define the class module and carry class docs plus method docs.
 - Submodule docs live in submodule `__init__.ex`; class docs live in class files.
+- Module docs prepend the Python module docstring (when available), then include runtime options,
+  plus Python docs/version metadata when configured.
 
 File names do not appear in HexDocs. Only module names and `@moduledoc`/`@doc` content are shown.
 When Python docstrings are missing, SnakeBridge emits a concise fallback description so
 HexDocs remains consistent.
+
+For third-party libraries, you can include an explicit docs URL to surface a "Python Docs"
+section in the generated `@moduledoc`:
+
+```elixir
+defp python_deps do
+  [
+    {:pillow, "10.2.0", docs_url: "https://pillow.readthedocs.io/"}
+  ]
+end
+```
 
 ### Benefits
 
@@ -207,14 +220,16 @@ HexDocs remains consistent.
 ### HexDocs Grouping (Optional)
 
 You can group generated modules by Python package path for a clean HexDocs navigation tree.
-SnakeBridge provides a helper that reads the manifest and builds `groups_for_modules`:
+SnakeBridge provides a helper that reads the manifest and builds a `groups_for_modules`
+keyword list:
 
 ```elixir
 def project do
   [
     # ...
     docs: [
-      groups_for_modules: SnakeBridge.Docs.groups_for_modules()
+      groups_for_modules: SnakeBridge.Docs.groups_for_modules(),
+      nest_modules_by_prefix: SnakeBridge.Docs.nest_modules_by_prefix()
     ]
   ]
 end
@@ -513,9 +528,9 @@ The `snakebridge.lock` captures environment state:
 
 ```json
 {
-  "version": "0.11.0",
+  "version": "0.13.0",
   "environment": {
-    "snakebridge_version": "0.11.0",
+    "snakebridge_version": "0.13.0",
     "generator_hash": "a1b2c3...",
     "python_version": "3.12.3",
     "elixir_version": "1.18.4",

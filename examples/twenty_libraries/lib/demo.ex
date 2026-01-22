@@ -1,4 +1,6 @@
 defmodule Demo do
+  require SnakeBridge
+
   @moduledoc """
   Demonstrates calling 20 different Python standard libraries over gRPC.
 
@@ -11,7 +13,7 @@ defmodule Demo do
   Run the complete 20-library demonstration.
   """
   def run do
-    SnakeBridge.run_as_script(fn ->
+    SnakeBridge.script do
       Examples.reset_failures()
 
       print_header()
@@ -19,7 +21,7 @@ defmodule Demo do
       print_summary(results)
 
       Examples.assert_no_failures!()
-    end)
+    end
     |> Examples.assert_script_ok()
   end
 

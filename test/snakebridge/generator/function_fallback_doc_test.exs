@@ -25,7 +25,7 @@ defmodule SnakeBridge.Generator.FunctionFallbackDocTest do
 
     assert source =~ "@doc"
     assert source =~ "Python binding for `mylib.hello`."
-    assert source =~ "Parameters:"
+    assert source =~ "## Parameters"
   end
 
   test "uses fallback docstrings for module attributes" do

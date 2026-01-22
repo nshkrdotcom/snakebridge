@@ -239,7 +239,7 @@
               }
             },
             {
-              "default": "<built-in method match of re.Pattern object at 0x7077b63a3920>",
+              "default": "<built-in method match of re.Pattern object at 0x795ec725b780>",
               "kind": "POSITIONAL_OR_KEYWORD",
               "name": "_w",
               "type": {
@@ -793,7 +793,7 @@
               }
             },
             {
-              "default": "<built-in method match of re.Pattern object at 0x7077b63a3920>",
+              "default": "<built-in method match of re.Pattern object at 0x795ec725b780>",
               "kind": "POSITIONAL_OR_KEYWORD",
               "name": "_w",
               "type": {
@@ -1170,6 +1170,45 @@
       ],
       "module": "Json.Scanner.MakeScanner",
       "python_module": "json.scanner"
+    }
+  },
+  "modules": {
+    "json": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "JSON (JavaScript Object Notation) <https://json.org> is a subset of\nJavaScript syntax (ECMA-262 3rd edition) used as a lightweight data\ninterchange format.\n\n:mod:`json` exposes an API familiar to users of the standard library\n:mod:`marshal` and :mod:`pickle` modules.  It is derived from a\nversion of the externally maintained simplejson library.\n\nEncoding basic Python object hierarchies::\n\n    >>> import json\n    >>> json.dumps(['foo', {'bar': ('baz', None, 1.0, 2)}])\n    '[\"foo\", {\"bar\": [\"baz\", null, 1.0, 2]}]'\n    >>> print(json.dumps(\"\\\"foo\\bar\"))\n    \"\\\"foo\\bar\"\n    >>> print(json.dumps('\\u1234'))\n    \"\\u1234\"\n    >>> print(json.dumps('\\\\'))\n    \"\\\\\"\n    >>> print(json.dumps({\"c\": 0, \"b\": 0, \"a\": 0}, sort_keys=True))\n    {\"a\": 0, \"b\": 0, \"c\": 0}\n    >>> from io import StringIO\n    >>> io = StringIO()\n    >>> json.dump(['streaming API'], io)\n    >>> io.getvalue()\n    '[\"streaming API\"]'\n\nCompact encoding::\n\n    >>> import json\n    >>> mydict = {'4': 5, '6': 7}\n    >>> json.dumps([1,2,3,mydict], separators=(',', ':'))\n    '[1,2,3,{\"4\":5,\"6\":7}]'\n\nPretty printing::\n\n    >>> import json\n    >>> print(json.dumps({'4': 5, '6': 7}, sort_keys=True, indent=4))\n    {\n        \"4\": 5,\n        \"6\": 7\n    }\n\nDecoding JSON::\n\n    >>> import json\n    >>> obj = ['foo', {'bar': ['baz', None, 1.0, 2]}]\n    >>> json.loads('[\"foo\", {\"bar\":[\"baz\", null, 1.0, 2]}]') == obj\n    True\n    >>> json.loads('\"\\\\\"foo\\\\bar\"') == '\"foo\\x08ar'\n    True\n    >>> from io import StringIO\n    >>> io = StringIO('[\"streaming API\"]')\n    >>> json.load(io)[0] == 'streaming API'\n    True\n\nSpecializing JSON object decoding::\n\n    >>> import json\n    >>> def as_complex(dct):\n    ...     if '__complex__' in dct:\n    ...         return complex(dct['real'], dct['imag'])\n    ...     return dct\n    ...\n    >>> json.loads('{\"__complex__\": true, \"real\": 1, \"imag\": 2}',\n    ...     object_hook=as_complex)\n    (1+2j)\n    >>> from decimal import Decimal\n    >>> json.loads('1.1', parse_float=Decimal) == Decimal('1.1')\n    True\n\nSpecializing JSON object encoding::\n\n    >>> import json\n    >>> def encode_complex(obj):\n    ...     if isinstance(obj, complex):\n    ...         return [obj.real, obj.imag]\n    ...     raise TypeError(f'Object of type {obj.__class__.__name__} '\n    ...                     f'is not JSON serializable')\n    ...\n    >>> json.dumps(2 + 1j, default=encode_complex)\n    '[2.0, 1.0]'\n    >>> json.JSONEncoder(default=encode_complex).encode(2 + 1j)\n    '[2.0, 1.0]'\n    >>> ''.join(json.JSONEncoder(default=encode_complex).iterencode(2 + 1j))\n    '[2.0, 1.0]'\n\n\nUsing json.tool from the shell to validate and pretty-print::\n\n    $ echo '{\"json\":\"obj\"}' | python -m json.tool\n    {\n        \"json\": \"obj\"\n    }\n    $ echo '{ 1.2:3.4}' | python -m json.tool\n    Expecting property name enclosed in double quotes: line 1 column 3 (char 2)",
+      "module_version": "2.0.9",
+      "python_module": "json"
+    },
+    "json.decoder": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Implementation of JSONDecoder",
+      "python_module": "json.decoder"
+    },
+    "json.encoder": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Implementation of JSONEncoder",
+      "python_module": "json.encoder"
+    },
+    "json.scanner": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "JSON token scanner",
+      "python_module": "json.scanner"
+    },
+    "json.tool": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Command-line tool to validate and pretty-print JSON\n\nUsage::\n\n    $ echo '{\"json\":\"obj\"}' | python -m json.tool\n    {\n        \"json\": \"obj\"\n    }\n    $ echo '{ 1.2:3.4}' | python -m json.tool\n    Expecting property name enclosed in double quotes: line 1 column 3 (char 2)",
+      "python_module": "json.tool"
+    },
+    "math": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "This module provides access to the mathematical functions\ndefined by the C standard.",
+      "python_module": "math"
     }
   },
   "symbols": {
@@ -1811,5 +1850,5 @@
       "return_annotation": null
     }
   },
-  "version": "3.0.0"
+  "version": "0.13.0"
 }

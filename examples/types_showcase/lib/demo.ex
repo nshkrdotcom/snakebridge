@@ -1,4 +1,6 @@
 defmodule Demo do
+  require SnakeBridge
+
   @moduledoc """
   Types Showcase - Demonstrates Python to Elixir Type Mapping.
 
@@ -15,7 +17,7 @@ defmodule Demo do
   alias SnakeBridge.Examples
 
   def run do
-    SnakeBridge.run_as_script(fn ->
+    SnakeBridge.script do
       Examples.reset_failures()
 
       IO.puts("""
@@ -76,7 +78,7 @@ defmodule Demo do
       """)
 
       Examples.assert_no_failures!()
-    end)
+    end
     |> Examples.assert_script_ok()
   end
 

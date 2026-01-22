@@ -28,6 +28,8 @@ defmodule SnakeBridge.Generator do
 
   defp do_render_library(library, functions, classes, opts) do
     version = Keyword.get(opts, :version, Application.spec(:snakebridge, :vsn) |> to_string())
+    module_docs = Keyword.get(opts, :module_docs) || %{}
+    lock_data = Keyword.get(opts, :lock_data)
     module_name = module_to_string(library.module_name)
 
     header = """
@@ -36,7 +38,7 @@ defmodule SnakeBridge.Generator do
     # Library: #{library.python_name} #{library.version || "unknown"}
     """
 
-    moduledoc = root_moduledoc(library)
+    moduledoc = build_moduledoc(library, module_name, library.python_name, module_docs, lock_data)
 
     functions_by_module =
       functions
@@ -55,7 +57,7 @@ defmodule SnakeBridge.Generator do
       |> Map.drop([library.python_name])
       |> Enum.sort_by(fn {python_module, _} -> python_module end)
       |> Enum.map_join("\n\n", fn {python_module, funcs} ->
-        render_submodule(python_module, funcs, library)
+        render_submodule(python_module, funcs, library, module_docs, lock_data)
       end)
 
     class_defs =
@@ -83,24 +85,36 @@ defmodule SnakeBridge.Generator do
     |> ensure_final_newline()
   end
 
-  @spec generate_library(SnakeBridge.Config.Library.t(), list(), list(), SnakeBridge.Config.t()) ::
-          :ok
-  def generate_library(library, functions, classes, config) do
+  @spec generate_library(
+          SnakeBridge.Config.Library.t(),
+          list(),
+          list(),
+          SnakeBridge.Config.t(),
+          map(),
+          map() | nil
+        ) :: :ok
+  def generate_library(library, functions, classes, config, module_docs \\ %{}, lock_data \\ nil) do
+    lock_data = lock_data || SnakeBridge.Lock.load()
+
     case config.generated_layout do
-      :single -> generate_single_file(library, functions, classes, config)
-      :split -> generate_split_layout(library, functions, classes, config)
-      _ -> generate_split_layout(library, functions, classes, config)
+      :single -> generate_single_file(library, functions, classes, config, module_docs, lock_data)
+      :split -> generate_split_layout(library, functions, classes, config, module_docs, lock_data)
+      _ -> generate_split_layout(library, functions, classes, config, module_docs, lock_data)
     end
   end
 
   # Legacy single-file generation
-  defp generate_single_file(library, functions, classes, config) do
+  defp generate_single_file(library, functions, classes, config, module_docs, lock_data) do
     start_time = System.monotonic_time()
     File.mkdir_p!(config.generated_dir)
     path = Path.join(config.generated_dir, "#{library.python_name}.ex")
 
     source =
-      render_library(library, functions, classes, version: Application.spec(:snakebridge, :vsn))
+      render_library(library, functions, classes,
+        version: Application.spec(:snakebridge, :vsn),
+        module_docs: module_docs,
+        lock_data: lock_data
+      )
 
     result = write_if_changed(path, source)
     cleanup_stale_generated_files(library, config, [path])
@@ -121,18 +135,34 @@ defmodule SnakeBridge.Generator do
   end
 
   # Split layout: one file per Python module path
-  defp generate_split_layout(library, functions, classes, config) do
+  defp generate_split_layout(library, functions, classes, config, module_docs, lock_data) do
     alias SnakeBridge.Generator.PathMapper
 
     start_time = System.monotonic_time()
     context = TypeMapper.build_context(classes)
 
     TypeMapper.with_context(context, fn ->
-      do_generate_split_layout(library, functions, classes, config, start_time)
+      do_generate_split_layout(
+        library,
+        functions,
+        classes,
+        config,
+        module_docs,
+        lock_data,
+        start_time
+      )
     end)
   end
 
-  defp do_generate_split_layout(library, functions, classes, config, start_time) do
+  defp do_generate_split_layout(
+         library,
+         functions,
+         classes,
+         config,
+         module_docs,
+         lock_data,
+         start_time
+       ) do
     alias SnakeBridge.Generator.PathMapper
 
     # Group functions and classes by python_module
@@ -149,6 +179,8 @@ defmodule SnakeBridge.Generator do
       |> Enum.map(&class_module_name(&1, library))
       |> MapSet.new()
 
+    doc_context = %{module_docs: module_docs, lock_data: lock_data}
+
     module_files =
       write_split_module_files(
         library,
@@ -157,7 +189,8 @@ defmodule SnakeBridge.Generator do
         functions,
         classes,
         class_module_names,
-        config
+        config,
+        doc_context
       )
 
     class_files = write_split_class_files(library, classes, config)
@@ -222,9 +255,12 @@ defmodule SnakeBridge.Generator do
          functions,
          classes,
          class_module_names,
-         config
+         config,
+         doc_context
        ) do
     alias SnakeBridge.Generator.PathMapper
+
+    %{module_docs: module_docs, lock_data: lock_data} = doc_context
 
     Enum.map(module_modules, fn python_module ->
       funcs = Map.get(functions_by_module, python_module, [])
@@ -244,7 +280,17 @@ defmodule SnakeBridge.Generator do
           nil
         end
 
-      source = render_module_file(library, elixir_module, python_module, funcs, discovery)
+      source =
+        render_module_file(
+          library,
+          elixir_module,
+          python_module,
+          funcs,
+          discovery,
+          module_docs,
+          lock_data
+        )
+
       write_if_changed(path, source)
       path
     end)
@@ -281,7 +327,15 @@ defmodule SnakeBridge.Generator do
   end
 
   @doc false
-  def render_module_file(library, elixir_module, python_module, functions, discovery \\ nil) do
+  def render_module_file(
+        library,
+        elixir_module,
+        python_module,
+        functions,
+        discovery \\ nil,
+        module_docs \\ %{},
+        lock_data \\ nil
+      ) do
     version = Application.spec(:snakebridge, :vsn) |> to_string()
     module_name = module_to_string(elixir_module)
 
@@ -292,7 +346,7 @@ defmodule SnakeBridge.Generator do
     # Python module: #{python_module}
     """
 
-    moduledoc = build_moduledoc(library, python_module)
+    moduledoc = build_moduledoc(library, module_name, python_module, module_docs, lock_data)
 
     function_defs =
       functions
@@ -321,21 +375,189 @@ defmodule SnakeBridge.Generator do
     |> ensure_final_newline()
   end
 
-  defp build_moduledoc(library, python_module) do
-    is_root = python_module == library.python_name
+  defp build_moduledoc(library, module_name, python_module, module_docs, lock_data) do
+    module_docs = module_docs || %{}
+    module_info = Map.get(module_docs, python_module, %{})
+    raw_doc = module_info["docstring"] || ""
 
-    if is_root do
-      root_moduledoc(library)
-    else
-      """
-        @moduledoc \"\"\"
-        Submodule bindings for `#{python_module}`.
-        \"\"\"
+    formatted_doc =
+      raw_doc
+      |> format_docstring([], nil)
+      |> String.trim()
 
-        def __snakebridge_python_name__, do: "#{python_module}"
-        def __snakebridge_library__, do: "#{library.python_name}"
-      """
+    fallback =
+      if python_module == library.python_name do
+        "SnakeBridge bindings for `#{library.python_name}`."
+      else
+        "Submodule bindings for `#{python_module}`."
+      end
+
+    doc_section = if formatted_doc == "", do: fallback, else: formatted_doc
+
+    sections =
+      [
+        doc_section,
+        python_docs_section(library),
+        version_section(library, lock_data, module_info),
+        runtime_options_block(module_name)
+      ]
+      |> Enum.filter(&present_section?/1)
+
+    body = Enum.join(sections, "\n\n")
+
+    moduledoc = """
+    @moduledoc \"\"\"
+    #{body}
+    \"\"\"
+
+    @doc false
+    def __snakebridge_python_name__, do: "#{python_module}"
+    @doc false
+    def __snakebridge_library__, do: "#{library.python_name}"
+    """
+
+    indent(moduledoc, 2)
+  end
+
+  defp present_section?(section) when is_binary(section) do
+    String.trim(section) != ""
+  end
+
+  defp present_section?(_section), do: false
+
+  defp python_docs_section(library) do
+    case python_docs_url(library) do
+      nil -> nil
+      url -> "## Python Docs\n\n- [Python docs](#{url})"
     end
+  end
+
+  defp python_docs_url(library) do
+    if library.version == :stdlib do
+      "https://docs.python.org/3/library/#{library.python_name}.html"
+    else
+      library.docs_url
+    end
+  end
+
+  defp version_section(library, lock_data, module_info) do
+    if library.version == :stdlib do
+      python_version = lock_python_version(lock_data)
+
+      if python_version do
+        "## Version\n\n- Python stdlib (Python #{python_version})"
+      else
+        "## Version\n\n- Python stdlib"
+      end
+    else
+      requested = requested_version(library)
+      observed = observed_version(library, lock_data, module_info)
+
+      lines =
+        []
+        |> maybe_append_version("Requested", requested)
+        |> maybe_append_version("Observed at generation", observed)
+
+      lines =
+        if lines == [] do
+          ["- Version unspecified (not pinned)"]
+        else
+          lines
+        end
+
+      "## Version\n\n" <> Enum.join(lines, "\n")
+    end
+  end
+
+  defp maybe_append_version(lines, _label, nil), do: lines
+
+  defp maybe_append_version(lines, label, value) do
+    lines ++ ["- #{label}: #{value}"]
+  end
+
+  defp requested_version(%{version: nil}), do: nil
+  defp requested_version(%{version: :stdlib}), do: nil
+
+  defp requested_version(%{version: version}) do
+    to_string(version)
+  end
+
+  defp observed_version(library, lock_data, module_info) do
+    lock_version = lock_package_version(lock_data, library)
+    module_version = module_info["module_version"]
+
+    cond do
+      is_binary(lock_version) and lock_version != "" -> lock_version
+      is_binary(module_version) and module_version != "" -> module_version
+      true -> nil
+    end
+  end
+
+  defp lock_package_version(nil, _library), do: nil
+
+  defp lock_package_version(lock_data, library) do
+    package_name = library.pypi_package || library.python_name
+    packages = Map.get(lock_data || %{}, "python_packages", %{})
+
+    normalized = normalize_package_name(package_name)
+
+    packages
+    |> Enum.find_value(fn {name, info} ->
+      if normalize_package_name(name) == normalized do
+        info["version"] || info[:version]
+      end
+    end)
+  end
+
+  defp normalize_package_name(name) when is_binary(name) do
+    name
+    |> String.downcase()
+    |> String.replace("_", "-")
+  end
+
+  defp normalize_package_name(_name), do: ""
+
+  defp lock_python_version(lock_data) do
+    get_in(lock_data || %{}, ["environment", "python_version"])
+  end
+
+  defp runtime_options_block(module_name) do
+    """
+    ## Runtime Options
+
+    All functions accept a `__runtime__` option for controlling execution behavior:
+
+        #{module_name}.some_function(args, __runtime__: [timeout: 120_000])
+
+    ### Supported runtime options
+
+    - `:timeout` - Call timeout in milliseconds (default: 120,000ms / 2 minutes)
+    - `:timeout_profile` - Use a named profile (`:default`, `:ml_inference`, `:batch_job`, `:streaming`)
+    - `:stream_timeout` - Timeout for streaming operations (default: 1,800,000ms / 30 minutes)
+    - `:session_id` - Override the session ID for this call
+    - `:pool_name` - Target a specific Snakepit pool (multi-pool setups)
+    - `:affinity` - Override session affinity (`:hint`, `:strict_queue`, `:strict_fail_fast`)
+
+    ### Timeout Profiles
+
+    - `:default` - 2 minute timeout for regular calls
+    - `:ml_inference` - 10 minute timeout for ML/LLM workloads
+    - `:batch_job` - Unlimited timeout for long-running jobs
+    - `:streaming` - 2 minute timeout, 30 minute stream_timeout
+
+    ### Example with timeout override
+
+        # For a long-running ML inference call
+        #{module_name}.predict(data, __runtime__: [timeout_profile: :ml_inference])
+
+        # Or explicit timeout
+        #{module_name}.predict(data, __runtime__: [timeout: 600_000])
+
+        # Route to a pool and enforce strict affinity
+        #{module_name}.predict(data, __runtime__: [pool_name: :strict_pool, affinity: :strict_queue])
+
+    See `SnakeBridge.Defaults` for global timeout configuration.
+    """
   end
 
   @doc false
@@ -599,22 +821,25 @@ defmodule SnakeBridge.Generator do
     |> length()
   end
 
-  defp render_submodule(python_module, functions, library) do
+  defp render_submodule(python_module, functions, library, module_docs, lock_data) do
     module_name =
       python_module
       |> String.split(".")
       |> Enum.drop(length(String.split(library.python_name, ".")))
       |> Enum.map_join(".", &Macro.camelize/1)
 
+    full_module_name = module_to_string(library.module_name) <> "." <> module_name
+
     function_defs =
       functions
       |> Enum.sort_by(& &1["name"])
       |> Enum.map_join("\n\n", &Function.render_function(&1, library))
 
+    moduledoc = build_moduledoc(library, full_module_name, python_module, module_docs, lock_data)
+
     """
       defmodule #{module_name} do
-        def __snakebridge_python_name__, do: "#{python_module}"
-        def __snakebridge_library__, do: "#{library.python_name}"
+    #{indent(moduledoc, 2)}
 
     #{indent(function_defs, 4)}
       end
@@ -693,52 +918,6 @@ defmodule SnakeBridge.Generator do
     """
   end
 
-  defp root_moduledoc(library) do
-    """
-      @moduledoc \"\"\"
-      SnakeBridge bindings for `#{library.python_name}`.
-
-      ## Runtime Options
-
-      All functions accept a `__runtime__` option for controlling execution behavior:
-
-          #{library.module_name}.some_function(args, __runtime__: [timeout: 120_000])
-
-      ### Supported runtime options
-
-      - `:timeout` - Call timeout in milliseconds (default: 120,000ms / 2 minutes)
-      - `:timeout_profile` - Use a named profile (`:default`, `:ml_inference`, `:batch_job`, `:streaming`)
-      - `:stream_timeout` - Timeout for streaming operations (default: 1,800,000ms / 30 minutes)
-      - `:session_id` - Override the session ID for this call
-      - `:pool_name` - Target a specific Snakepit pool (multi-pool setups)
-      - `:affinity` - Override session affinity (`:hint`, `:strict_queue`, `:strict_fail_fast`)
-
-      ### Timeout Profiles
-
-      - `:default` - 2 minute timeout for regular calls
-      - `:ml_inference` - 10 minute timeout for ML/LLM workloads
-      - `:batch_job` - Unlimited timeout for long-running jobs
-      - `:streaming` - 2 minute timeout, 30 minute stream_timeout
-
-      ### Example with timeout override
-
-          # For a long-running ML inference call
-          #{library.module_name}.predict(data, __runtime__: [timeout_profile: :ml_inference])
-
-          # Or explicit timeout
-          #{library.module_name}.predict(data, __runtime__: [timeout: 600_000])
-
-          # Route to a pool and enforce strict affinity
-          #{library.module_name}.predict(data, __runtime__: [pool_name: :strict_pool, affinity: :strict_queue])
-
-      See `SnakeBridge.Defaults` for global timeout configuration.
-      \"\"\"
-
-      def __snakebridge_python_name__, do: "#{library.python_name}"
-      def __snakebridge_library__, do: "#{library.python_name}"
-    """
-  end
-
   @doc """
   Normalize a docstring to a string, handling both raw strings and parsed docstring maps.
   """
@@ -777,22 +956,32 @@ defmodule SnakeBridge.Generator do
       |> RstParser.parse()
       |> MarkdownConverter.convert()
 
-    extras = format_param_docs(params, return_type)
+    extras = format_param_docs(params, return_type, base)
 
-    if extras == "" do
-      base
-    else
-      base <> "\n\n" <> extras
-    end
+    doc =
+      if extras == "" do
+        base
+      else
+        base <> "\n\n" <> extras
+      end
+
+    doc = rewrite_doc_links(doc)
+
+    escape_docstring(doc)
   rescue
     _ ->
-      extras = format_param_docs(params, return_type)
+      extras = format_param_docs(params, return_type, raw_doc)
 
-      if extras == "" do
-        raw_doc
-      else
-        raw_doc <> "\n\n" <> extras
-      end
+      doc =
+        if extras == "" do
+          raw_doc
+        else
+          raw_doc <> "\n\n" <> extras
+        end
+
+      doc = rewrite_doc_links(doc)
+
+      escape_docstring(doc)
   end
 
   @doc false
@@ -806,16 +995,39 @@ defmodule SnakeBridge.Generator do
 
     if formatted == "" do
       fallback = fallback |> to_string() |> String.trim()
-      extras = format_param_docs(params, return_type)
+      extras = format_param_docs(params, return_type, fallback)
 
-      cond do
-        fallback == "" -> ""
-        extras == "" -> fallback
-        true -> fallback <> "\n\n" <> extras
-      end
+      doc =
+        cond do
+          fallback == "" -> ""
+          extras == "" -> fallback
+          true -> fallback <> "\n\n" <> extras
+        end
+
+      doc = rewrite_doc_links(doc)
+
+      escape_docstring(doc)
     else
       formatted
     end
+  end
+
+  @pydantic_concepts %{
+    "../concepts/models.md" => "https://docs.pydantic.dev/latest/concepts/models/",
+    "../concepts/serialization.md" => "https://docs.pydantic.dev/latest/concepts/serialization/",
+    "../concepts/json.md" => "https://docs.pydantic.dev/latest/concepts/json/"
+  }
+
+  defp rewrite_doc_links(doc) when is_binary(doc) do
+    Enum.reduce(@pydantic_concepts, doc, fn {from, to}, acc ->
+      String.replace(acc, from, to)
+    end)
+  end
+
+  defp escape_docstring(doc) when is_binary(doc) do
+    doc
+    |> String.replace("\"\"\"", "\\\"\\\"\\\"")
+    |> String.replace("\#{", "\\\#{")
   end
 
   @spec build_params(list(), map()) :: %{
@@ -1268,31 +1480,36 @@ defmodule SnakeBridge.Generator do
     |> Enum.map_join("\n", fn line -> prefix <> line end)
   end
 
-  defp format_param_docs(params, return_type) do
+  defp format_param_docs(params, return_type, base) do
     param_lines =
       params
       |> Enum.map(&param_doc_line/1)
       |> Enum.reject(&is_nil/1)
 
+    has_params_section? = String.contains?(base, "## Parameters")
+    has_returns_section? = String.contains?(base, "## Returns")
+
     sections =
       []
-      |> maybe_add_params_section(param_lines)
-      |> maybe_add_return_section(return_type)
+      |> maybe_add_params_section(param_lines, has_params_section?)
+      |> maybe_add_return_section(return_type, has_returns_section?)
 
     Enum.join(sections, "\n\n")
   end
 
-  defp maybe_add_params_section(sections, []), do: sections
+  defp maybe_add_params_section(sections, _lines, true), do: sections
+  defp maybe_add_params_section(sections, [], _has_section), do: sections
 
-  defp maybe_add_params_section(sections, lines) do
-    sections ++ ["Parameters:\n" <> Enum.join(lines, "\n")]
+  defp maybe_add_params_section(sections, lines, false) do
+    sections ++ ["## Parameters\n\n" <> Enum.join(lines, "\n")]
   end
 
-  defp maybe_add_return_section(sections, nil), do: sections
+  defp maybe_add_return_section(sections, _return_type, true), do: sections
+  defp maybe_add_return_section(sections, nil, _has_section), do: sections
 
-  defp maybe_add_return_section(sections, return_type) do
+  defp maybe_add_return_section(sections, return_type, false) do
     return_spec = type_spec_string(return_type)
-    sections ++ ["Returns:\n- `#{return_spec}`"]
+    sections ++ ["## Returns\n\n- `#{return_spec}`"]
   end
 
   defp param_doc_line(param) do

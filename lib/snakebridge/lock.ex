@@ -43,7 +43,11 @@ defmodule SnakeBridge.Lock do
   @spec update(SnakeBridge.Config.t()) :: :ok
   def update(config) do
     lock = build(config)
+    write(lock)
+  end
 
+  @spec write(map()) :: :ok
+  def write(lock) when is_map(lock) do
     lock
     |> Jason.encode!(pretty: true)
     |> then(&File.write!(lock_path(), &1))

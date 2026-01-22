@@ -1,4 +1,6 @@
 defmodule Demo do
+  require SnakeBridge
+
   @moduledoc """
   Run with: mix run --no-start -e Demo.run
   """
@@ -6,7 +8,7 @@ defmodule Demo do
   alias SnakeBridge.Examples
 
   def run do
-    SnakeBridge.run_as_script(fn ->
+    SnakeBridge.script do
       Examples.reset_failures()
 
       IO.puts("""
@@ -30,7 +32,7 @@ defmodule Demo do
       run_verbose_pipeline(input)
 
       Examples.assert_no_failures!()
-    end)
+    end
     |> Examples.assert_script_ok()
   end
 

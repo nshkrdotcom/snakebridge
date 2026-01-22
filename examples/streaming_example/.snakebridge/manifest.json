@@ -1,5 +1,13 @@
 {
   "classes": {},
+  "modules": {
+    "streaming_example": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Local module for streaming example.",
+      "python_module": "streaming_example"
+    }
+  },
   "symbols": {
     "Streaming.generate/1": {
       "docstring": "Generate either a full response or a stream of chunks.",
@@ -56,5 +64,5 @@
       "signature_available": true
     }
   },
-  "version": "0.7.0"
+  "version": "0.13.0"
 }

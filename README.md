@@ -23,7 +23,7 @@ def project do
 end
 
 defp deps do
-  [{:snakebridge, "~> 0.12.1"}]
+  [{:snakebridge, "~> 0.13.0"}]
 end
 
 defp python_deps do
@@ -209,6 +209,51 @@ SnakeBridge.call("module", "fn", [args],
 )
 ```
 
+### Runtime Defaults (Process-Scoped)
+
+Set defaults once per process:
+
+```elixir
+SnakeBridge.RuntimeContext.put_defaults(
+  pool_name: :gpu_pool,
+  timeout_profile: :ml_inference
+)
+```
+
+Or scope them to a block:
+
+```elixir
+SnakeBridge.with_runtime(pool_name: :gpu_pool, timeout_profile: :ml_inference) do
+  {:ok, result} = SnakeBridge.call("module", "fn", [args])
+  result
+end
+```
+
+Helper shortcuts for common option shapes:
+
+```elixir
+SnakeBridge.call("numpy", "mean", [scores], SnakeBridge.rt(pool_name: :gpu_pool))
+
+SnakeBridge.call("numpy", "mean", [scores],
+  SnakeBridge.opts(py: [axis: 0], runtime: [pool_name: :gpu_pool])
+)
+```
+
+### Testing
+
+Use the built-in ExUnit template for automatic setup/teardown:
+
+```elixir
+defmodule MyApp.SomeFeatureTest do
+  use SnakeBridge.TestCase, pool: :dspy_pool
+
+  test "runs pipeline" do
+    {:ok, out} = Dspy.SomeModule.some_call("x", y: 1)
+    assert out != nil
+  end
+end
+```
+
 ## Advanced Features
 
 ### Streaming and Generators
@@ -282,10 +327,73 @@ mix snakebridge.verify         # Hardware compatibility check
 For scripts and Mix tasks:
 
 ```elixir
-SnakeBridge.run_as_script(fn ->
+SnakeBridge.script do
   {:ok, result} = SnakeBridge.call("math", "sqrt", [16])
   IO.inspect(result)
+end
+```
+
+`SnakeBridge.run_as_script/2` remains available for custom lifecycle options.
+
+## Before/After
+
+**Test setup**
+
+Before:
+
+```elixir
+setup_all do
+  Application.ensure_all_started(:snakebridge)
+  SnakeBridge.ConfigHelper.configure_snakepit!()
+  :ok
+end
+
+setup do
+  SnakeBridge.Runtime.clear_auto_session()
+  on_exit(fn -> SnakeBridge.release_auto_session() end)
+end
+```
+
+After:
+
+```elixir
+defmodule MyApp.SomeFeatureTest do
+  use SnakeBridge.TestCase, pool: :demo_pool
+end
+```
+
+**Pool selection defaults**
+
+Before:
+
+```elixir
+SnakeBridge.call("numpy", "mean", [scores],
+  __runtime__: [pool_name: :analytics_pool, timeout_profile: :ml_inference]
+)
+```
+
+After:
+
+```elixir
+SnakeBridge.with_runtime(pool_name: :analytics_pool, timeout_profile: :ml_inference) do
+  SnakeBridge.call("numpy", "mean", [scores])
+end
+```
+
+**Callbacks**
+
+Before:
+
+```elixir
+SnakeBridge.SessionContext.with_session([session_id: "shared"], fn ->
+  SnakeBridge.call("module", "fn", [fn x -> x end])
 end)
+```
+
+After:
+
+```elixir
+SnakeBridge.call("module", "fn", [fn x -> x end])
 ```
 
 ## Guides

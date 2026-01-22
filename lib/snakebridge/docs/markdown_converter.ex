@@ -6,6 +6,7 @@ defmodule SnakeBridge.Docs.MarkdownConverter do
   is compatible with ExDoc and follows Elixir documentation conventions.
   """
 
+  alias SnakeBridge.Docs.LinkSanitizer
   alias SnakeBridge.Docs.MathRenderer
 
   @type_map %{
@@ -70,7 +71,9 @@ defmodule SnakeBridge.Docs.MarkdownConverter do
     |> Enum.map(&build_section(&1, parsed))
     |> Enum.reject(&is_nil/1)
     |> Enum.join("\n\n")
+    |> wrap_grid_tables()
     |> MathRenderer.render()
+    |> LinkSanitizer.sanitize()
     |> String.trim()
   end
 
@@ -107,6 +110,78 @@ defmodule SnakeBridge.Docs.MarkdownConverter do
   end
 
   defp build_section(:notes, _parsed), do: nil
+
+  defp wrap_grid_tables(text) when is_binary(text) do
+    lines = String.split(text, "\n", trim: false)
+
+    {out, table_lines, in_table, indent} =
+      Enum.reduce(lines, {[], [], false, ""}, &process_grid_table_line/2)
+
+    out = finalize_grid_table(out, table_lines, in_table, indent)
+
+    Enum.join(out, "\n")
+  end
+
+  defp process_grid_table_line(line, {out, table_lines, in_table, indent}) do
+    if grid_table_line?(line) do
+      indent = if in_table, do: indent, else: leading_indent(line)
+      {out, table_lines ++ [line], true, indent}
+    else
+      end_table_block(out, table_lines, in_table, indent, line)
+    end
+  end
+
+  defp end_table_block(out, table_lines, true, indent, line) do
+    {out ++ emit_table_block(table_lines, indent) ++ [line], [], false, ""}
+  end
+
+  defp end_table_block(out, _table_lines, false, _indent, line) do
+    {out ++ [line], [], false, ""}
+  end
+
+  defp finalize_grid_table(out, table_lines, true, indent) do
+    out ++ emit_table_block(table_lines, indent)
+  end
+
+  defp finalize_grid_table(out, _table_lines, false, _indent) do
+    out
+  end
+
+  defp emit_table_block(lines, indent) do
+    if grid_table_block?(lines) do
+      fence = indent <> "```"
+      [fence | lines] ++ [fence]
+    else
+      lines
+    end
+  end
+
+  defp grid_table_block?(lines) do
+    Enum.any?(lines, &grid_table_border?/1) and Enum.any?(lines, &grid_table_row?/1)
+  end
+
+  defp grid_table_line?(line) do
+    grid_table_border?(line) or grid_table_row?(line)
+  end
+
+  defp grid_table_border?(line) do
+    trimmed = String.trim(line)
+
+    String.starts_with?(trimmed, "+") and String.ends_with?(trimmed, "+") and
+      (String.contains?(trimmed, "-") or String.contains?(trimmed, "="))
+  end
+
+  defp grid_table_row?(line) do
+    trimmed = String.trim(line)
+    String.starts_with?(trimmed, "|") and String.ends_with?(trimmed, "|")
+  end
+
+  defp leading_indent(line) do
+    case Regex.run(~r/^\s*/, line) do
+      [indent] -> indent
+      _ -> ""
+    end
+  end
 
   # Generic type patterns with their prefixes and converters
   # Format: {prefix, prefix_length, converter_function}

@@ -7,6 +7,7 @@ defmodule SnakeBridge.Runtime do
   """
 
   alias SnakeBridge.Runtime.{Payload, SessionResolver, Streamer}
+  alias SnakeBridge.RuntimeContext
   alias SnakeBridge.Types
 
   @runtime_client_key :snakebridge_runtime_client
@@ -130,14 +131,15 @@ defmodule SnakeBridge.Runtime do
     encoded_args = encode_args(args)
     encoded_kwargs = encode_kwargs(stringify_keys(opts))
     # Map opts cannot have __runtime__, use context/auto-session
-    session_id = resolve_session_id([])
+    runtime_defaults = RuntimeContext.get_defaults()
+    session_id = resolve_session_id(runtime_defaults)
 
     payload =
       Payload.helper_payload(helper, encoded_args, encoded_kwargs, false, session_id)
       |> Map.put("session_id", session_id)
 
     runtime_opts =
-      []
+      runtime_defaults
       |> apply_runtime_defaults(payload, :call)
       |> ensure_session_opt(session_id)
 
@@ -663,7 +665,12 @@ defmodule SnakeBridge.Runtime do
   def split_opts(opts) do
     extra_args = Keyword.get(opts, :__args__, [])
     idempotent = Keyword.get(opts, :idempotent, false)
-    runtime_opts = Keyword.get(opts, :__runtime__, [])
+
+    runtime_opts =
+      RuntimeContext.get_defaults()
+      |> List.wrap()
+      |> Kernel.++(List.wrap(Keyword.get(opts, :__runtime__, [])))
+      |> Keyword.new()
 
     kwargs =
       opts
@@ -972,8 +979,6 @@ defmodule SnakeBridge.Runtime do
       end
     end
   end
-
-  defp maybe_put_pool_name_from_ref(runtime_opts, _ref), do: runtime_opts
 
   defp runtime_pool_name(runtime_opts) when is_list(runtime_opts) do
     case Keyword.fetch(runtime_opts, :pool_name) do

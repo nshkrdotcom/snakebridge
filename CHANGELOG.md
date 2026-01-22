@@ -7,13 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.12.1] - 2026-01-21
+## [0.13.0] - 2026-01-21
 
 ### Added
 - Generated class wrappers now include `@moduledoc` from Python class docstrings
 - Generated constructors now include `@doc` from `__init__` method docstrings
 - Generated methods now include `@doc` from method docstrings
 - Documentation is automatically converted from Python formats (Google, NumPy, Sphinx, Epytext) to ExDoc Markdown
+
+### Added
+- Sanitizes docstring Markdown links that escape the docs root (e.g. `../...`) to avoid ExDoc missing-file warnings
 
 ## [0.12.0] - 2026-01-20
 
@@ -23,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Class modules get separate files: `Dspy.Predict.RLM` → `dspy/predict/rlm.ex`
   - Registry tracks all generated files for split layout
 - **`Generator.PathMapper` module**: New path mapping utilities for Python-to-Elixir file path conversion.
-- **`Generator.render_module_file/5`**: Renders individual module files for split layout.
+- **`Generator.render_module_file/7`**: Renders individual module files for split layout.
 - **`Generator.render_class_file/4`**: Renders standalone class module files.
 - **`Class.render_class_standalone/3`**: Renders classes as top-level modules for split layout.
 
@@ -693,7 +696,7 @@ Numpy.compute(data, __runtime__: [timeout: 600_000])
 - Type system mapper
 - Basic code generation
 
-[0.12.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.12.0...v0.12.1
+[0.13.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.9.0...v0.10.0

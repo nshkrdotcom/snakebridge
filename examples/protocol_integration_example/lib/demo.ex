@@ -1,4 +1,6 @@
 defmodule Demo do
+  require SnakeBridge
+
   @moduledoc """
   Run with: mix run --no-start -e Demo.run
   """
@@ -8,7 +10,7 @@ defmodule Demo do
   alias SnakeBridge.SessionContext
 
   def run do
-    SnakeBridge.run_as_script(fn ->
+    SnakeBridge.script do
       Examples.reset_failures()
 
       IO.puts("Protocol Integration Example")
@@ -26,7 +28,7 @@ defmodule Demo do
       end)
 
       Examples.assert_no_failures!()
-    end)
+    end
     |> Examples.assert_script_ok()
   end
 

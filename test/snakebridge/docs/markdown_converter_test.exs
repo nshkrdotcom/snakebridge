@@ -121,6 +121,23 @@ defmodule SnakeBridge.Docs.MarkdownConverterTest do
 
       assert is_binary(result)
     end
+
+    test "wraps grid tables in code fences" do
+      table = "+---+---+\n| a | b |\n+---+---+"
+
+      parsed = %{
+        short_description: "Summary.",
+        long_description: table,
+        params: [],
+        returns: nil,
+        raises: [],
+        examples: []
+      }
+
+      result = MarkdownConverter.convert(parsed)
+
+      assert result =~ "```\n+---+---+\n| a | b |\n+---+---+\n```"
+    end
   end
 
   describe "convert_type/1" do

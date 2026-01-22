@@ -566,11 +566,13 @@ defmodule SnakeBridge.Compiler.Pipeline do
     info["class"] == name or String.ends_with?(info["module"] || "", ".#{name}")
   end
 
-  defp generate_from_manifest(config, manifest) do
+  defp generate_from_manifest(config, manifest, lock_data) do
+    module_docs = Map.get(manifest, "modules", %{})
+
     Enum.each(config.libraries, fn library ->
       functions = functions_for_library(manifest, library)
       classes = classes_for_library(manifest, library)
-      Generator.generate_library(library, functions, classes, config)
+      Generator.generate_library(library, functions, classes, config, module_docs, lock_data)
     end)
   end
 
@@ -657,12 +659,15 @@ defmodule SnakeBridge.Compiler.Pipeline do
 
       errors = generate_all_errors ++ format_introspection_errors(introspection_errors)
 
+      updated_manifest = update_manifest_module_docs(updated_manifest, config)
       Manifest.save(config, updated_manifest)
       enforce_signature_thresholds!(config, updated_manifest)
-      generate_from_manifest(config, updated_manifest)
+
+      lock_data = Lock.build(config)
+      generate_from_manifest(config, updated_manifest, lock_data)
       generate_helper_wrappers(config)
       SnakeBridge.Registry.save()
-      Lock.update(config)
+      Lock.write(lock_data)
       SnakeBridge.CoverageReport.write_reports(config, updated_manifest, errors)
 
       symbol_count = count_symbols(updated_manifest)
@@ -812,6 +817,9 @@ defmodule SnakeBridge.Compiler.Pipeline do
         end
       )
 
+    module_entries = module_entries_from_module_introspection(library, result)
+    updated = Manifest.put_modules(updated, module_entries)
+
     {updated, issues}
   end
 
@@ -878,10 +886,177 @@ defmodule SnakeBridge.Compiler.Pipeline do
       extract_module_issues(library, data) ++
         extract_namespace_issues(library, python_module, data)
 
+    module_entries = module_entries_from_module_introspection(library, data)
+    updated = Manifest.put_modules(updated, module_entries)
+
     {updated, issues}
   end
 
   defp update_manifest_from_module_introspection(manifest, _library, _result), do: {manifest, []}
+
+  defp update_manifest_module_docs(manifest, config) do
+    modules = modules_from_manifest(manifest, config)
+    existing = Map.get(manifest, "modules", %{})
+    missing = Enum.reject(modules, &Map.has_key?(existing, &1))
+
+    if missing == [] do
+      manifest
+    else
+      entries = module_doc_entries(missing, config)
+      Manifest.put_modules(manifest, entries)
+    end
+  end
+
+  defp module_entries_from_module_introspection(
+         library,
+         %{"namespaces" => namespaces} = result
+       ) do
+    namespace_entries =
+      namespaces
+      |> Enum.map(fn {namespace, data} ->
+        python_module =
+          if namespace == "" do
+            library.python_name
+          else
+            "#{library.python_name}.#{namespace}"
+          end
+
+        module_entry_from_doc_info(python_module, data)
+      end)
+
+    root_entry = module_entry_from_doc_info(library.python_name, result, result["module_version"])
+
+    [root_entry | namespace_entries]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq_by(fn {python_module, _} -> python_module end)
+  end
+
+  defp module_entries_from_module_introspection(library, result) when is_map(result) do
+    root_entry = module_entry_from_doc_info(library.python_name, result, result["module_version"])
+
+    case root_entry do
+      nil -> []
+      entry -> [entry]
+    end
+  end
+
+  defp module_doc_entries(missing, config) do
+    missing
+    |> Enum.group_by(&library_for_python_module(config.libraries, &1))
+    |> Enum.flat_map(&fetch_module_doc_entries/1)
+  end
+
+  defp fetch_module_doc_entries({nil, _modules}), do: []
+
+  defp fetch_module_doc_entries({library, modules}) do
+    case SnakeBridge.Introspector.introspect_module_docs(library, modules) do
+      {:ok, infos} ->
+        infos
+        |> Enum.map(&module_entry_from_introspector_info/1)
+        |> Enum.reject(&is_nil/1)
+
+      {:error, reason} ->
+        build_error_module_entries(modules, reason)
+    end
+  end
+
+  defp build_error_module_entries(modules, reason) do
+    Enum.map(modules, fn python_module ->
+      module_entry(python_module, "", nil, "error", module_doc_error(reason))
+    end)
+  end
+
+  defp module_entry_from_introspector_info(info) when is_map(info) do
+    python_module = info["module"] || info["python_module"]
+    module_entry_from_doc_info(python_module, info, info["module_version"])
+  end
+
+  defp module_entry_from_doc_info(python_module, info, module_version_override \\ nil) do
+    if is_binary(python_module) do
+      docstring = info["docstring"] || ""
+      doc_source = info["doc_source"]
+      doc_missing_reason = info["doc_missing_reason"]
+      module_version = module_version_override || info["module_version"]
+
+      module_entry(
+        python_module,
+        docstring,
+        module_version,
+        doc_source,
+        doc_missing_reason
+      )
+    end
+  end
+
+  defp module_entry(python_module, docstring, module_version, doc_source, doc_missing_reason) do
+    {doc_source, doc_missing_reason} =
+      module_doc_source(docstring, doc_source, doc_missing_reason)
+
+    entry = %{
+      "python_module" => python_module,
+      "docstring" => docstring || "",
+      "doc_source" => doc_source,
+      "doc_missing_reason" => doc_missing_reason
+    }
+
+    entry =
+      if module_version do
+        Map.put(entry, "module_version", module_version)
+      else
+        entry
+      end
+
+    {python_module, entry}
+  end
+
+  defp module_doc_source(_docstring, doc_source, doc_missing_reason) when is_binary(doc_source) do
+    {doc_source, doc_missing_reason}
+  end
+
+  defp module_doc_source(docstring, _doc_source, doc_missing_reason) do
+    if docstring in [nil, ""] do
+      {"empty", doc_missing_reason || "docstring missing"}
+    else
+      {"runtime", doc_missing_reason}
+    end
+  end
+
+  defp module_doc_error(reason) do
+    cond do
+      is_binary(reason) -> reason
+      is_map(reason) -> Map.get(reason, "message") || inspect(reason)
+      true -> inspect(reason)
+    end
+  end
+
+  defp modules_from_manifest(manifest, config) do
+    library_roots = Enum.map(config.libraries, & &1.python_name)
+
+    symbol_modules =
+      manifest
+      |> Map.get("symbols", %{})
+      |> Map.values()
+      |> Enum.map(&(&1["python_module"] || ""))
+
+    class_modules =
+      manifest
+      |> Map.get("classes", %{})
+      |> Map.values()
+      |> Enum.map(&(&1["python_module"] || ""))
+
+    (library_roots ++ symbol_modules ++ class_modules)
+    |> Enum.filter(&is_binary/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq()
+  end
+
+  defp library_for_python_module(libraries, python_module) when is_binary(python_module) do
+    libraries
+    |> Enum.filter(fn library ->
+      String.starts_with?(python_module, library.python_name)
+    end)
+    |> Enum.max_by(fn library -> String.length(library.python_name) end, fn -> nil end)
+  end
 
   defp generate_all_error(library, reason) do
     %{

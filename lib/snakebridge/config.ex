@@ -40,6 +40,7 @@ defmodule SnakeBridge.Config do
     - `:generate` - Controls which symbols are generated:
       - `:used` (default) - Only generate wrappers for symbols detected in your code
       - `:all` - Generate wrappers for ALL public symbols in the Python module
+    - `:docs_url` - Explicit documentation URL for third-party libraries
     """
 
     defstruct [
@@ -48,6 +49,7 @@ defmodule SnakeBridge.Config do
       :module_name,
       :python_name,
       :pypi_package,
+      :docs_url,
       :extras,
       include: [],
       exclude: [],
@@ -71,6 +73,7 @@ defmodule SnakeBridge.Config do
             module_name: module(),
             python_name: String.t(),
             pypi_package: String.t() | nil,
+            docs_url: String.t() | nil,
             extras: [String.t()],
             include: [String.t()],
             exclude: [String.t()],
@@ -228,6 +231,7 @@ defmodule SnakeBridge.Config do
       module_name: module_name,
       python_name: python_name,
       pypi_package: Keyword.get(opts, :pypi_package),
+      docs_url: Keyword.get(opts, :docs_url),
       extras: List.wrap(extras),
       include: Keyword.get(opts, :include, []),
       exclude: Keyword.get(opts, :exclude, []),

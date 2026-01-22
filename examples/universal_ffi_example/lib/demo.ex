@@ -1,4 +1,6 @@
 defmodule Demo do
+  require SnakeBridge
+
   @moduledoc """
   Comprehensive showcase of SnakeBridge Universal FFI (v0.10.0+).
 
@@ -27,7 +29,7 @@ defmodule Demo do
   alias SnakeBridge.Runtime
 
   def run do
-    SnakeBridge.run_as_script(fn ->
+    SnakeBridge.script do
       Examples.reset_failures()
 
       IO.puts("")
@@ -53,7 +55,7 @@ defmodule Demo do
       IO.puts(String.duplicate("=", 60))
 
       Examples.assert_no_failures!()
-    end)
+    end
     |> Examples.assert_script_ok()
   end
 

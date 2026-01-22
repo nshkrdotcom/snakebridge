@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-01-21
+
+### Added
+- Generated class wrappers now include `@moduledoc` from Python class docstrings
+- Generated constructors now include `@doc` from `__init__` method docstrings
+- Generated methods now include `@doc` from method docstrings
+- Documentation is automatically converted from Python formats (Google, NumPy, Sphinx, Epytext) to ExDoc Markdown
+
 ## [0.12.0] - 2026-01-20
 
 ### Added
@@ -685,6 +693,7 @@ Numpy.compute(data, __runtime__: [timeout: 600_000])
 - Type system mapper
 - Basic code generation
 
+[0.12.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.9.0...v0.10.0

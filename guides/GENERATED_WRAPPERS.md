@@ -185,12 +185,52 @@ Classes are generated as separate files named after the class:
 | `pandas.DataFrame` | `pandas/data_frame.ex` | `Pandas.DataFrame` |
 | `numpy.ndarray` | `numpy/ndarray.ex` | `Numpy.Ndarray` |
 
+### Documentation Placement
+
+Documentation follows the same structure users see in HexDocs:
+
+- Module files (`__init__.ex`) define the module and carry module docs plus module-level function docs.
+- Class files define the class module and carry class docs plus method docs.
+- Submodule docs live in submodule `__init__.ex`; class docs live in class files.
+
+File names do not appear in HexDocs. Only module names and `@moduledoc`/`@doc` content are shown.
+When Python docstrings are missing, SnakeBridge emits a concise fallback description so
+HexDocs remains consistent.
+
 ### Benefits
 
 - **IDE Navigation**: Jump to definitions matches Python's module structure
 - **Smaller Files**: Each module is independently viewable and diffable
 - **Git-Friendly**: Changes to one submodule don't affect others
 - **Familiar Layout**: Developers familiar with Python recognize the structure
+
+### HexDocs Grouping (Optional)
+
+You can group generated modules by Python package path for a clean HexDocs navigation tree.
+SnakeBridge provides a helper that reads the manifest and builds `groups_for_modules`:
+
+```elixir
+def project do
+  [
+    # ...
+    docs: [
+      groups_for_modules: SnakeBridge.Docs.groups_for_modules()
+    ]
+  ]
+end
+```
+
+By default, grouping uses one submodule level beyond the library root. To group by full
+Python paths (more granular), set `depth: :full`:
+
+```elixir
+docs: [
+  groups_for_modules: SnakeBridge.Docs.groups_for_modules(depth: :full)
+]
+```
+
+The helper reads `.snakebridge/manifest.json`, so run `mix compile` (or
+`mix snakebridge.setup`) before generating docs to ensure the manifest is up to date.
 
 ### Configuration
 

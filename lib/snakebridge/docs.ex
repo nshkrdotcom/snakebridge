@@ -5,6 +5,8 @@ defmodule SnakeBridge.Docs do
 
   @cache_table :snakebridge_docs
 
+  alias SnakeBridge.Manifest
+
   @spec get(module(), atom() | String.t()) :: String.t()
   def get(module, function) do
     start_time = System.monotonic_time()
@@ -22,6 +24,63 @@ defmodule SnakeBridge.Docs do
         SnakeBridge.Telemetry.docs_fetch(start_time, module, function, source)
         doc
     end
+  end
+
+  @doc """
+  Builds an ExDoc `groups_for_modules` map using the SnakeBridge manifest.
+
+  This keeps HexDocs navigation aligned with Python package paths, while
+  remaining purely an Elixir configuration concern.
+
+  ## Options
+
+  - `:config` - `SnakeBridge.Config` struct (defaults to `SnakeBridge.Config.load/0`)
+  - `:manifest` - manifest map (defaults to `SnakeBridge.Manifest.load/1`)
+  - `:depth` - group depth beyond the library root (`:full` or non-negative integer, default: 1)
+  - `:libraries` - list of library names to include (atoms or strings)
+  - `:include_functions` - include module functions (default: true)
+  - `:include_classes` - include class modules (default: true)
+  """
+  @spec groups_for_modules(keyword()) :: map()
+  def groups_for_modules(opts \\ []) do
+    config = Keyword.get(opts, :config) || SnakeBridge.Config.load()
+    manifest = Keyword.get(opts, :manifest) || Manifest.load(config)
+
+    depth =
+      case Keyword.get(opts, :depth, 1) do
+        :full -> :full
+        value when is_integer(value) -> value
+        _ -> 1
+      end
+
+    include_functions = Keyword.get(opts, :include_functions, true)
+    include_classes = Keyword.get(opts, :include_classes, true)
+    only_libraries = Keyword.get(opts, :libraries)
+
+    libraries = filter_libraries(config.libraries, only_libraries)
+
+    entries =
+      []
+      |> maybe_add_function_entries(manifest, include_functions)
+      |> maybe_add_class_entries(manifest, include_classes)
+
+    entries
+    |> Enum.reduce(%{}, fn entry, acc ->
+      case process_entry(entry, libraries, depth) do
+        nil -> acc
+        {group, module} -> Map.update(acc, group, MapSet.new([module]), &MapSet.put(&1, module))
+      end
+    end)
+    |> Enum.map(fn {group, modules} ->
+      modules =
+        modules
+        |> Enum.map(&Module.split/1)
+        |> Enum.sort()
+        |> Enum.map(&Module.concat/1)
+
+      {group, modules}
+    end)
+    |> Map.new()
   end
 
   defp fetch_doc_with_source(module, function) do
@@ -84,6 +143,90 @@ defmodule SnakeBridge.Docs do
       String.starts_with?(name, query) -> 0.9
       String.contains?(name, query) -> 0.7
       true -> 0.0
+    end
+  end
+
+  defp maybe_add_function_entries(entries, _manifest, false), do: entries
+
+  defp maybe_add_function_entries(entries, manifest, true) do
+    entries ++
+      (manifest
+       |> Map.get("symbols", %{})
+       |> Map.values()
+       |> Enum.map(fn info -> {info["python_module"] || "", info["module"] || ""} end))
+  end
+
+  defp maybe_add_class_entries(entries, _manifest, false), do: entries
+
+  defp maybe_add_class_entries(entries, manifest, true) do
+    entries ++
+      (manifest
+       |> Map.get("classes", %{})
+       |> Map.values()
+       |> Enum.map(fn info -> {info["python_module"] || "", info["module"] || ""} end))
+  end
+
+  defp filter_libraries(libraries, nil), do: libraries
+
+  defp filter_libraries(libraries, only) do
+    only =
+      only
+      |> List.wrap()
+      |> Enum.map(&to_string/1)
+
+    Enum.filter(libraries, fn library ->
+      to_string(library.python_name) in only
+    end)
+  end
+
+  defp library_for_module(python_module, libraries) do
+    libraries
+    |> Enum.filter(fn library ->
+      String.starts_with?(python_module, library.python_name)
+    end)
+    |> Enum.max_by(fn library -> String.length(library.python_name) end, fn -> nil end)
+  end
+
+  defp group_name_for(python_module, library, depth) do
+    if depth == :full do
+      python_module
+    else
+      depth = max(depth, 0)
+      root_parts = String.split(library.python_name, ".")
+      module_parts = String.split(python_module, ".")
+      extra_parts = Enum.drop(module_parts, length(root_parts))
+
+      if extra_parts == [] or depth == 0 do
+        Enum.join(root_parts, ".")
+      else
+        Enum.join(root_parts ++ Enum.take(extra_parts, depth), ".")
+      end
+    end
+  end
+
+  defp process_entry({python_module, elixir_module}, libraries, depth) do
+    if python_module in [nil, ""] or elixir_module in [nil, ""] do
+      nil
+    else
+      process_valid_entry(python_module, elixir_module, libraries, depth)
+    end
+  end
+
+  defp process_valid_entry(python_module, elixir_module, libraries, depth) do
+    case library_for_module(python_module, libraries) do
+      nil ->
+        nil
+
+      library ->
+        group = group_name_for(python_module, library, depth)
+
+        module =
+          elixir_module
+          |> to_string()
+          |> String.split(".")
+          |> Module.concat()
+
+        {group, module}
     end
   end
 

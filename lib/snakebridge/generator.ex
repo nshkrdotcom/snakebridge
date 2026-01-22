@@ -795,6 +795,29 @@ defmodule SnakeBridge.Generator do
       end
   end
 
+  @doc false
+  @spec format_docstring_with_fallback(String.t() | map() | nil, list(), map() | nil, String.t()) ::
+          String.t()
+  def format_docstring_with_fallback(raw_doc, params, return_type, fallback) do
+    formatted =
+      raw_doc
+      |> format_docstring(params, return_type)
+      |> String.trim()
+
+    if formatted == "" do
+      fallback = fallback |> to_string() |> String.trim()
+      extras = format_param_docs(params, return_type)
+
+      cond do
+        fallback == "" -> ""
+        extras == "" -> fallback
+        true -> fallback <> "\n\n" <> extras
+      end
+    else
+      formatted
+    end
+  end
+
   @spec build_params(list(), map()) :: %{
           required: list(map()),
           optional_positional: list(map()),
@@ -1273,9 +1296,16 @@ defmodule SnakeBridge.Generator do
   end
 
   defp param_doc_line(param) do
-    case param_name(param) do
+    case sanitized_param_name(param) do
       nil -> nil
       name -> format_param_doc_line(name, param)
+    end
+  end
+
+  defp sanitized_param_name(param) do
+    case param_name(param) do
+      nil -> nil
+      name -> sanitize_name(name)
     end
   end
 

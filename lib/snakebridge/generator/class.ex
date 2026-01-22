@@ -9,11 +9,13 @@ defmodule SnakeBridge.Generator.Class do
     python_module = Generator.class_python_module(class_info, library)
     module_name = Generator.class_module_name(class_info, library)
     relative_module = Generator.relative_module_name(library, module_name)
+    moduledoc = render_class_moduledoc(class_info["docstring"], class_name)
 
     methods = class_info["methods"] || []
     attrs = class_info["attributes"] || []
 
     init_method = Enum.find(methods, fn method -> method["name"] == "__init__" end)
+    init_docstring = if init_method, do: init_method["docstring"], else: nil
     init_params = if init_method, do: init_method["parameters"] || [], else: []
     init_params = drop_self_param(init_params)
     plan = Generator.build_params(init_params, init_method || %{})
@@ -22,9 +24,9 @@ defmodule SnakeBridge.Generator.Class do
 
     constructor =
       if plan.is_variadic do
-        render_variadic_constructor(plan, args_name)
+        render_variadic_constructor(plan, args_name, init_docstring, class_name)
       else
-        render_constructor(plan, args_name)
+        render_constructor(plan, args_name, init_params, init_docstring, class_name)
       end
 
     methods =
@@ -32,7 +34,7 @@ defmodule SnakeBridge.Generator.Class do
       |> Enum.reject(fn method -> method["name"] == "__init__" end)
       |> deduplicate_methods()
 
-    methods_source = Enum.map_join(methods, "\n\n", &render_method/1)
+    methods_source = Enum.map_join(methods, "\n\n", &render_method(&1, class_name))
     method_names = resolved_method_names(methods)
 
     attrs_source =
@@ -42,6 +44,7 @@ defmodule SnakeBridge.Generator.Class do
 
     """
       defmodule #{relative_module} do
+    #{Generator.indent(moduledoc, 4)}
         def __snakebridge_python_name__, do: "#{python_module}"
         def __snakebridge_python_class__, do: "#{class_name}"
         def __snakebridge_library__, do: "#{library.python_name}"
@@ -68,11 +71,13 @@ defmodule SnakeBridge.Generator.Class do
     class_name = Generator.class_name(class_info)
     python_module = Generator.class_python_module(class_info, library)
     module_name = module_to_string(elixir_module)
+    moduledoc = render_class_moduledoc(class_info["docstring"], class_name)
 
     methods = class_info["methods"] || []
     attrs = class_info["attributes"] || []
 
     init_method = Enum.find(methods, fn method -> method["name"] == "__init__" end)
+    init_docstring = if init_method, do: init_method["docstring"], else: nil
     init_params = if init_method, do: init_method["parameters"] || [], else: []
     init_params = drop_self_param(init_params)
     plan = Generator.build_params(init_params, init_method || %{})
@@ -81,9 +86,9 @@ defmodule SnakeBridge.Generator.Class do
 
     constructor =
       if plan.is_variadic do
-        render_variadic_constructor(plan, args_name)
+        render_variadic_constructor(plan, args_name, init_docstring, class_name)
       else
-        render_constructor(plan, args_name)
+        render_constructor(plan, args_name, init_params, init_docstring, class_name)
       end
 
     methods =
@@ -91,7 +96,7 @@ defmodule SnakeBridge.Generator.Class do
       |> Enum.reject(fn method -> method["name"] == "__init__" end)
       |> deduplicate_methods()
 
-    methods_source = Enum.map_join(methods, "\n\n", &render_method/1)
+    methods_source = Enum.map_join(methods, "\n\n", &render_method(&1, class_name))
     method_names = resolved_method_names(methods)
 
     attrs_source =
@@ -101,6 +106,7 @@ defmodule SnakeBridge.Generator.Class do
 
     """
     defmodule #{module_name} do
+    #{Generator.indent(moduledoc, 2)}
       def __snakebridge_python_name__, do: "#{python_module}"
       def __snakebridge_python_class__, do: "#{class_name}"
       def __snakebridge_library__, do: "#{library.python_name}"
@@ -121,13 +127,56 @@ defmodule SnakeBridge.Generator.Class do
 
   defp module_to_string(module) when is_binary(module), do: module
 
-  defp render_constructor(plan, args_name) do
+  defp render_class_moduledoc(docstring, class_name) do
+    formatted =
+      docstring
+      |> Generator.format_docstring()
+      |> String.trim()
+
+    content =
+      if formatted == "" do
+        "Wrapper for Python class #{class_name}."
+      else
+        formatted
+      end
+
+    Enum.join(["@moduledoc \"\"\"", content, "\"\"\""], "\n")
+  end
+
+  defp render_doc_attribute(docstring, params, return_type, indent, fallback) do
+    formatted =
+      docstring
+      |> Generator.format_docstring_with_fallback(params, return_type, fallback)
+      |> String.trim()
+
+    if formatted == "" do
+      ""
+    else
+      indent_str = String.duplicate(" ", indent)
+      content = Generator.indent(formatted, indent)
+
+      Enum.join(["#{indent_str}@doc \"\"\"", content, "#{indent_str}\"\"\""], "\n")
+    end
+  end
+
+  defp render_constructor(plan, args_name, init_params, init_docstring, class_name) do
     param_names = Enum.map(plan.required, & &1.name)
     args = Generator.args_expr(param_names, plan.has_args, args_name)
 
     param_list = Generator.param_list(param_names, plan.has_args, plan.has_opts, args_name)
 
     call = "SnakeBridge.Runtime.call_class(__MODULE__, :__init__, #{args}, opts)"
+
+    doc_block =
+      render_doc_attribute(
+        init_docstring,
+        init_params,
+        nil,
+        8,
+        fallback_constructor_doc(class_name)
+      )
+
+    doc_block = if doc_block == "", do: "", else: doc_block <> "\n"
 
     spec_args =
       plan.required
@@ -140,20 +189,20 @@ defmodule SnakeBridge.Generator.Class do
     kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 10)
 
     """
-        @spec new(#{spec_args_str}) :: {:ok, SnakeBridge.Ref.t()} | {:error, Snakepit.Error.t()}
+    #{doc_block}        @spec new(#{spec_args_str}) :: {:ok, SnakeBridge.Ref.t()} | {:error, Snakepit.Error.t()}
         def new(#{param_list}) do
     #{normalize}#{kw_validation}          #{call}
         end
     """
   end
 
-  defp render_method(%{"name" => "__init__"}), do: ""
-  defp render_method(%{name: "__init__"}), do: ""
+  defp render_method(%{"name" => "__init__"}, _class_name), do: ""
+  defp render_method(%{name: "__init__"}, _class_name), do: ""
 
-  defp render_method(info) do
+  defp render_method(info, class_name) do
     python_name = info["python_name"] || info["name"] || info[:name] || ""
     name_info = resolve_method_name(info, python_name)
-    do_render_method(name_info, info)
+    do_render_method(name_info, info, class_name, python_name)
   end
 
   defp resolve_method_name(info, python_name) do
@@ -163,9 +212,9 @@ defmodule SnakeBridge.Generator.Class do
     end
   end
 
-  defp do_render_method(nil, _info), do: ""
+  defp do_render_method(nil, _info, _class_name, _python_name), do: ""
 
-  defp do_render_method({name, python_name}, info) do
+  defp do_render_method({name, python_name}, info, class_name, _original_python_name) do
     params =
       info["parameters"]
       |> List.wrap()
@@ -173,14 +222,23 @@ defmodule SnakeBridge.Generator.Class do
 
     plan = Generator.build_params(params, info)
     return_type = info["return_type"] || %{"type" => "any"}
-    render_method_body(name, python_name, plan, return_type)
+    docstring = info["docstring"]
+    render_method_body(name, python_name, plan, return_type, docstring, params, class_name)
   end
 
-  defp render_method_body(name, python_name, %{is_variadic: true}, return_type) do
-    render_variadic_method(name, python_name, return_type)
+  defp render_method_body(
+         name,
+         python_name,
+         %{is_variadic: true},
+         return_type,
+         docstring,
+         _params,
+         class_name
+       ) do
+    render_variadic_method(name, python_name, return_type, docstring, class_name)
   end
 
-  defp render_method_body(name, python_name, plan, return_type) do
+  defp render_method_body(name, python_name, plan, return_type, docstring, params, class_name) do
     param_names = Enum.map(plan.required, & &1.name)
     args_name = Generator.extra_args_name(param_names)
     spec = Generator.method_spec(name, plan.required, plan.has_args, return_type)
@@ -188,8 +246,19 @@ defmodule SnakeBridge.Generator.Class do
     normalize = Generator.normalize_args_line(plan.has_args, args_name, 10)
     kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 10)
 
+    doc_block =
+      render_doc_attribute(
+        docstring,
+        params,
+        return_type,
+        8,
+        fallback_method_doc(class_name, python_name)
+      )
+
+    doc_block = if doc_block == "", do: "", else: doc_block <> "\n"
+
     """
-        #{spec}
+    #{doc_block}        #{spec}
         def #{name}(ref#{Generator.method_param_suffix(param_names, plan.has_args, plan.has_opts, args_name)}) do
     #{normalize}#{kw_validation}          #{call}
         end
@@ -307,25 +376,49 @@ defmodule SnakeBridge.Generator.Class do
     String.starts_with?(python_name, "__") && String.ends_with?(python_name, "__")
   end
 
-  defp render_variadic_constructor(_plan, _args_name) do
+  defp fallback_constructor_doc(class_name) do
+    "Constructs `#{class_name}`."
+  end
+
+  defp fallback_method_doc(class_name, python_name) do
+    "Python method `#{class_name}.#{python_name}`."
+  end
+
+  defp render_variadic_constructor(_plan, _args_name, init_docstring, class_name) do
     max_arity = Generator.variadic_max_arity()
     specs = variadic_specs("new", max_arity, "SnakeBridge.Ref.t()")
     clauses = variadic_constructor_clauses(max_arity)
 
+    doc_block =
+      render_doc_attribute(init_docstring, [], nil, 8, fallback_constructor_doc(class_name))
+
+    doc_block = if doc_block == "", do: "", else: doc_block <> "\n"
+
     """
-        #{specs}
+    #{doc_block}        #{specs}
     #{Generator.indent(clauses, 8)}
     """
   end
 
-  defp render_variadic_method(name, python_name, return_type) do
+  defp render_variadic_method(name, python_name, return_type, docstring, class_name) do
     max_arity = Generator.variadic_max_arity()
     return_spec = Generator.type_spec_string(return_type)
     specs = variadic_method_specs(name, max_arity, return_spec)
     clauses = variadic_method_clauses(name, python_name, max_arity)
 
+    doc_block =
+      render_doc_attribute(
+        docstring,
+        [],
+        return_type,
+        8,
+        fallback_method_doc(class_name, python_name)
+      )
+
+    doc_block = if doc_block == "", do: "", else: doc_block <> "\n"
+
     """
-        #{specs}
+    #{doc_block}        #{specs}
     #{Generator.indent(clauses, 8)}
     """
   end

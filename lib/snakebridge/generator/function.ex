@@ -7,37 +7,67 @@ defmodule SnakeBridge.Generator.Function do
   def render_function(info, library) do
     raw_name = info["name"] || ""
     python_name = info["python_name"] || info["function"] || raw_name
+    python_module = info["python_module"] || library.python_name || ""
     {name, _python_name} = Generator.sanitize_function_name(raw_name)
 
     if module_attribute?(info) do
-      render_module_attribute(name, python_name, info)
+      render_module_attribute(name, python_name, info, python_module)
     else
-      render_callable_function(info, library, name, python_name)
+      render_callable_function(info, library, name, python_name, python_module)
     end
   end
 
-  defp render_callable_function(info, library, name, python_name) do
+  defp render_callable_function(info, library, name, python_name, python_module) do
     params = info["parameters"] || []
     doc = info["docstring"] || ""
     plan = Generator.build_params(params, info)
     param_names = Enum.map(plan.required, & &1.name)
     args_name = Generator.extra_args_name(param_names)
     return_type = info["return_type"] || %{"type" => "any"}
+    fallback_doc = fallback_function_doc(python_module, python_name)
 
-    normal = render_function_body(name, python_name, plan, args_name, return_type, doc, params)
+    normal =
+      render_function_body(
+        name,
+        python_name,
+        plan,
+        args_name,
+        return_type,
+        doc,
+        params,
+        fallback_doc
+      )
+
     maybe_add_streaming(normal, name, python_name, plan, args_name, library)
   end
 
-  defp render_function_body(name, python_name, plan, _args_name, return_type, doc, params) do
+  defp render_function_body(
+         name,
+         python_name,
+         plan,
+         _args_name,
+         return_type,
+         doc,
+         params,
+         fallback_doc
+       ) do
     cond do
       plan.is_variadic ->
-        render_variadic_function(name, python_name, return_type, doc, params)
+        render_variadic_function(name, python_name, return_type, doc, params, fallback_doc)
 
       plan.optional_positional != [] and not plan.has_varargs ->
-        render_optional_positional_function(name, python_name, plan, return_type, doc, params)
+        render_optional_positional_function(
+          name,
+          python_name,
+          plan,
+          return_type,
+          doc,
+          params,
+          fallback_doc
+        )
 
       true ->
-        render_simple_function(name, python_name, plan, return_type, doc, params)
+        render_simple_function(name, python_name, plan, return_type, doc, params, fallback_doc)
     end
   end
 
@@ -65,10 +95,11 @@ defmodule SnakeBridge.Generator.Function do
       info["type"] == "attribute" or info[:type] == "attribute"
   end
 
-  defp render_module_attribute(name, python_name, info) do
+  defp render_module_attribute(name, python_name, info, python_module) do
     return_type = info["return_type"] || %{"type" => "any"}
     doc = info["docstring"] || ""
-    formatted_doc = Generator.format_docstring(doc, [], return_type)
+    fallback_doc = fallback_attribute_doc(python_module, python_name)
+    formatted_doc = Generator.format_docstring_with_fallback(doc, [], return_type, fallback_doc)
     attr_ref = Generator.function_ref(name, python_name)
     return_spec = Generator.type_spec_string(return_type)
 
@@ -83,10 +114,13 @@ defmodule SnakeBridge.Generator.Function do
     """
   end
 
-  defp render_simple_function(name, python_name, plan, return_type, doc, params) do
+  defp render_simple_function(name, python_name, plan, return_type, doc, params, fallback_doc) do
     param_names = Enum.map(plan.required, & &1.name)
     args_list = "[#{Enum.join(param_names, ", ")}]"
-    formatted_doc = Generator.format_docstring(doc, params, return_type)
+
+    formatted_doc =
+      Generator.format_docstring_with_fallback(doc, params, return_type, fallback_doc)
+
     kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 8)
     return_spec = Generator.type_spec_string(return_type)
 
@@ -113,8 +147,18 @@ defmodule SnakeBridge.Generator.Function do
     """
   end
 
-  defp render_optional_positional_function(name, python_name, plan, return_type, doc, params) do
-    formatted_doc = Generator.format_docstring(doc, params, return_type)
+  defp render_optional_positional_function(
+         name,
+         python_name,
+         plan,
+         return_type,
+         doc,
+         params,
+         fallback_doc
+       ) do
+    formatted_doc =
+      Generator.format_docstring_with_fallback(doc, params, return_type, fallback_doc)
+
     kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 8)
     return_spec = Generator.type_spec_string(return_type)
 
@@ -238,10 +282,13 @@ defmodule SnakeBridge.Generator.Function do
     """
   end
 
-  defp render_variadic_function(name, python_name, return_type, doc, params) do
+  defp render_variadic_function(name, python_name, return_type, doc, params, fallback_doc) do
     max_arity = Generator.variadic_max_arity()
     return_spec = Generator.type_spec_string(return_type)
-    formatted_doc = Generator.format_docstring(doc, params, return_type)
+
+    formatted_doc =
+      Generator.format_docstring_with_fallback(doc, params, return_type, fallback_doc)
+
     specs = variadic_specs(name, max_arity, return_spec)
     clauses = variadic_function_clauses(name, python_name, max_arity)
 
@@ -454,4 +501,18 @@ defmodule SnakeBridge.Generator.Function do
 
   defp variadic_streaming_param_list_with_opts(args),
     do: Enum.join(args ++ ["opts", "callback"], ", ")
+
+  defp fallback_function_doc(python_module, python_name) do
+    path = dotted_path(python_module, python_name)
+    "Python binding for `#{path}`."
+  end
+
+  defp fallback_attribute_doc(python_module, python_name) do
+    path = dotted_path(python_module, python_name)
+    "Python module attribute `#{path}`."
+  end
+
+  defp dotted_path("", name), do: name
+  defp dotted_path(nil, name), do: name
+  defp dotted_path(module, name), do: "#{module}.#{name}"
 end

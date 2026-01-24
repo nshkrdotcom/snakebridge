@@ -115,7 +115,7 @@ defmodule SnakeBridge.Config do
 
   @type t :: %__MODULE__{
           libraries: [Library.t()],
-          auto_install: :never | :dev | :dev_test | :always,
+          auto_install: :never | :dev | :dev_test | :always | nil,
           generated_dir: String.t(),
           generated_layout: :single | :split,
           metadata_dir: String.t(),

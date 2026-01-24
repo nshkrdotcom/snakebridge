@@ -239,7 +239,7 @@
               }
             },
             {
-              "default": "<built-in method match of re.Pattern object at 0x7fe21d2c36b0>",
+              "default": "<built-in method match of re.Pattern object at 0x7fe27d95f6b0>",
               "kind": "POSITIONAL_OR_KEYWORD",
               "name": "_w",
               "type": {
@@ -793,7 +793,7 @@
               }
             },
             {
-              "default": "<built-in method match of re.Pattern object at 0x7fe21d2c36b0>",
+              "default": "<built-in method match of re.Pattern object at 0x7fe27d95f6b0>",
               "kind": "POSITIONAL_OR_KEYWORD",
               "name": "_w",
               "type": {

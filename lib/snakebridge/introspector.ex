@@ -152,17 +152,7 @@ defmodule SnakeBridge.Introspector do
 
       {:error, _} ->
         # Output may contain warnings before JSON - try to extract JSON
-        case extract_json_object(output) do
-          {:ok, json_str} ->
-            case Jason.decode(json_str) do
-              {:ok, %{"error" => error}} -> {:error, normalize_error(error, package)}
-              {:ok, result} when is_map(result) -> {:ok, result}
-              {:error, _} -> {:error, {:json_parse, output}}
-            end
-
-          :error ->
-            {:error, {:json_parse, output}}
-        end
+        parse_extracted_json(output, package)
     end
   end
 
@@ -176,6 +166,24 @@ defmodule SnakeBridge.Introspector do
 
       :nomatch ->
         :error
+    end
+  end
+
+  defp parse_extracted_json(output, package) do
+    case extract_json_object(output) do
+      {:ok, json_str} ->
+        decode_json_result(json_str, output, package)
+
+      :error ->
+        {:error, {:json_parse, output}}
+    end
+  end
+
+  defp decode_json_result(json_str, output, package) do
+    case Jason.decode(json_str) do
+      {:ok, %{"error" => error}} -> {:error, normalize_error(error, package)}
+      {:ok, result} when is_map(result) -> {:ok, result}
+      {:error, _} -> {:error, {:json_parse, output}}
     end
   end
 
@@ -402,41 +410,32 @@ defmodule SnakeBridge.Introspector do
 
   defp resolve_module_settings(library, opts) do
     mode = resolve_module_mode(library, opts)
-
-    module_include =
-      case Keyword.fetch(opts, :module_include) do
-        {:ok, value} ->
-          normalize_module_list(value)
-
-        :error ->
-          if is_map(library), do: normalize_module_list(Map.get(library, :module_include))
-      end
-
-    module_exclude =
-      case Keyword.fetch(opts, :module_exclude) do
-        {:ok, value} ->
-          normalize_module_list(value)
-
-        :error ->
-          if is_map(library), do: normalize_module_list(Map.get(library, :module_exclude))
-      end
-
-    module_depth =
-      case Keyword.fetch(opts, :module_depth) do
-        {:ok, depth} -> normalize_module_depth(depth)
-        :error -> if(is_map(library), do: normalize_module_depth(Map.get(library, :module_depth)))
-      end
-
     {submodules, discover_submodules?, public_api?} = module_mode_flags(mode)
 
     %{
       submodules: submodules,
       discover_submodules?: discover_submodules?,
       public_api?: public_api?,
-      module_include: module_include,
-      module_exclude: module_exclude,
-      module_depth: module_depth
+      module_include: resolve_module_list_option(library, opts, :module_include),
+      module_exclude: resolve_module_list_option(library, opts, :module_exclude),
+      module_depth: resolve_module_depth_option(library, opts)
     }
+  end
+
+  defp resolve_module_list_option(library, opts, key) do
+    case Keyword.fetch(opts, key) do
+      {:ok, value} -> normalize_module_list(value)
+      :error when is_map(library) -> normalize_module_list(Map.get(library, key))
+      :error -> nil
+    end
+  end
+
+  defp resolve_module_depth_option(library, opts) do
+    case Keyword.fetch(opts, :module_depth) do
+      {:ok, depth} -> normalize_module_depth(depth)
+      :error when is_map(library) -> normalize_module_depth(Map.get(library, :module_depth))
+      :error -> nil
+    end
   end
 
   defp resolve_module_mode(library, opts) do
@@ -445,25 +444,26 @@ defmodule SnakeBridge.Introspector do
         {:only, normalize_module_list(list)}
 
       {:ok, true} ->
-        public_api? = Keyword.get(opts, :public_api, library_public_api(library))
-        if public_api?, do: :public, else: :all
+        resolve_submodules_true(library, opts)
 
       {:ok, false} ->
         :root
 
       :error ->
-        mode = Keyword.get(opts, :module_mode) || library_module_mode(library)
+        resolve_module_mode_from_config(library, opts)
+    end
+  end
 
-        cond do
-          mode != nil ->
-            normalize_module_mode(mode)
+  defp resolve_submodules_true(library, opts) do
+    public_api? = Keyword.get(opts, :public_api, library_public_api(library))
+    if public_api?, do: :public, else: :all
+  end
 
-          is_map(library) ->
-            legacy_mode_from_library(library)
-
-          true ->
-            :root
-        end
+  defp resolve_module_mode_from_config(library, opts) do
+    case Keyword.get(opts, :module_mode) || library_module_mode(library) do
+      nil when is_map(library) -> legacy_mode_from_library(library)
+      nil -> :root
+      mode -> normalize_module_mode(mode)
     end
   end
 
@@ -479,7 +479,6 @@ defmodule SnakeBridge.Introspector do
   defp module_mode_flags(:public), do: {nil, true, true}
   defp module_mode_flags(:all), do: {nil, true, false}
   defp module_mode_flags(:root), do: {nil, false, false}
-  defp module_mode_flags(_), do: {nil, false, false}
 
   defp normalize_module_mode(:light), do: :root
   defp normalize_module_mode(:top), do: :root

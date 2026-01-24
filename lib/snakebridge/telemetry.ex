@@ -327,6 +327,28 @@ defmodule SnakeBridge.Telemetry do
     )
   end
 
+  @doc """
+  Emits session cleanup error event.
+
+  ## Measurements
+
+  - `system_time` - System time when cleanup failure was observed
+
+  ## Metadata
+
+  - `session_id` - Session identifier
+  - `source` - `:manual` or `:owner_down`
+  - `reason` - Error or exit reason
+  """
+  @spec session_cleanup_error(String.t(), :manual | :owner_down, term()) :: :ok
+  def session_cleanup_error(session_id, source, reason) do
+    emit(
+      [:snakebridge, :session, :cleanup, :error],
+      %{system_time: System.system_time()},
+      %{session_id: session_id, source: source, reason: reason}
+    )
+  end
+
   defp emit(event, measurements, metadata) do
     case Application.ensure_all_started(:telemetry) do
       {:ok, _} -> :telemetry.execute(event, measurements, metadata)

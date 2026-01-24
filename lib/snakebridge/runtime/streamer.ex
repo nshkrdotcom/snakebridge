@@ -91,6 +91,7 @@ defmodule SnakeBridge.Runtime.Streamer do
 
     chunk_callback = fn chunk -> send(caller, {stream_ref, :chunk, chunk}) end
 
+    # Per-call stream worker: monitored by the caller and intentionally unsupervised.
     {:ok, pid} =
       Task.start(fn ->
         stream_result =

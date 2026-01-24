@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Private modules (any path component starting with `_`) are excluded
 - **Compilation progress output**: Progress messages during introspection and generation phases
 - **Method collision fix**: When a Python class has both `__init__` and a method named `new`, the method is renamed to `python_new` to avoid arity collisions
+- **Session cleanup failure telemetry**: Emits `[:snakebridge, :session, :cleanup, :error]` when best-effort cleanup fails
+
+### Changed
+- Registry is now supervised at runtime while keeping lazy startup for compile-time tasks
 
 ## [0.13.0] - 2026-01-21
 

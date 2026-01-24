@@ -96,7 +96,7 @@ defmodule Json.JSONDecoder do
   ## Parameters
 
   - `s` (term())
-  - `w` (term() default: <built-in method match of re.Pattern object at 0x7fe21d2c36b0>)
+  - `w` (term() default: <built-in method match of re.Pattern object at 0x7fe27d95f6b0>)
 
   ## Returns
 

@@ -3,8 +3,8 @@ defmodule SnakeBridge.ModuleModeIntrospectionTest do
 
   use ExUnit.Case, async: false
 
-  alias SnakeBridge.Introspector
   alias SnakeBridge.Config
+  alias SnakeBridge.Introspector
 
   @fixtures_path Path.expand("../fixtures/python", __DIR__)
 

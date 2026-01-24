@@ -97,7 +97,17 @@ defmodule SnakeBridge.Registry do
   """
   @spec start_link(keyword()) :: Agent.on_start()
   def start_link(opts \\ []) do
-    Agent.start_link(fn -> %{} end, Keyword.merge([name: __MODULE__], opts))
+    case Agent.start_link(fn -> %{} end, Keyword.merge([name: __MODULE__], opts)) do
+      {:ok, pid} ->
+        {:ok, pid}
+
+      {:error, {:already_started, pid}} ->
+        Process.link(pid)
+        {:ok, pid}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   @doc """
@@ -306,18 +316,38 @@ defmodule SnakeBridge.Registry do
 
   ## Private Functions
 
-  # Ensures the registry agent is started
+  # Ensures the registry agent is started.
+  # Runtime should be supervised; compile-time tooling may use lazy startup.
   defp ensure_started do
     case Process.whereis(__MODULE__) do
       nil ->
-        start_registry()
+        start_registry_for_context()
 
       pid ->
         if Process.alive?(pid) do
           :ok
         else
-          start_registry()
+          start_registry_for_context()
         end
+    end
+  end
+
+  defp start_registry_for_context do
+    if Process.whereis(SnakeBridge.Supervisor) do
+      start_registry_supervised()
+    else
+      start_registry()
+    end
+  end
+
+  defp start_registry_supervised do
+    case Supervisor.restart_child(SnakeBridge.Supervisor, __MODULE__) do
+      {:ok, _pid} -> :ok
+      {:ok, _pid, _info} -> :ok
+      {:error, :running} -> :ok
+      {:error, :restarting} -> :ok
+      {:error, :not_found} -> start_registry()
+      {:error, reason} -> raise "Failed to restart registry: #{inspect(reason)}"
     end
   end
 

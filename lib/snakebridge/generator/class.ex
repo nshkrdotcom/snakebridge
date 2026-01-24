@@ -292,9 +292,13 @@ defmodule SnakeBridge.Generator.Class do
   end
 
   defp attribute_reserved_names(method_names) do
-    method_names
-    |> MapSet.new()
-    |> MapSet.union(MapSet.new(@reserved_attribute_names))
+    MapSet.union(method_names, reserved_attribute_names())
+  end
+
+  defp reserved_attribute_names do
+    Enum.reduce(@reserved_attribute_names, MapSet.new(), fn name, acc ->
+      MapSet.put(acc, name)
+    end)
   end
 
   defp ensure_unique_attr_name(name, used) do

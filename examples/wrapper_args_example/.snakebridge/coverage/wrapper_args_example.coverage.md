@@ -1,6 +1,6 @@
 # Coverage Report: wrapper_args_example
 
-Generated at: 2026-01-22T03:59:46.326819Z
+Generated at: 2026-01-24T01:40:18.955257Z
 
 ## Summary
 

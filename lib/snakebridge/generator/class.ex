@@ -3,6 +3,8 @@ defmodule SnakeBridge.Generator.Class do
 
   alias SnakeBridge.Generator
 
+  @reserved_attribute_names ["new"]
+
   @spec render_class(map(), SnakeBridge.Config.Library.t()) :: String.t()
   def render_class(class_info, library) do
     class_name = Generator.class_name(class_info)
@@ -32,6 +34,7 @@ defmodule SnakeBridge.Generator.Class do
     methods =
       methods
       |> Enum.reject(fn method -> method["name"] == "__init__" end)
+      |> rename_new_method_if_collision(init_method)
       |> deduplicate_methods()
 
     methods_source = Enum.map_join(methods, "\n\n", &render_method(&1, class_name))
@@ -94,6 +97,7 @@ defmodule SnakeBridge.Generator.Class do
     methods =
       methods
       |> Enum.reject(fn method -> method["name"] == "__init__" end)
+      |> rename_new_method_if_collision(init_method)
       |> deduplicate_methods()
 
     methods_source = Enum.map_join(methods, "\n\n", &render_method(&1, class_name))
@@ -275,14 +279,22 @@ defmodule SnakeBridge.Generator.Class do
   end
 
   defp resolve_attribute_names(attrs, method_names) do
+    reserved = attribute_reserved_names(method_names)
+
     {resolved, _used} =
-      Enum.map_reduce(attrs, MapSet.new(method_names), fn attr, used ->
+      Enum.map_reduce(attrs, reserved, fn attr, used ->
         {elixir_name, python_name} = sanitize_attribute_name(attr)
         {unique_name, used} = ensure_unique_attr_name(elixir_name, used)
         {{unique_name, python_name}, used}
       end)
 
     resolved
+  end
+
+  defp attribute_reserved_names(method_names) do
+    method_names
+    |> MapSet.new()
+    |> MapSet.union(MapSet.new(@reserved_attribute_names))
   end
 
   defp ensure_unique_attr_name(name, used) do
@@ -339,6 +351,20 @@ defmodule SnakeBridge.Generator.Class do
     Enum.reject(params, fn param ->
       name = param["name"] || param[:name]
       name in ["self", "cls"]
+    end)
+  end
+
+  # Rename the Python 'new' method to 'python_new' when there's an __init__ constructor.
+  # This avoids collision with the generated 'new' constructor.
+  defp rename_new_method_if_collision(methods, nil), do: methods
+
+  defp rename_new_method_if_collision(methods, _init_method) do
+    Enum.map(methods, fn method ->
+      if method["name"] == "new" do
+        Map.put(method, "elixir_name", "python_new")
+      else
+        method
+      end
     end)
   end
 

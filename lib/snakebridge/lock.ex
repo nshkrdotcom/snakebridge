@@ -187,12 +187,62 @@ defmodule SnakeBridge.Lock do
         %{
           "requested" => library.version,
           "resolved" => library.version,
-          "hash" => nil
+          "hash" => nil,
+          "config_hash" => library_config_hash(library)
         }
       }
     end)
     |> Map.new()
   end
+
+  @doc false
+  def library_config_hash(library) do
+    values = [
+      {:module_name, module_name_string(library.module_name)},
+      {:generate, library.generate},
+      {:include, normalize_list(library.include)},
+      {:exclude, normalize_list(library.exclude)},
+      {:streaming, normalize_list(library.streaming)},
+      {:submodules, library.submodules},
+      {:public_api, library.public_api},
+      {:module_mode, library.module_mode},
+      {:module_include, normalize_list(library.module_include)},
+      {:module_exclude, normalize_list(library.module_exclude)},
+      {:module_depth, library.module_depth},
+      {:docs_url, library.docs_url},
+      {:signature_sources, normalize_list(library.signature_sources)},
+      {:strict_signatures, library.strict_signatures},
+      {:min_signature_tier, library.min_signature_tier},
+      {:stub_search_paths, normalize_list(library.stub_search_paths)},
+      {:use_typeshed, library.use_typeshed},
+      {:typeshed_path, library.typeshed_path},
+      {:stubgen, normalize_stubgen(library.stubgen)}
+    ]
+
+    :crypto.hash(:sha256, :erlang.term_to_binary(values))
+    |> Base.encode16(case: :lower)
+  end
+
+  defp module_name_string(nil), do: nil
+  defp module_name_string(module) when is_atom(module), do: Atom.to_string(module)
+  defp module_name_string(module), do: to_string(module)
+
+  defp normalize_list(nil), do: []
+
+  defp normalize_list(list) when is_list(list) do
+    Enum.map(list, fn
+      value when is_atom(value) -> Atom.to_string(value)
+      value -> to_string(value)
+    end)
+  end
+
+  defp normalize_list(value) when is_atom(value), do: [Atom.to_string(value)]
+  defp normalize_list(value) when is_binary(value), do: [value]
+  defp normalize_list(_), do: []
+
+  defp normalize_stubgen(nil), do: []
+  defp normalize_stubgen(list) when is_list(list), do: Enum.sort_by(list, &elem(&1, 0))
+  defp normalize_stubgen(_), do: []
 
   defp lock_path do
     "snakebridge.lock"

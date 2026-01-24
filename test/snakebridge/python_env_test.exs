@@ -83,6 +83,44 @@ defmodule SnakeBridge.PythonEnvTest do
     assert PythonEnv.derive_requirements(libraries) == ["torch[cuda,dev]~=2.0"]
   end
 
+  test "sync_project_requirements! writes derived requirements to project file" do
+    tmp =
+      System.tmp_dir!()
+      |> Path.join("snakebridge_requirements_#{System.unique_integer([:positive])}")
+
+    File.rm_rf(tmp)
+
+    Application.put_env(:snakebridge, :requirements_project_root, tmp)
+
+    on_exit(fn ->
+      Application.delete_env(:snakebridge, :requirements_project_root)
+      File.rm_rf(tmp)
+    end)
+
+    libraries = [
+      %Config.Library{name: :json, version: :stdlib, python_name: "json", module_name: Json},
+      %Config.Library{name: :numpy, version: "~> 1.26", python_name: "numpy", module_name: Numpy},
+      %Config.Library{
+        name: :pillow,
+        version: "~> 10.0",
+        python_name: "PIL",
+        pypi_package: "pillow",
+        module_name: Pillow
+      }
+    ]
+
+    config = %Config{libraries: libraries}
+
+    assert :ok = PythonEnv.sync_project_requirements!(config)
+
+    path = Path.join([tmp, "priv", "python", "requirements.txt"])
+    contents = File.read!(path)
+
+    assert String.contains?(contents, "numpy~=1.26")
+    assert String.contains?(contents, "pillow~=10.0")
+    refute String.contains?(contents, "json")
+  end
+
   test "ensure! installs packages when auto_install enabled" do
     libraries = [
       %Config.Library{name: :numpy, version: "~> 1.26", python_name: "numpy", module_name: Numpy}

@@ -30,6 +30,36 @@ defmodule SnakeBridge.ConfigTest do
     assert library.extras == ["cuda"]
   end
 
+  test "parse_libraries normalizes module mode and filters" do
+    [library] =
+      Config.parse_libraries(
+        numpy: [
+          version: "1.26.0",
+          module_mode: :standard,
+          module_include: ["linalg"],
+          module_exclude: "internal.*",
+          module_depth: 2
+        ]
+      )
+
+    assert library.module_mode == :public
+    assert library.module_include == ["linalg"]
+    assert library.module_exclude == ["internal.*"]
+    assert library.module_depth == 2
+  end
+
+  test "parse_libraries accepts explicit module allowlist" do
+    [library] =
+      Config.parse_libraries(
+        numpy: [
+          version: "1.26.0",
+          module_mode: {:only, ["linalg", "fft"]}
+        ]
+      )
+
+    assert library.module_mode == {:only, ["linalg", "fft"]}
+  end
+
   test "load reads auto_install from application env" do
     Application.put_env(:snakebridge, :auto_install, :always)
 

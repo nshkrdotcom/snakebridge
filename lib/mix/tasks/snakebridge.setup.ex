@@ -25,6 +25,7 @@ defmodule Mix.Tasks.Snakebridge.Setup do
     Mix.Task.run("loadconfig")
 
     config = SnakeBridge.Config.load()
+    SnakeBridge.PythonEnv.sync_project_requirements!(config)
     requirements = SnakeBridge.PythonEnv.derive_requirements(config.libraries)
 
     if requirements == [] do

@@ -1,5 +1,13 @@
 {
   "classes": {},
+  "modules": {
+    "strict_mode_example": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Local module for strict mode example.",
+      "python_module": "strict_mode_example"
+    }
+  },
   "symbols": {
     "StrictModeExample.add/2": {
       "doc_missing_reason": "runtime docstring missing",
@@ -131,5 +139,5 @@
       "signature_source": "variadic"
     }
   },
-  "version": "0.7.0"
+  "version": "0.14.0"
 }

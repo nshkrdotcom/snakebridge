@@ -30,15 +30,16 @@
     "python_platform": "x86_64-pc-linux-gnu",
     "python_runtime_hash": "df2bb64c335c6096abfe779d140288d2ff1f66d033f7472986e3032854e5c9ee",
     "python_version": "3.12.3",
-    "snakebridge_version": "0.13.0"
+    "snakebridge_version": "0.14.0"
   },
   "libraries": {
     "wrapper_args_example": {
+      "config_hash": "ebec8900174faa2d02f555ae3daf5da86a40986e686d2517ce777e6ee05db442",
       "hash": null,
       "requested": "stdlib",
       "resolved": "stdlib"
     }
   },
   "python_packages": {},
-  "version": "0.13.0"
+  "version": "0.14.0"
 }

@@ -1,5 +1,13 @@
 {
   "classes": {},
+  "modules": {
+    "wrapper_args_example": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Local module for wrapper args example.",
+      "python_module": "wrapper_args_example"
+    }
+  },
   "symbols": {
     "WrapperArgs.join_values/0": {
       "docstring": "Join values with a separator, demonstrating Python varargs.",
@@ -96,5 +104,5 @@
       "signature_available": true
     }
   },
-  "version": "0.7.0"
+  "version": "0.14.0"
 }

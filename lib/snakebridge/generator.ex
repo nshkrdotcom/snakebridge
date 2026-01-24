@@ -52,11 +52,21 @@ defmodule SnakeBridge.Generator do
       |> Enum.sort_by(& &1["name"])
       |> Enum.map_join("\n\n", &Function.render_function(&1, library))
 
+    submodule_modules =
+      module_docs
+      |> Map.keys()
+      |> Enum.filter(&String.starts_with?(&1, library.python_name <> "."))
+
+    submodule_modules =
+      submodule_modules ++ Map.keys(functions_by_module)
+
     submodule_defs =
-      functions_by_module
-      |> Map.drop([library.python_name])
-      |> Enum.sort_by(fn {python_module, _} -> python_module end)
-      |> Enum.map_join("\n\n", fn {python_module, funcs} ->
+      submodule_modules
+      |> Enum.reject(&(&1 == library.python_name))
+      |> Enum.uniq()
+      |> Enum.sort()
+      |> Enum.map_join("\n\n", fn python_module ->
+        funcs = Map.get(functions_by_module, python_module, [])
         render_submodule(python_module, funcs, library, module_docs, lock_data)
       end)
 
@@ -171,7 +181,9 @@ defmodule SnakeBridge.Generator do
       |> Enum.map(&Map.put_new(&1, "python_module", library.python_name))
       |> Enum.group_by(& &1["python_module"])
 
-    module_modules = split_layout_module_modules(library, functions_by_module, classes)
+    module_modules =
+      split_layout_module_modules(library, functions_by_module, classes, module_docs)
+
     expected_paths = split_layout_expected_paths(library, module_modules, classes, config)
 
     class_module_names =
@@ -207,6 +219,15 @@ defmodule SnakeBridge.Generator do
         end
       end)
 
+    duration_ms =
+      System.convert_time_unit(System.monotonic_time() - start_time, :native, :millisecond)
+
+    duration_str = format_duration(duration_ms)
+
+    Mix.shell().info(
+      "[SnakeBridge] Generated #{length(all_paths)} files for #{library.python_name} in #{duration_str}"
+    )
+
     SnakeBridge.Telemetry.generate_stop(
       start_time,
       library.name,
@@ -219,7 +240,10 @@ defmodule SnakeBridge.Generator do
     :ok
   end
 
-  defp split_layout_module_modules(library, functions_by_module, classes) do
+  defp format_duration(ms) when ms < 1000, do: "#{ms}ms"
+  defp format_duration(ms), do: "#{Float.round(ms / 1000, 1)}s"
+
+  defp split_layout_module_modules(library, functions_by_module, classes, module_docs) do
     function_modules = Map.keys(functions_by_module)
 
     class_modules =
@@ -227,7 +251,12 @@ defmodule SnakeBridge.Generator do
       |> Enum.map(&(&1["python_module"] || library.python_name))
       |> Enum.reject(&is_nil/1)
 
-    [library.python_name | function_modules ++ class_modules]
+    module_doc_modules =
+      module_docs
+      |> Map.keys()
+      |> Enum.filter(&String.starts_with?(&1, library.python_name))
+
+    [library.python_name | function_modules ++ class_modules ++ module_doc_modules]
     |> Enum.uniq()
     |> Enum.sort()
   end
@@ -311,8 +340,24 @@ defmodule SnakeBridge.Generator do
   defp write_split_class_files(library, classes, config) do
     alias SnakeBridge.Generator.PathMapper
 
+    total = length(classes)
+    progress_interval = max(div(total, 10), 100)
+
+    if total > 0 do
+      Mix.shell().info(
+        "[SnakeBridge] Generating #{total} class files for #{library.python_name}..."
+      )
+    end
+
     classes
-    |> Enum.map(fn class ->
+    |> Enum.with_index(1)
+    |> Enum.map(fn {class, index} ->
+      # Show progress at intervals
+      if total > 100 and rem(index, progress_interval) == 0 do
+        percent = div(index * 100, total)
+        Mix.shell().info("[SnakeBridge] Progress: #{index}/#{total} (#{percent}%)")
+      end
+
       python_module = class["python_module"] || library.python_name
       class_name = class["name"] || class["class"] || "Class"
       path = PathMapper.class_file_path(python_module, class_name, config.generated_dir)
@@ -394,9 +439,20 @@ defmodule SnakeBridge.Generator do
 
     doc_section = if formatted_doc == "", do: fallback, else: formatted_doc
 
+    error_note =
+      case module_info["doc_source"] do
+        "error" ->
+          reason = module_info["doc_missing_reason"] || "unknown error"
+          "## Notes\n\n- Module failed to import during generation: #{reason}"
+
+        _ ->
+          nil
+      end
+
     sections =
       [
         doc_section,
+        error_note,
         python_docs_section(library),
         version_section(library, lock_data, module_info),
         runtime_options_block(module_name)

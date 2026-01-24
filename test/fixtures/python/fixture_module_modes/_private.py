@@ -1,0 +1,3 @@
+def secret():
+    return "secret"
+

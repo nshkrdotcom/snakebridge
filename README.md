@@ -23,7 +23,7 @@ def project do
 end
 
 defp deps do
-  [{:snakebridge, "~> 0.13.0"}]
+  [{:snakebridge, "~> 0.14.0"}]
 end
 
 defp python_deps do
@@ -169,6 +169,7 @@ defp python_deps do
       include: ["array", "mean"],     # Only these symbols
       exclude: ["testing"],           # Exclude these
       submodules: true,               # Include submodules
+      public_api: true,               # Filter to public API modules only
       generate: :all,                 # Generate all symbols
       streaming: ["generate"],        # *_stream variants
       min_signature_tier: :stub},     # Signature quality threshold

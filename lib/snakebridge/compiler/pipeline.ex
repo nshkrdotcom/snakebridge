@@ -517,6 +517,30 @@ defmodule SnakeBridge.Compiler.Pipeline do
     end
   end
 
+  defp clear_library_classes(manifest, library) do
+    classes =
+      manifest
+      |> Map.get("classes", %{})
+      |> Enum.reject(fn {_module, info} ->
+        python_module = info["python_module"] || ""
+        String.starts_with?(python_module, library.python_name)
+      end)
+      |> Map.new()
+
+    symbols =
+      manifest
+      |> Map.get("symbols", %{})
+      |> Enum.reject(fn {_key, info} ->
+        python_module = info["python_module"] || ""
+        String.starts_with?(python_module, library.python_name)
+      end)
+      |> Map.new()
+
+    manifest
+    |> Map.put("classes", classes)
+    |> Map.put("symbols", symbols)
+  end
+
   defp module_from_string(module) when is_binary(module) do
     module
     |> String.split(".")
@@ -726,8 +750,13 @@ defmodule SnakeBridge.Compiler.Pipeline do
 
     opts = if submodules, do: [submodules: submodules], else: []
 
+    submodule_msg = if library.submodules == true, do: " with submodules", else: ""
+    Mix.shell().info("[SnakeBridge] Introspecting #{library.python_name}#{submodule_msg}...")
+
     case SnakeBridge.Introspector.introspect_module(library, opts) do
       {:ok, result} ->
+        class_count = count_classes_in_result(result)
+        Mix.shell().info("[SnakeBridge] Found #{class_count} classes to generate")
         update_manifest_from_module_introspection(manifest, library, result)
 
       {:error, reason} ->
@@ -735,12 +764,25 @@ defmodule SnakeBridge.Compiler.Pipeline do
     end
   end
 
+  defp count_classes_in_result(%{"namespaces" => namespaces}) do
+    Enum.reduce(namespaces, 0, fn {_namespace, data}, acc ->
+      acc + length(data["classes"] || [])
+    end)
+  end
+
+  defp count_classes_in_result(_), do: 0
+
   defp update_manifest_from_module_introspection(
          manifest,
          library,
          %{"namespaces" => namespaces} = result
        ) do
     base_issues = extract_module_issues(library, result)
+
+    # Clear all existing classes for this library before adding new ones
+    # This is important for public_api filtering - we don't want stale classes
+    manifest = clear_library_classes(manifest, library)
+
     {existing_class_map, existing_class_modules} = existing_classes_from_manifest(manifest)
 
     reserved_modules =
@@ -831,6 +873,10 @@ defmodule SnakeBridge.Compiler.Pipeline do
     # Flat format (v2.0)
     python_module = library.python_name
     attributes = data["attributes"] || []
+
+    # Clear all existing classes for this library before adding new ones
+    manifest = clear_library_classes(manifest, library)
+
     {existing_class_map, existing_class_modules} = existing_classes_from_manifest(manifest)
     reserved_modules = reserved_modules_from_manifest(manifest)
 
@@ -977,6 +1023,14 @@ defmodule SnakeBridge.Compiler.Pipeline do
       doc_source = info["doc_source"]
       doc_missing_reason = info["doc_missing_reason"]
       module_version = module_version_override || info["module_version"]
+      error = info["error"]
+
+      {doc_source, doc_missing_reason} =
+        if error && docstring in [nil, ""] do
+          {"error", error}
+        else
+          {doc_source, doc_missing_reason}
+        end
 
       module_entry(
         python_module,

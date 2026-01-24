@@ -26,4 +26,28 @@ defmodule SnakeBridge.Generator.AttributeConflictTest do
     assert source =~ "def pos_attr(ref)"
     assert source =~ "get_attr(ref, :POS)"
   end
+
+  test "attributes that collide with constructors are suffixed" do
+    library = %SnakeBridge.Config.Library{
+      name: :dspy,
+      python_name: "dspy",
+      module_name: Dspy,
+      version: "3.1.2"
+    }
+
+    classes = [
+      %{
+        "name" => "EngineState",
+        "python_module" => "dspy.engine",
+        "methods" => [],
+        "attributes" => ["NEW"]
+      }
+    ]
+
+    source = SnakeBridge.Generator.render_library(library, [], classes, version: "3.0.0")
+
+    assert source =~ "def new(opts \\\\ [])"
+    assert source =~ "def new_attr(ref)"
+    assert source =~ "get_attr(ref, :NEW)"
+  end
 end

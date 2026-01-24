@@ -1,5 +1,13 @@
 {
   "classes": {},
+  "modules": {
+    "stub_fallback_example": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Runtime module for stub fallback example.",
+      "python_module": "stub_fallback_example"
+    }
+  },
   "symbols": {
     "StubFallbackExample.stubbed/1": {
       "doc_missing_reason": null,
@@ -52,5 +60,5 @@
       "signature_source": "stub"
     }
   },
-  "version": "0.10.0"
+  "version": "0.14.0"
 }

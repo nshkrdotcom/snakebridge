@@ -88,11 +88,23 @@ defmodule SnakeBridge.Introspector do
 
   defp build_module_args(python_name, config_json, library, opts) do
     base = [script_path(), "--module", python_name, "--config", config_json]
-    {submodules, discover_submodules?} = resolve_submodules(library, opts)
+
+    %{
+      submodules: submodules,
+      discover_submodules?: discover_submodules?,
+      public_api?: public_api?,
+      module_include: module_include,
+      module_exclude: module_exclude,
+      module_depth: module_depth
+    } = resolve_module_settings(library, opts)
 
     base
     |> maybe_add_submodules(submodules)
     |> maybe_add_discover_submodules(discover_submodules?)
+    |> maybe_add_public_api(public_api?)
+    |> maybe_add_module_include(module_include)
+    |> maybe_add_module_exclude(module_exclude)
+    |> maybe_add_module_depth(module_depth)
     |> maybe_add_flat(opts)
   end
 
@@ -105,15 +117,65 @@ defmodule SnakeBridge.Introspector do
   defp maybe_add_discover_submodules(args, true), do: args ++ ["--discover-submodules"]
   defp maybe_add_discover_submodules(args, _), do: args
 
+  defp maybe_add_public_api(args, true), do: args ++ ["--public-api"]
+  defp maybe_add_public_api(args, _), do: args
+
+  defp maybe_add_module_include(args, []), do: args
+  defp maybe_add_module_include(args, nil), do: args
+
+  defp maybe_add_module_include(args, list),
+    do: args ++ ["--module-include", Enum.join(list, ",")]
+
+  defp maybe_add_module_exclude(args, []), do: args
+  defp maybe_add_module_exclude(args, nil), do: args
+
+  defp maybe_add_module_exclude(args, list),
+    do: args ++ ["--module-exclude", Enum.join(list, ",")]
+
+  defp maybe_add_module_depth(args, nil), do: args
+
+  defp maybe_add_module_depth(args, depth) when is_integer(depth),
+    do: args ++ ["--module-depth", Integer.to_string(depth)]
+
   defp maybe_add_flat(args, opts) do
     if Keyword.get(opts, :flat, false), do: args ++ ["--flat"], else: args
   end
 
   defp parse_module_output(output, package) do
+    # Try direct parse first
     case Jason.decode(output) do
-      {:ok, %{"error" => error}} -> {:error, normalize_error(error, package)}
-      {:ok, result} when is_map(result) -> {:ok, result}
-      {:error, _} -> {:error, {:json_parse, output}}
+      {:ok, %{"error" => error}} ->
+        {:error, normalize_error(error, package)}
+
+      {:ok, result} when is_map(result) ->
+        {:ok, result}
+
+      {:error, _} ->
+        # Output may contain warnings before JSON - try to extract JSON
+        case extract_json_object(output) do
+          {:ok, json_str} ->
+            case Jason.decode(json_str) do
+              {:ok, %{"error" => error}} -> {:error, normalize_error(error, package)}
+              {:ok, result} when is_map(result) -> {:ok, result}
+              {:error, _} -> {:error, {:json_parse, output}}
+            end
+
+          :error ->
+            {:error, {:json_parse, output}}
+        end
+    end
+  end
+
+  # Extract a JSON object from output that may have warning lines before it
+  defp extract_json_object(output) do
+    # Find the first '{' and extract from there
+    case :binary.match(output, "{") do
+      {start, _} ->
+        json_str = binary_part(output, start, byte_size(output) - start)
+        {:ok, json_str}
+
+      :nomatch ->
+        :error
     end
   end
 
@@ -338,28 +400,115 @@ defmodule SnakeBridge.Introspector do
   defp library_label(name) when is_atom(name), do: name
   defp library_label(_), do: :unknown
 
-  defp resolve_submodules(library, opts) do
-    submodules_opt = Keyword.get(opts, :submodules)
+  defp resolve_module_settings(library, opts) do
+    mode = resolve_module_mode(library, opts)
 
-    library_submodules =
-      if is_map(library) do
-        Map.get(library, :submodules)
-      else
-        nil
+    module_include =
+      case Keyword.fetch(opts, :module_include) do
+        {:ok, value} ->
+          normalize_module_list(value)
+
+        :error ->
+          if is_map(library), do: normalize_module_list(Map.get(library, :module_include))
       end
 
-    case submodules_opt do
-      list when is_list(list) ->
-        {list, false}
+    module_exclude =
+      case Keyword.fetch(opts, :module_exclude) do
+        {:ok, value} ->
+          normalize_module_list(value)
 
-      _ ->
-        case library_submodules do
-          true -> {nil, true}
-          list when is_list(list) -> {list, false}
-          _ -> {nil, false}
+        :error ->
+          if is_map(library), do: normalize_module_list(Map.get(library, :module_exclude))
+      end
+
+    module_depth =
+      case Keyword.fetch(opts, :module_depth) do
+        {:ok, depth} -> normalize_module_depth(depth)
+        :error -> if(is_map(library), do: normalize_module_depth(Map.get(library, :module_depth)))
+      end
+
+    {submodules, discover_submodules?, public_api?} = module_mode_flags(mode)
+
+    %{
+      submodules: submodules,
+      discover_submodules?: discover_submodules?,
+      public_api?: public_api?,
+      module_include: module_include,
+      module_exclude: module_exclude,
+      module_depth: module_depth
+    }
+  end
+
+  defp resolve_module_mode(library, opts) do
+    case Keyword.fetch(opts, :submodules) do
+      {:ok, list} when is_list(list) ->
+        {:only, normalize_module_list(list)}
+
+      {:ok, true} ->
+        public_api? = Keyword.get(opts, :public_api, library_public_api(library))
+        if public_api?, do: :public, else: :all
+
+      {:ok, false} ->
+        :root
+
+      :error ->
+        mode = Keyword.get(opts, :module_mode) || library_module_mode(library)
+
+        cond do
+          mode != nil ->
+            normalize_module_mode(mode)
+
+          is_map(library) ->
+            legacy_mode_from_library(library)
+
+          true ->
+            :root
         end
     end
   end
+
+  defp legacy_mode_from_library(library) do
+    case Map.get(library, :submodules) do
+      true -> if(library_public_api(library), do: :public, else: :all)
+      list when is_list(list) -> {:only, normalize_module_list(list)}
+      _ -> :root
+    end
+  end
+
+  defp module_mode_flags({:only, list}) when is_list(list), do: {list, false, false}
+  defp module_mode_flags(:public), do: {nil, true, true}
+  defp module_mode_flags(:all), do: {nil, true, false}
+  defp module_mode_flags(:root), do: {nil, false, false}
+  defp module_mode_flags(_), do: {nil, false, false}
+
+  defp normalize_module_mode(:light), do: :root
+  defp normalize_module_mode(:top), do: :root
+  defp normalize_module_mode(:root), do: :root
+  defp normalize_module_mode(:standard), do: :public
+  defp normalize_module_mode(:public), do: :public
+  defp normalize_module_mode(:full), do: :all
+  defp normalize_module_mode(:nuclear), do: :all
+  defp normalize_module_mode(:all), do: :all
+
+  defp normalize_module_mode({:only, list}) when is_list(list),
+    do: {:only, normalize_module_list(list)}
+
+  defp normalize_module_mode(_), do: :root
+
+  defp normalize_module_list(nil), do: []
+  defp normalize_module_list(list) when is_list(list), do: Enum.map(list, &to_string/1)
+  defp normalize_module_list(value) when is_binary(value), do: [value]
+  defp normalize_module_list(_), do: []
+
+  defp normalize_module_depth(nil), do: nil
+  defp normalize_module_depth(value) when is_integer(value) and value > 0, do: value
+  defp normalize_module_depth(_), do: nil
+
+  defp library_public_api(library) when is_map(library), do: Map.get(library, :public_api, false)
+  defp library_public_api(_), do: false
+
+  defp library_module_mode(library) when is_map(library), do: Map.get(library, :module_mode)
+  defp library_module_mode(_), do: nil
 
   defp runner_opts do
     config = Application.get_env(:snakebridge, :introspector, [])

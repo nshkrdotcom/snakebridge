@@ -190,6 +190,31 @@ defmodule SnakeBridge.Generator.SplitLayoutTest do
       refute File.exists?(legacy_path)
       assert File.exists?(Path.join(tmp_dir, "cleanup_demo/__init__.ex"))
     end
+
+    test "generates module files from module docs even without symbols", %{tmp_dir: tmp_dir} do
+      library = %Library{
+        name: :doc_only,
+        python_name: "doc_only",
+        module_name: DocOnly,
+        version: "1.0.0"
+      }
+
+      module_docs = %{
+        "doc_only" => %{"docstring" => "Root docs"},
+        "doc_only.extra" => %{"docstring" => "Extra docs"}
+      }
+
+      config = %SnakeBridge.Config{
+        generated_dir: tmp_dir,
+        generated_layout: :split,
+        libraries: [library]
+      }
+
+      :ok = Generator.generate_library(library, [], [], config, module_docs)
+
+      assert File.exists?(Path.join(tmp_dir, "doc_only/__init__.ex"))
+      assert File.exists?(Path.join(tmp_dir, "doc_only/extra/__init__.ex"))
+    end
   end
 
   describe "generate_library/4 with single layout" do

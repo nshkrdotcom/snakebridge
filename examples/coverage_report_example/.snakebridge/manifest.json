@@ -88,6 +88,14 @@
       "python_module": "coverage_report_example"
     }
   },
+  "modules": {
+    "coverage_report_example": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Local module for coverage report example.",
+      "python_module": "coverage_report_example"
+    }
+  },
   "symbols": {
     "CoverageReportExample.documented/2": {
       "doc_missing_reason": null,
@@ -181,5 +189,5 @@
       "signature_source": "runtime"
     }
   },
-  "version": "0.10.0"
+  "version": "0.14.0"
 }

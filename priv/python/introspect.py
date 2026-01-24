@@ -26,6 +26,7 @@ import os
 import ast
 import pkgutil
 import subprocess
+import fnmatch
 from typing import Any, Dict, List, Optional, Tuple, Union, get_type_hints
 import typing
 import argparse
@@ -1845,8 +1846,10 @@ def introspect_module_namespace(module_name: str, namespace: str = "", config: O
     """
     try:
         module = importlib.import_module(module_name)
-    except ImportError as e:
-        return {"error": f"Failed to import module '{module_name}': {str(e)}"}
+    except Exception as e:
+        # Catch all exceptions, not just ImportError - some modules fail with
+        # AttributeError, RuntimeError, etc. during import (e.g., platform-specific code)
+        return {"error": f"Failed to import module '{module_name}': {type(e).__name__}: {str(e)}"}
 
     namespace_info = {
         "functions": [],
@@ -1927,6 +1930,36 @@ def introspect_module_namespace(module_name: str, namespace: str = "", config: O
             )
             continue
 
+    # Handle lazy-loaded symbols from __all__ (e.g., vllm uses __getattr__ for lazy imports)
+    # These symbols are declared in __all__ but not visible to inspect.getmembers() until accessed
+    if module_all is not None:
+        for name in module_all:
+            if name in seen_names:
+                continue
+            if name.startswith('_'):
+                continue
+
+            try:
+                obj = getattr(module, name, None)
+                if obj is None:
+                    continue
+
+                seen_names.add(name)
+                if inspect.isclass(obj):
+                    class_info = _build_class_info(name, obj, module_name, config, stub_info, module_doc)
+                    namespace_info["classes"].append(class_info)
+                elif inspect.isfunction(obj) or inspect.isbuiltin(obj) or (callable(obj) and not inspect.isclass(obj)):
+                    func_info = _build_function_info(name, obj, module_name, config, stub_info, module_doc)
+                    namespace_info["functions"].append(func_info)
+                elif not inspect.ismodule(obj):
+                    attr_info = _build_attribute_info(name, obj, module_name, module_doc)
+                    namespace_info["attributes"].append(attr_info)
+            except Exception as e:
+                namespace_info.setdefault("issues", []).append(
+                    {"type": "lazy_import_failed", "member": name, "reason": str(e)}
+                )
+                continue
+
     # Add stub-only symbols not present at runtime
     if stub_info:
         for name in stub_info.get("functions", {}).keys():
@@ -1986,12 +2019,123 @@ def _discover_submodules(module_name: str) -> Tuple[List[str], List[Dict[str, An
     return discovered, issues
 
 
+def _module_has_public_api(module_name: str, base_module: str) -> bool:
+    """
+    Check if a module has a public API worth generating.
+
+    A module has public API if:
+    1. It's a PACKAGE (has __path__ - i.e., a directory), OR
+    2. It declares __all__, OR
+    3. It defines public functions/classes at the top level
+
+    This uses static inspection (no import execution) so optional modules
+    can still be included when they exist on disk but fail to import.
+
+    Args:
+        module_name: Full module name to check
+        base_module: Base package name (e.g., "vllm")
+
+    Returns:
+        True if module has public API worth generating
+    """
+    try:
+        spec = importlib.util.find_spec(module_name)
+    except Exception:
+        spec = None
+
+    if spec is None:
+        return False
+
+    if spec.submodule_search_locations:
+        init_path = _package_init_path(spec)
+        if init_path and _source_has_public_api(init_path):
+            return True
+        return True
+
+    origin = getattr(spec, "origin", None)
+    if origin and os.path.exists(origin):
+        if origin.endswith((".py", ".pyi")):
+            return _source_has_public_api(origin)
+        return True
+
+    return False
+
+
+def _package_init_path(spec: importlib.machinery.ModuleSpec) -> Optional[str]:
+    origin = getattr(spec, "origin", None)
+    if origin and origin.endswith("__init__.py"):
+        return origin
+    return None
+
+
+def _source_has_public_api(path: str) -> bool:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            source = handle.read()
+    except Exception:
+        return False
+
+    try:
+        tree = ast.parse(source)
+    except Exception:
+        return False
+
+    has_all = False
+    has_public_defs = False
+
+    for node in tree.body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                if isinstance(target, ast.Name) and target.id == "__all__":
+                    has_all = True
+                    break
+        elif isinstance(node, ast.AugAssign):
+            target = node.target
+            if isinstance(target, ast.Name) and target.id == "__all__":
+                has_all = True
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if not node.name.startswith("_"):
+                has_public_defs = True
+        if has_all or has_public_defs:
+            return True
+
+    return False
+
+
+def _parse_csv(value: Optional[str]) -> List[str]:
+    if not value:
+        return []
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _is_pattern(value: str) -> bool:
+    return any(ch in value for ch in ["*", "?", "["])
+
+
+def _expand_patterns(patterns: List[str], candidates: List[str]) -> List[str]:
+    if not patterns:
+        return []
+
+    matched: List[str] = []
+    for pattern in patterns:
+        if _is_pattern(pattern):
+            matched.extend([item for item in candidates if fnmatch.fnmatchcase(item, pattern)])
+        else:
+            matched.append(pattern)
+    return matched
+
+
 def introspect_module(
     module_name: str,
     submodules: Optional[List[str]] = None,
     flat_mode: bool = False,
     config: Optional[Dict[str, Any]] = None,
     discover_submodules: bool = False,
+    public_api: bool = False,
+    module_include: Optional[List[str]] = None,
+    module_exclude: Optional[List[str]] = None,
+    module_depth: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Introspect a Python module with optional submodule detection.
@@ -2002,6 +2146,10 @@ def introspect_module(
         flat_mode: If True, use legacy flat format (v2.0), otherwise use namespaced format (v2.1)
         config: Introspection config dict
         discover_submodules: If True, walk packages to discover submodules automatically
+        public_api: If True, only include modules with explicit public API (__all__ or defined-in-module)
+        module_include: Submodules to force-include (relative to root)
+        module_exclude: Submodules to exclude (relative to root)
+        module_depth: Limit discovery depth (1 = direct children only)
 
     Returns:
         Dictionary with complete module information
@@ -2031,11 +2179,56 @@ def introspect_module(
     module_file = module.__file__ if hasattr(module, '__file__') else None
 
     submodule_list: List[str] = [name for name in (submodules or []) if name]
+    raw_candidates: List[str] = list(submodule_list)
 
     if discover_submodules:
         discovered, discovery_issues = _discover_submodules(module_name)
         issues.extend(discovery_issues)
         for name in discovered:
+            if name not in submodule_list:
+                submodule_list.append(name)
+        raw_candidates = list(submodule_list)
+
+    # Filter to public API modules if requested
+    if public_api and submodule_list:
+        original_count = len(submodule_list)
+        filtered_list = []
+        for submodule in submodule_list:
+            full_name = f"{module_name}.{submodule}"
+            # Skip private modules (any path component starts with _)
+            if any(part.startswith('_') for part in submodule.split('.')):
+                continue
+            # Check if module has public API
+            if _module_has_public_api(full_name, module_name):
+                filtered_list.append(submodule)
+        submodule_list = filtered_list
+        # Record how many were filtered
+        filtered_count = original_count - len(submodule_list)
+        if filtered_count > 0:
+            issues.append({
+                "type": "public_api_filter",
+                "filtered_count": filtered_count,
+                "remaining_count": len(submodule_list),
+                "message": f"Filtered {filtered_count} internal modules, {len(submodule_list)} public API modules remaining"
+            })
+
+    # Apply depth filter before excludes/includes
+    if module_depth and module_depth > 0:
+        submodule_list = [
+            name for name in submodule_list if len(name.split(".")) <= module_depth
+        ]
+
+    # Apply exclude patterns
+    exclude_list = _expand_patterns(module_exclude or [], raw_candidates)
+    if exclude_list:
+        exclude_set = set(exclude_list)
+        submodule_list = [name for name in submodule_list if name not in exclude_set]
+
+    # Apply include patterns last (explicit include overrides filters)
+    include_list = _expand_patterns(module_include or [], raw_candidates)
+    if include_list:
+        include_set = set(include_list)
+        for name in include_set:
             if name not in submodule_list:
                 submodule_list.append(name)
 
@@ -2230,6 +2423,27 @@ Examples:
         action='store_true',
         help='Use legacy flat format (v2.0) instead of namespaced format (v2.1)'
     )
+    parser.add_argument(
+        '--public-api',
+        action='store_true',
+        help='Only include modules with explicit public API (__all__ or defined-in-module classes)'
+    )
+    parser.add_argument(
+        '--module-include',
+        help='Comma-separated list of submodules to force-include',
+        default=None
+    )
+    parser.add_argument(
+        '--module-exclude',
+        help='Comma-separated list of submodules to exclude',
+        default=None
+    )
+    parser.add_argument(
+        '--module-depth',
+        type=int,
+        help='Limit submodule discovery depth (1 = direct children only)',
+        default=None
+    )
 
     args = parser.parse_args()
 
@@ -2237,6 +2451,9 @@ Examples:
     if not module_name:
         parser.error("module name is required")
     submodules = args.submodules.split(',') if args.submodules else None
+    module_include = _parse_csv(args.module_include)
+    module_exclude = _parse_csv(args.module_exclude)
+    module_depth = args.module_depth
     flat_mode = args.flat
     config = _parse_config(args.config)
 
@@ -2259,6 +2476,10 @@ Examples:
                 flat_mode=flat_mode,
                 config=config,
                 discover_submodules=args.discover_submodules,
+                public_api=args.public_api,
+                module_include=module_include,
+                module_exclude=module_exclude,
+                module_depth=module_depth,
             )
             print(json.dumps(result, indent=2))
     except Exception as e:

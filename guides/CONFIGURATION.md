@@ -52,7 +52,12 @@ end
 | `extras` | `[String]` | `[]` | pip extras (e.g., `["sql", "excel"]`) |
 | `include` | `[String]` | `[]` | Only generate these symbols |
 | `exclude` | `[String]` | `[]` | Exclude these symbols from generation |
-| `submodules` | `boolean` | `false` | Include submodules in generation |
+| `module_mode` | `atom` | `nil` | Module selection mode for `generate: :all` |
+| `module_include` | `[String]` | `[]` | Force-include submodules (relative to root) |
+| `module_exclude` | `[String]` | `[]` | Exclude submodules (relative to root) |
+| `module_depth` | `pos_integer` | `nil` | Limit submodule discovery depth |
+| `submodules` | `boolean \| [String]` | `false` | Legacy submodule selection (use `module_mode`) |
+| `public_api` | `boolean` | `false` | Legacy public filter (use `module_mode`) |
 | `generate` | `:used \| :all` | `:used` | Generation mode |
 | `streaming` | `[String]` | `[]` | Functions that get `*_stream` variants |
 | `min_signature_tier` | `atom` | `nil` | Minimum signature quality threshold |
@@ -80,11 +85,27 @@ end
 ### Submodule Generation
 
 ```elixir
-# Generate numpy.linalg, numpy.random, etc.
-{:numpy, "1.26.0", submodules: true}
+# Standard (public) module discovery
+{:numpy, "1.26.0", generate: :all, module_mode: :public}
 
-# Combine with include for targeted submodules
-{:numpy, "1.26.0", submodules: true, include: ["linalg", "random"]}
+# Nuclear mode (all submodules)
+{:numpy, "1.26.0", generate: :all, module_mode: :all}
+
+# Light mode (root only)
+{:numpy, "1.26.0", generate: :all, module_mode: :light}
+
+# Limit discovery depth to direct children only
+{:numpy, "1.26.0", generate: :all, module_mode: :public, module_depth: 1}
+
+# Force-include / exclude submodules
+{:numpy, "1.26.0",
+  generate: :all,
+  module_mode: :public,
+  module_include: ["linalg"],
+  module_exclude: ["random.*"]}
+
+# Legacy options (still supported)
+{:numpy, "1.26.0", submodules: true, public_api: true}
 ```
 
 ### Signature Quality

@@ -120,9 +120,16 @@ defmodule Mix.Tasks.Compile.Snakebridge do
           false
 
         info ->
-          normalize_version(info["requested"]) == normalize_version(library.version)
+          normalize_version(info["requested"]) == normalize_version(library.version) and
+            config_hash_matches?(library, info)
       end
     end)
+  end
+
+  defp config_hash_matches?(library, info) do
+    lock_hash = info["config_hash"]
+    current_hash = Lock.library_config_hash(library)
+    is_binary(lock_hash) and lock_hash == current_hash
   end
 
   defp normalize_version(nil), do: nil

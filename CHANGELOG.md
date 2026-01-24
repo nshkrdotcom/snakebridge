@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-01-23
+
+### Added
+- **Public API filtering** (`public_api: true`): New option for submodule introspection that filters to only modules with explicit public APIs
+  - Modules with `__all__` defined are included
+  - Modules with classes/functions defined in the module (not imported) are included
+  - Private modules (any path component starting with `_`) are excluded
+- **Compilation progress output**: Progress messages during introspection and generation phases
+- **Method collision fix**: When a Python class has both `__init__` and a method named `new`, the method is renamed to `python_new` to avoid arity collisions
+
 ## [0.13.0] - 2026-01-21
 
 ### Added
@@ -696,6 +706,7 @@ Numpy.compute(data, __runtime__: [timeout: 600_000])
 - Type system mapper
 - Basic code generation
 
+[0.14.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.10.0...v0.11.0

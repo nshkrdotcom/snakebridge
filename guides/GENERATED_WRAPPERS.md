@@ -32,7 +32,7 @@ defp python_deps do
   [
     {:numpy, "1.26.0"},
     {:pandas, "2.0.0", include: ["DataFrame", "read_csv"]},
-    {:dspy, "2.6.5", generate: :all, submodules: true},
+    {:mylib, "1.0.0", generate: :all, module_mode: :public},
     {:math, :stdlib}
   ]
 end
@@ -53,7 +53,12 @@ end
 | `include` | list | `[]` | Symbols to always generate |
 | `exclude` | list | `[]` | Symbols to never generate |
 | `generate` | `:used` or `:all` | `:used` | Generation mode |
-| `submodules` | boolean or list | `false` | Include submodules |
+| `module_mode` | atom | `nil` | Module discovery mode (`:light`, `:public`, `:all`) |
+| `module_include` | list | `[]` | Force-include submodules |
+| `module_exclude` | list | `[]` | Exclude submodules |
+| `module_depth` | integer | `nil` | Limit submodule discovery depth |
+| `submodules` | boolean or list | `false` | Legacy submodule selection (use `module_mode`) |
+| `public_api` | boolean | `false` | Legacy public filter (use `module_mode`) |
 | `module_name` | atom | derived | Override Elixir module name |
 | `python_name` | string | derived | Override Python module name |
 | `streaming` | list | `[]` | Functions that return generators |
@@ -73,7 +78,33 @@ The compiler scans `lib/` for calls like `Numpy.mean/1` and generates only those
 **`:all`** - Generates wrappers for all public symbols in the Python module:
 
 ```elixir
-{:dspy, "2.6.5", generate: :all, submodules: true}
+{:mylib, "1.0.0", generate: :all, module_mode: :public}
+```
+
+### Module Discovery Modes
+
+Module discovery determines which submodules are introspected when `generate: :all` is set.
+SnakeBridge provides three standard modes:
+
+- `:light` / `:root` - only the root module
+- `:public` / `:standard` - discover submodules and keep public API modules
+- `:all` / `:nuclear` - discover everything (including private)
+
+```elixir
+{:mylib, "1.0.0", generate: :all, module_mode: :light}
+{:mylib, "1.0.0", generate: :all, module_mode: :public}
+{:mylib, "1.0.0", generate: :all, module_mode: :all}
+```
+
+You can further refine discovery:
+
+```elixir
+{:mylib, "1.0.0",
+  generate: :all,
+  module_mode: :public,
+  module_depth: 1,
+  module_include: ["linalg"],
+  module_exclude: ["internal.*"]}
 ```
 
 ### Include and Exclude
@@ -148,14 +179,14 @@ Generated files are organized to match Python module paths:
 
 ```
 lib/snakebridge_generated/
-├── dspy/
-│   ├── __init__.ex          # Dspy module (root functions)
-│   ├── predict/
-│   │   ├── __init__.ex       # Dspy.Predict module
-│   │   ├── chain_of_thought.ex  # Dspy.Predict.ChainOfThought (class)
-│   │   └── rlm.ex            # Dspy.Predict.Rlm (class)
-│   └── retrieve/
-│       └── __init__.ex       # Dspy.Retrieve module
+├── mylib/
+│   ├── __init__.ex          # Mylib module (root functions)
+│   ├── models/
+│   │   ├── __init__.ex       # Mylib.Models module
+│   │   ├── classifier.ex     # Mylib.Models.Classifier (class)
+│   │   └── regressor.ex      # Mylib.Models.Regressor (class)
+│   └── utils/
+│       └── __init__.ex       # Mylib.Utils module
 ├── numpy/
 │   ├── __init__.ex           # Numpy module
 │   └── linalg/
@@ -171,8 +202,8 @@ Following Python's `__init__.py` pattern, package modules use `__init__.ex`:
 
 | Python Module | Generated File | Elixir Module |
 |---------------|----------------|---------------|
-| `dspy` | `dspy/__init__.ex` | `Dspy` |
-| `dspy.predict` | `dspy/predict/__init__.ex` | `Dspy.Predict` |
+| `mylib` | `mylib/__init__.ex` | `Mylib` |
+| `mylib.models` | `mylib/models/__init__.ex` | `Mylib.Models` |
 | `numpy.linalg` | `numpy/linalg/__init__.ex` | `Numpy.Linalg` |
 
 ### Class Files
@@ -181,7 +212,7 @@ Classes are generated as separate files named after the class:
 
 | Python Class | Generated File | Elixir Module |
 |--------------|----------------|---------------|
-| `dspy.predict.ChainOfThought` | `dspy/predict/chain_of_thought.ex` | `Dspy.Predict.ChainOfThought` |
+| `mylib.models.Classifier` | `mylib/models/classifier.ex` | `Mylib.Models.Classifier` |
 | `pandas.DataFrame` | `pandas/data_frame.ex` | `Pandas.DataFrame` |
 | `numpy.ndarray` | `numpy/ndarray.ex` | `Numpy.Ndarray` |
 
@@ -260,7 +291,7 @@ With `:single`, all modules for a library are nested in one file:
 
 ```
 lib/snakebridge_generated/
-├── dspy.ex      # All Dspy.* modules nested inside
+├── mylib.ex     # All Mylib.* modules nested inside
 ├── numpy.ex     # All Numpy.* modules nested inside
 └── pandas.ex    # All Pandas.* modules nested inside
 ```

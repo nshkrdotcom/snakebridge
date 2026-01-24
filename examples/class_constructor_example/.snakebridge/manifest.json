@@ -72,6 +72,14 @@
       "python_module": "class_constructor_example"
     }
   },
+  "modules": {
+    "class_constructor_example": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Local module for class constructor example.",
+      "python_module": "class_constructor_example"
+    }
+  },
   "symbols": {},
-  "version": "0.7.0"
+  "version": "0.14.0"
 }

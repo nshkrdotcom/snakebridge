@@ -30,25 +30,28 @@
     "python_platform": "x86_64-pc-linux-gnu",
     "python_runtime_hash": "df2bb64c335c6096abfe779d140288d2ff1f66d033f7472986e3032854e5c9ee",
     "python_version": "3.12.3",
-    "snakebridge_version": "0.13.0"
+    "snakebridge_version": "0.14.0"
   },
   "libraries": {
     "math": {
+      "config_hash": "69c391977f7091f5feca34f551a0cd4c1214e854e9546a5580202ca28fdcd7ff",
       "hash": null,
       "requested": "stdlib",
       "resolved": "stdlib"
     },
     "numpy": {
+      "config_hash": "f9bb9ed47e380ec348d8bb7c1b9e57b84cc0d012638eb89257cc901e653557a3",
       "hash": null,
       "requested": "stdlib",
       "resolved": "stdlib"
     },
     "pathlib": {
+      "config_hash": "ea5c406f021d5cefc32b963fbf9333cd75d62e47430b768ce5cb79d56e57e101",
       "hash": null,
       "requested": "stdlib",
       "resolved": "stdlib"
     }
   },
   "python_packages": {},
-  "version": "0.13.0"
+  "version": "0.14.0"
 }

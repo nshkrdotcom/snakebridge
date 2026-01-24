@@ -25,6 +25,40 @@
       "python_module": "pylatexenc.latexwalker"
     }
   },
+  "modules": {
+    "math_verify": {
+      "doc_missing_reason": "docstring missing",
+      "doc_source": "empty",
+      "docstring": "",
+      "python_module": "math_verify"
+    },
+    "pylatexenc": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "Utilities for LaTeX to/from Unicode Text conversion.\n\nMain Site:\n\n    https://github.com/phfaist/pylatexenc/",
+      "module_version": "2.10",
+      "python_module": "pylatexenc"
+    },
+    "pylatexenc.latexencode": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "The `latexencode` module provides a set of routines that allows you to\nconvert a unicode string to LaTeX escape sequences.\n\nFor basic usage you can use the :py:func:`unicode_to_latex()` function\ndirectly::\n\n  >>> from pylatexenc.latexencode import unicode_to_latex\n  >>> print(unicode_to_latex('À votre santé'))\n  \\`A votre sant\\'e\n  >>> print(unicode_to_latex('The length of samples #3 & #4 is 3μm'))\n  The length of samples \\#3 \\& \\#4 is 3\\ensuremath{\\mu}m\n\nThe conversion is handled by the class :py:class:`UnicodeToLatexEncoder`.  If\nyou are converting multiple strings, you may create an instance with the flags\nyou like and invoke its method\n:py:meth:`~UnicodeToLatexEncoder.unicode_to_latex()` as many times as necessary::\n\n  >>> from pylatexenc.latexencode import UnicodeToLatexEncoder\n  >>> u = UnicodeToLatexEncoder(unknown_char_policy='replace')\n  >>> print(u.unicode_to_latex('À votre santé'))\n  \\`A votre sant\\'e\n  >>> print(u.unicode_to_latex('The length of samples #3 & #4 is 3μm'))\n  The length of samples \\#3 \\& \\#4 is 3\\ensuremath{\\mu}m\n  >>> print(u.unicode_to_latex('À votre santé: 乾杯'))\n  No known latex representation for character: U+4E7E - ‘乾’\n  No known latex representation for character: U+676F - ‘杯’\n  \\`A votre sant\\'e: {\\bfseries ?}{\\bfseries ?}\n\nExample using custom conversion rules::\n\n  >>> from pylatexenc.latexencode import UnicodeToLatexEncoder, \\\n  ...     UnicodeToLatexConversionRule, RULE_REGEX\n  >>> u = UnicodeToLatexEncoder(\n  ...     conversion_rules=[\n  ...         UnicodeToLatexConversionRule(rule_type=RULE_REGEX, rule=[\n  ...             (re.compile(r'-->'), r'\\\\textrightarrow'),\n  ...             (re.compile(r'<--'), r'\\\\textleftarrow'),\n  ...         ]),\n  ...         'defaults'\n  ...     ]\n  ... )\n  >>> print(u.unicode_to_latex(\"Cheers --> À votre santé\"))\n  Cheers {\\textrightarrow} \\`A votre sant\\'e\n\nSee :py:class:`UnicodeToLatexEncoder` and\n:py:class:`UnicodeToLatexConversionRule`.  Note for regex rules, the replacement\ntext is expanded like the second argument of `re.sub()` and backslashes need to\nbe escaped even inside raw strings.\n\n.. versionadded:: 2.0\n\n   The class :py:class:`UnicodeToLatexEncoder` along with its helper functions\n   and classes were introduced in `pylatexenc 2.0`.\n\n   The earlier function :py:func:`utf8tolatex()` that was available in\n   `pylatexenc 1.x` is still provided unchanged, so code written for `pylatexenc\n   1.x` should work without changes.  New code is however strongly encouraged to\n   employ the new API.",
+      "python_module": "pylatexenc.latexencode"
+    },
+    "pylatexenc.latexwalker": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "The ``latexwalker`` module provides a simple API for parsing LaTeX snippets,\nand representing the contents using a data structure based on node classes.\n\nLatexWalker will understand the syntax of most common macros.  However,\n``latexwalker`` is NOT a replacement for a full LaTeX engine.  (Originally,\n``latexwalker`` was designed to extract useful text for indexing for text\ndatabase searches of LaTeX content.)\n\nSimple example usage::\n\n    >>> from pylatexenc.latexwalker import LatexWalker, LatexEnvironmentNode\n    >>> w = LatexWalker(r\"\"\"\n    ... \\textbf{Hi there!} Here is \\emph{a list}:\n    ... \\begin{enumerate}[label=(i)]\n    ... \\item One\n    ... \\item Two\n    ... \\end{enumerate}\n    ... and $x$ is a variable.\n    ... \"\"\")\n    >>> (nodelist, pos, len_) = w.get_latex_nodes(pos=0)\n    >>> nodelist[0]\n    LatexCharsNode(pos=0, len=1, chars='\\n')\n    >>> nodelist[1]\n    LatexMacroNode(pos=1, len=18, macroname='textbf',\n    nodeargd=ParsedMacroArgs(argnlist=[LatexGroupNode(pos=8, len=11,\n    nodelist=[LatexCharsNode(pos=9, len=9, chars='Hi there!')],\n    delimiters=('{', '}'))], argspec='{'), macro_post_space='')\n    >>> nodelist[5].isNodeType(LatexEnvironmentNode)\n    True\n    >>> nodelist[5].environmentname\n    'enumerate'\n    >>> nodelist[5].nodeargd.argspec\n    '['\n    >>> nodelist[5].nodeargd.argnlist\n    [LatexGroupNode(pos=60, len=11, nodelist=[LatexCharsNode(pos=61, len=9,\n    chars='label=(i)')], delimiters=('[', ']'))]\n    >>> nodelist[7].latex_verbatim()\n    '$x$'\n\nYou can also use `latexwalker` directly in command-line, producing JSON or a\nhuman-readable node tree::\n\n    $ echo '\\textit{italic} text' | latexwalker --output-format=json\n    {\n      \"nodelist\": [\n        {\n          \"nodetype\": \"LatexMacroNode\",\n          \"pos\": 0,\n          \"len\": 15,\n          \"macroname\": \"textit\",\n    [...]\n\n    $ latexwalker --help\n    [...]\n\nThe parser can be influenced by specifying a collection of known macros and\nenvironments (the \"latex context\") that are specified using\n:py:class:`pylatexenc.macrospec.MacroSpec` and\n:py:class:`pylatexenc.macrospec.EnvironmentSpec` objects in a\n:py:class:`pylatexenc.macrospec.LatexContextDb` object.  See the doc of the\nmodule :py:mod:`pylatexenc.macrospec` for more information.",
+      "python_module": "pylatexenc.latexwalker"
+    },
+    "sympy": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
+      "docstring": "SymPy is a Python library for symbolic mathematics. It aims to become a\nfull-featured computer algebra system (CAS) while keeping the code as simple\nas possible in order to be comprehensible and easily extensible.  SymPy is\nwritten entirely in Python. It depends on mpmath, and other external libraries\nmay be optionally for things like plotting support.\n\nSee the webpage for more information and documentation:\n\n    https://sympy.org",
+      "module_version": "1.14.0",
+      "python_module": "sympy"
+    }
+  },
   "symbols": {
     "MathVerify.grade/2": {
       "docstring": "Score an answer against the gold expression.",
@@ -401,5 +435,5 @@
       "return_annotation": null
     }
   },
-  "version": "3.0.0"
+  "version": "0.14.0"
 }

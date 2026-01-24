@@ -40,6 +40,18 @@ defmodule SnakeBridge.Config do
     - `:generate` - Controls which symbols are generated:
       - `:used` (default) - Only generate wrappers for symbols detected in your code
       - `:all` - Generate wrappers for ALL public symbols in the Python module
+    - `:module_mode` - Controls which Python submodules are generated when `generate: :all`:
+      - `:root` / `:light` / `:top` - Only the root module
+      - `:public` / `:standard` - Discover submodules and keep public API modules
+      - `:all` / `:nuclear` - Discover all submodules (including private)
+      - `{:only, ["linalg", "fft"]}` - Explicit submodule allowlist
+    - `:submodules` - When `true`, introspect all submodules (can generate thousands of files)
+    - `:public_api` - When `true` with `submodules: true`, only include modules with explicit
+      public API (`__all__` defined or classes defined in the module). This filters out internal
+      implementation modules, typically reducing generated files by 90%+.
+    - `:module_include` - Extra submodules to include (relative to the library root)
+    - `:module_exclude` - Submodules to exclude (relative to the library root)
+    - `:module_depth` - Limit discovery depth (e.g. 1 = only direct children)
     - `:docs_url` - Explicit documentation URL for third-party libraries
     """
 
@@ -51,10 +63,15 @@ defmodule SnakeBridge.Config do
       :pypi_package,
       :docs_url,
       :extras,
+      :module_mode,
+      :module_include,
+      :module_exclude,
+      :module_depth,
       include: [],
       exclude: [],
       streaming: [],
       submodules: false,
+      public_api: false,
       generate: :used,
       signature_sources: nil,
       strict_signatures: nil,
@@ -66,6 +83,7 @@ defmodule SnakeBridge.Config do
     ]
 
     @type generate_mode :: :all | :used
+    @type module_mode :: :root | :public | :all | {:only, [String.t()]}
 
     @type t :: %__MODULE__{
             name: atom(),
@@ -75,10 +93,15 @@ defmodule SnakeBridge.Config do
             pypi_package: String.t() | nil,
             docs_url: String.t() | nil,
             extras: [String.t()],
+            module_mode: module_mode() | nil,
+            module_include: [String.t()],
+            module_exclude: [String.t()],
+            module_depth: pos_integer() | nil,
             include: [String.t()],
             exclude: [String.t()],
             streaming: [String.t()],
             submodules: boolean(),
+            public_api: boolean(),
             generate: generate_mode(),
             signature_sources: [atom() | String.t()] | nil,
             strict_signatures: boolean() | nil,
@@ -222,8 +245,14 @@ defmodule SnakeBridge.Config do
     python_name = Keyword.get(opts, :python_name, Atom.to_string(name))
     extras = Keyword.get(opts, :extras, [])
     generate = Keyword.get(opts, :generate, :used)
+    module_mode = normalize_module_mode(Keyword.get(opts, :module_mode))
+    module_include = normalize_module_list(Keyword.get(opts, :module_include, []))
+    module_exclude = normalize_module_list(Keyword.get(opts, :module_exclude, []))
+    module_depth = Keyword.get(opts, :module_depth)
 
     validate_generate_option!(generate, name)
+    validate_module_mode!(module_mode, name)
+    validate_module_depth!(module_depth, name)
 
     %Library{
       name: name,
@@ -233,10 +262,15 @@ defmodule SnakeBridge.Config do
       pypi_package: Keyword.get(opts, :pypi_package),
       docs_url: Keyword.get(opts, :docs_url),
       extras: List.wrap(extras),
+      module_mode: module_mode,
+      module_include: module_include,
+      module_exclude: module_exclude,
+      module_depth: normalize_module_depth(module_depth),
       include: Keyword.get(opts, :include, []),
       exclude: Keyword.get(opts, :exclude, []),
       streaming: Keyword.get(opts, :streaming, []),
       submodules: Keyword.get(opts, :submodules, false),
+      public_api: Keyword.get(opts, :public_api, false),
       generate: generate,
       signature_sources: Keyword.get(opts, :signature_sources),
       strict_signatures: Keyword.get(opts, :strict_signatures),
@@ -259,6 +293,62 @@ defmodule SnakeBridge.Config do
     Examples:
       {:dspy, "2.6.5", generate: :all}   # Generate all public symbols
       {:numpy, "1.26.0", generate: :used} # Only generate used symbols (default)
+    """
+  end
+
+  defp normalize_module_mode(nil), do: nil
+  defp normalize_module_mode(:light), do: :root
+  defp normalize_module_mode(:top), do: :root
+  defp normalize_module_mode(:root), do: :root
+  defp normalize_module_mode(:standard), do: :public
+  defp normalize_module_mode(:public), do: :public
+  defp normalize_module_mode(:full), do: :all
+  defp normalize_module_mode(:nuclear), do: :all
+  defp normalize_module_mode(:all), do: :all
+
+  defp normalize_module_mode({:only, list}) when is_list(list),
+    do: {:only, normalize_module_list(list)}
+
+  defp normalize_module_mode(other), do: other
+
+  defp normalize_module_list(nil), do: []
+  defp normalize_module_list(list) when is_list(list), do: Enum.map(list, &to_string/1)
+  defp normalize_module_list(value) when is_binary(value), do: [value]
+  defp normalize_module_list(_), do: []
+
+  defp normalize_module_depth(nil), do: nil
+  defp normalize_module_depth(value) when is_integer(value) and value > 0, do: value
+  defp normalize_module_depth(_), do: nil
+
+  defp validate_module_depth!(nil, _name), do: :ok
+
+  defp validate_module_depth!(value, _name) when is_integer(value) and value > 0, do: :ok
+
+  defp validate_module_depth!(invalid, name) do
+    raise ArgumentError, """
+    Invalid module_depth option for #{inspect(name)}: #{inspect(invalid)}
+
+    module_depth must be a positive integer (e.g. 1 or 2).
+    """
+  end
+
+  defp validate_module_mode!(nil, _name), do: :ok
+
+  defp validate_module_mode!(mode, _name)
+       when mode in [:root, :public, :all],
+       do: :ok
+
+  defp validate_module_mode!({:only, list}, _name) when is_list(list), do: :ok
+
+  defp validate_module_mode!(invalid, name) do
+    raise ArgumentError, """
+    Invalid module_mode option for #{inspect(name)}: #{inspect(invalid)}
+
+    module_mode must be one of:
+      :root | :light | :top
+      :public | :standard
+      :all | :full | :nuclear
+      {:only, ["submodule", "submodule.nested"]}
     """
   end
 

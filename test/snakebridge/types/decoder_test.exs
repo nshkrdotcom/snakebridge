@@ -44,22 +44,13 @@ defmodule SnakeBridge.Types.DecoderTest do
 
   describe "decode/1 atoms" do
     setup do
-      original = Application.get_env(:snakebridge, :atom_allowlist)
-
-      on_exit(fn ->
-        if is_nil(original) do
-          Application.delete_env(:snakebridge, :atom_allowlist)
-        else
-          Application.put_env(:snakebridge, :atom_allowlist, original)
-        end
-      end)
+      restore = SnakeBridge.Env.put_app_env_override(:snakebridge, :atom_allowlist, ["ok"])
+      on_exit(restore)
 
       :ok
     end
 
     test "decodes allowlisted atom tags into atoms" do
-      Application.put_env(:snakebridge, :atom_allowlist, ["ok"])
-
       assert Decoder.decode(%{
                "__type__" => "atom",
                "__schema__" => @schema,
@@ -68,8 +59,6 @@ defmodule SnakeBridge.Types.DecoderTest do
     end
 
     test "decodes non-allowlisted atom tags into strings" do
-      Application.put_env(:snakebridge, :atom_allowlist, ["ok"])
-
       assert Decoder.decode(%{
                "__type__" => "atom",
                "__schema__" => @schema,
@@ -676,28 +665,19 @@ defmodule SnakeBridge.Types.DecoderTest do
     end
 
     test "decodes tagged dict with atom keys when allowlisted" do
-      original = Application.get_env(:snakebridge, :atom_allowlist)
-      Application.put_env(:snakebridge, :atom_allowlist, :all)
+      SnakeBridge.Env.put_app_env_override(:snakebridge, :atom_allowlist, :all)
 
-      try do
-        encoded = %{
-          "__type__" => "dict",
-          "pairs" => [
-            [%{"__type__" => "atom", "value" => "key1"}, "value1"],
-            [%{"__type__" => "atom", "value" => "key2"}, "value2"]
-          ]
-        }
+      encoded = %{
+        "__type__" => "dict",
+        "pairs" => [
+          [%{"__type__" => "atom", "value" => "key1"}, "value1"],
+          [%{"__type__" => "atom", "value" => "key2"}, "value2"]
+        ]
+      }
 
-        decoded = Decoder.decode(encoded)
-        assert decoded[:key1] == "value1"
-        assert decoded[:key2] == "value2"
-      after
-        if is_nil(original) do
-          Application.delete_env(:snakebridge, :atom_allowlist)
-        else
-          Application.put_env(:snakebridge, :atom_allowlist, original)
-        end
-      end
+      decoded = Decoder.decode(encoded)
+      assert decoded[:key1] == "value1"
+      assert decoded[:key2] == "value2"
     end
   end
 end

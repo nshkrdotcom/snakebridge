@@ -5,10 +5,10 @@ defmodule SnakeBridge.TestCase do
   ## Usage
 
       defmodule MyApp.SomeTest do
-        use SnakeBridge.TestCase, pool: :dspy_pool
+        use SnakeBridge.TestCase, pool: :example_pool
 
         test "runs pipeline" do
-          {:ok, out} = Dspy.SomeModule.some_call("x", y: 1)
+          {:ok, out} = Examplelib.SomeModule.some_call("x", y: 1)
           assert out != nil
         end
       end

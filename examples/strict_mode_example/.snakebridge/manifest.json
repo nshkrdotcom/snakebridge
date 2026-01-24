@@ -55,7 +55,8 @@
         "runtime_hints: unavailable",
         "stub: not found"
       ],
-      "signature_source": "runtime"
+      "signature_source": "runtime",
+      "streaming": false
     },
     "StrictModeExample.multiply/2": {
       "doc_missing_reason": "runtime docstring missing",
@@ -103,7 +104,8 @@
         "runtime_hints: unavailable",
         "stub: not found"
       ],
-      "signature_source": "runtime"
+      "signature_source": "runtime",
+      "streaming": false
     },
     "StrictModeExample.mystery/0": {
       "doc_missing_reason": "runtime docstring missing",
@@ -136,8 +138,9 @@
         "runtime_hints: unavailable",
         "stub: not found"
       ],
-      "signature_source": "variadic"
+      "signature_source": "variadic",
+      "streaming": false
     }
   },
-  "version": "0.14.0"
+  "version": "0.15.0"
 }

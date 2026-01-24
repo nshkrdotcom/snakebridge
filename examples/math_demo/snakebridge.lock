@@ -5,7 +5,7 @@
   },
   "environment": {
     "elixir_version": "1.18.4",
-    "generator_hash": "79886ffdbf8011c74b010a281617d713dd8799618d19ca3020def9d89664073e",
+    "generator_hash": "c7a1d5edcd09f124c4faa65dea104391b75196aa2ff80f2c9a15084f7a726481",
     "hardware": {
       "accelerator": "cpu",
       "cpu_features": [
@@ -30,22 +30,22 @@
     "python_platform": "x86_64-pc-linux-gnu",
     "python_runtime_hash": "df2bb64c335c6096abfe779d140288d2ff1f66d033f7472986e3032854e5c9ee",
     "python_version": "3.12.3",
-    "snakebridge_version": "0.14.0"
+    "snakebridge_version": "0.15.0"
   },
   "libraries": {
     "json": {
-      "config_hash": "aab12db656f2a1b4b911c34215378ddeb9660330bede811807489c2a9528d588",
+      "config_hash": "973917addfe26da6a3417ad9cfccd380613fa3eb0c424863e86021982185c169",
       "hash": null,
       "requested": "stdlib",
       "resolved": "stdlib"
     },
     "math": {
-      "config_hash": "69c391977f7091f5feca34f551a0cd4c1214e854e9546a5580202ca28fdcd7ff",
+      "config_hash": "6ac7c38bd097f896730dbff4c5faa0a21d616f1c767f8eb9a75fae578663a071",
       "hash": null,
       "requested": "stdlib",
       "resolved": "stdlib"
     }
   },
   "python_packages": {},
-  "version": "0.14.0"
+  "version": "0.15.0"
 }

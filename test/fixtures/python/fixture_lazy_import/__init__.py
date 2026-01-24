@@ -1,7 +1,7 @@
 """
 Test fixture for lazy import handling.
 
-This module mimics the pattern used by vllm and other libraries
+This module mimics the pattern used by some libraries
 that use __getattr__ for lazy imports. The classes in __all__
 are not directly accessible via dir() or inspect.getmembers()
 until they are explicitly accessed by name.

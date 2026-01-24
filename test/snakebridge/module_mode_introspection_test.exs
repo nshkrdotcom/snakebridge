@@ -74,4 +74,43 @@ defmodule SnakeBridge.ModuleModeIntrospectionTest do
 
     assert Map.has_key?(namespaces, "empty_mod")
   end
+
+  test "exports mode includes only explicitly-exported submodules" do
+    library =
+      base_library(
+        name: :fixture_exports_mode,
+        python_name: "fixture_exports_mode",
+        module_name: FixtureExportsMode,
+        module_mode: :exports
+      )
+
+    {:ok, result} = Introspector.introspect_module(library)
+    namespaces = Map.get(result, "namespaces", %{})
+
+    assert Map.has_key?(namespaces, "api_mod")
+
+    refute Map.has_key?(namespaces, "internal_mod")
+    refute Map.has_key?(namespaces, "internal_pkg")
+    refute Map.has_key?(namespaces, "internal_pkg.deep")
+  end
+
+  test "explicit mode includes only modules/packages defining __all__" do
+    library =
+      base_library(
+        name: :fixture_explicit_mode,
+        python_name: "fixture_explicit_mode",
+        module_name: FixtureExplicitMode,
+        module_mode: :explicit
+      )
+
+    {:ok, result} = Introspector.introspect_module(library)
+    namespaces = Map.get(result, "namespaces", %{})
+
+    assert Map.has_key?(namespaces, "beta")
+    assert Map.has_key?(namespaces, "pkg")
+    assert Map.has_key?(namespaces, "pkg.child")
+
+    refute Map.has_key?(namespaces, "alpha")
+    refute Map.has_key?(namespaces, "pkg.noall")
+  end
 end

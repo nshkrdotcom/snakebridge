@@ -55,6 +55,7 @@ defmodule SnakeBridge.ConfigHelper do
   - `:pool_size` - Number of Python workers (default: 2)
   - `:venv_path` - Explicit path to venv directory
   - `:affinity` - Snakepit session affinity mode (`:hint`, `:strict_queue`, `:strict_fail_fast`)
+  - `:adapter_env` - Extra environment variables for the Python adapter (merged into each pool)
   - `:pools` - Multi-pool config list (maps or keyword lists); defaults apply per pool
   """
   @spec snakepit_config(keyword()) :: keyword()
@@ -71,6 +72,7 @@ defmodule SnakeBridge.ConfigHelper do
       else
         %{}
       end
+      |> merge_adapter_env(Keyword.get(opts, :adapter_env))
 
     base_pool_config =
       %{
@@ -143,7 +145,7 @@ defmodule SnakeBridge.ConfigHelper do
   defp resolve_python_executable(opts) do
     cond do
       # 1. Environment variable override
-      env_venv = System.get_env("SNAKEBRIDGE_VENV") ->
+      env_venv = SnakeBridge.Env.system_env("SNAKEBRIDGE_VENV") ->
         venv_python(env_venv)
 
       # 2. Explicit config
@@ -151,7 +153,7 @@ defmodule SnakeBridge.ConfigHelper do
         venv_python(config_path)
 
       # 3. Application config
-      app_venv = Application.get_env(:snakebridge, :venv_path) ->
+      app_venv = SnakeBridge.Env.app_env(:snakebridge, :venv_path) ->
         venv_python(app_venv)
 
       # 4. Snakepit-managed venv (auto-installed with mix snakebridge.setup)
@@ -219,7 +221,7 @@ defmodule SnakeBridge.ConfigHelper do
   defp snakepit_env_dir do
     python_packages =
       :snakepit
-      |> Application.get_env(:python_packages, [])
+      |> SnakeBridge.Env.app_env(:python_packages, [])
       |> normalize_config_input()
 
     case Map.get(python_packages, :env_dir) do
@@ -237,7 +239,7 @@ defmodule SnakeBridge.ConfigHelper do
   defp default_snakepit_env_dir do
     python_config =
       :snakepit
-      |> Application.get_env(:python, [])
+      |> SnakeBridge.Env.app_env(:python, [])
       |> normalize_config_input()
 
     runtime_dir = Map.get(python_config, :runtime_dir, "priv/snakepit/python")
@@ -249,7 +251,7 @@ defmodule SnakeBridge.ConfigHelper do
 
     paths =
       [
-        System.get_env("PYTHONPATH"),
+        SnakeBridge.Env.system_env("PYTHONPATH"),
         snakepit_priv_python(),
         snakebridge_priv_python()
       ]

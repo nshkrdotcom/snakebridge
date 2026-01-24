@@ -39,13 +39,6 @@ defmodule SnakeBridge.ConfigHelperTest do
   end
 
   test "snakepit_config prefers snakepit-managed venv when available" do
-    original_snakebridge_venv = Application.get_env(:snakebridge, :venv_path)
-    original_snakepit_python_packages = Application.get_env(:snakepit, :python_packages)
-    original_env = System.get_env("SNAKEBRIDGE_VENV")
-
-    System.delete_env("SNAKEBRIDGE_VENV")
-    Application.delete_env(:snakebridge, :venv_path)
-
     tmp_dir =
       Path.join(
         System.tmp_dir!(),
@@ -55,33 +48,56 @@ defmodule SnakeBridge.ConfigHelperTest do
     venv_dir = Path.join(tmp_dir, "venv")
     python_path = Path.join([venv_dir, "bin", "python3"])
     File.mkdir_p!(Path.dirname(python_path))
-    File.write!(python_path, "")
+    File.write!(python_path, "#!/usr/bin/env python3\n")
+    File.chmod!(python_path, 0o755)
 
-    Application.put_env(:snakepit, :python_packages, env_dir: venv_dir)
+    restore_venv_env = SnakeBridge.Env.put_system_env_override("SNAKEBRIDGE_VENV", nil)
+    restore_snakebridge_venv = SnakeBridge.Env.put_app_env_override(:snakebridge, :venv_path, nil)
+
+    restore_snakepit_python_packages =
+      SnakeBridge.Env.put_app_env_override(:snakepit, :python_packages, env_dir: venv_dir)
 
     on_exit(fn ->
       File.rm_rf!(tmp_dir)
-
-      if is_nil(original_snakepit_python_packages) do
-        Application.delete_env(:snakepit, :python_packages)
-      else
-        Application.put_env(:snakepit, :python_packages, original_snakepit_python_packages)
-      end
-
-      if is_nil(original_snakebridge_venv) do
-        Application.delete_env(:snakebridge, :venv_path)
-      else
-        Application.put_env(:snakebridge, :venv_path, original_snakebridge_venv)
-      end
-
-      if is_nil(original_env) do
-        System.delete_env("SNAKEBRIDGE_VENV")
-      else
-        System.put_env("SNAKEBRIDGE_VENV", original_env)
-      end
+      restore_snakepit_python_packages.()
+      restore_snakebridge_venv.()
+      restore_venv_env.()
     end)
 
     config = ConfigHelper.snakepit_config()
     assert Keyword.get(config, :python_executable) == python_path
+  end
+
+  test "snakepit_config merges adapter_env into pool_config" do
+    config =
+      ConfigHelper.snakepit_config(
+        pool_size: 1,
+        adapter_env: %{"EXAMPLE_ENABLE_MULTIPROCESSING" => "1"}
+      )
+
+    pool_config = Keyword.fetch!(config, :pool_config)
+    assert is_map(pool_config.adapter_env)
+    assert pool_config.adapter_env["EXAMPLE_ENABLE_MULTIPROCESSING"] == "1"
+  end
+
+  test "snakepit_config merges adapter_env into each pool and allows per-pool overrides" do
+    pools = [
+      %{name: :pool_a, adapter_env: %{"X" => "pool"}},
+      %{name: :pool_b}
+    ]
+
+    config =
+      ConfigHelper.snakepit_config(
+        pools: pools,
+        adapter_env: %{"X" => "global", "Y" => "global"}
+      )
+
+    [pool_a, pool_b] = Keyword.fetch!(config, :pools)
+
+    assert pool_a.adapter_env["X"] == "pool"
+    assert pool_a.adapter_env["Y"] == "global"
+
+    assert pool_b.adapter_env["X"] == "global"
+    assert pool_b.adapter_env["Y"] == "global"
   end
 end

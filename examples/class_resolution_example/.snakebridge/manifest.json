@@ -1,6 +1,6 @@
 {
   "classes": {
-    "Numpy.ndarray": {
+    "Numpy.Ndarray": {
       "attributes": [
         "T",
         "base",
@@ -24,6 +24,7 @@
       "doc_missing_reason": null,
       "doc_source": "runtime",
       "docstring": "ndarray(shape, dtype=float, buffer=None, offset=0, strides=None, order=None)\n\nAn array object represents a multidimensional, homogeneous array\nof fixed-size items.  An associated data-type object describes the\nformat of each element in the array (its byte-order, how many bytes it\noccupies in memory, whether it is an integer, a floating point number,\nor something else, etc.)\n\nArrays should be constructed using `array`, `zeros` or `empty` (refer\nto the See Also section below).  The parameters given here refer to\na low-level method (`ndarray(...)`) for instantiating an array.\n\nFor more information, refer to the `numpy` module and examine the\nmethods and attributes of an array.\n\nParameters\n----------\n(for the __new__ method; see Notes below)\n\nshape : tuple of ints\n    Shape of created array.\ndtype : data-type, optional\n    Any object that can be interpreted as a numpy data type.\n    Default is `numpy.float64`.\nbuffer : object exposing buffer interface, optional\n    Used to fill the array with data.\noffset : int, optional\n    Offset of array data in buffer.\nstrides : tuple of ints, optional\n    Strides of data in memory.\norder : {'C', 'F'}, optional\n    Row-major (C-style) or column-major (Fortran-style) order.\n\nAttributes\n----------\nT : ndarray\n    Transpose of the array.\ndata : buffer\n    The array's elements, in memory.\ndtype : dtype object\n    Describes the format of the elements in the array.\nflags : dict\n    Dictionary containing information related to memory use, e.g.,\n    'C_CONTIGUOUS', 'OWNDATA', 'WRITEABLE', etc.\nflat : numpy.flatiter object\n    Flattened version of the array as an iterator.  The iterator\n    allows assignments, e.g., ``x.flat = 3`` (See `ndarray.flat` for\n    assignment examples; TODO).\nimag : ndarray\n    Imaginary part of the array.\nreal : ndarray\n    Real part of the array.\nsize : int\n    Number of elements in the array.\nitemsize : int\n    The memory use of each array element in bytes.\nnbytes : int\n    The total number of bytes required to store the array data,\n    i.e., ``itemsize * size``.\nndim : int\n    The array's number of dimensions.\nshape : tuple of ints\n    Shape of the array.\nstrides : tuple of ints\n    The step-size required to move from one element to the next in\n    memory. For example, a contiguous ``(3, 4)`` array of type\n    ``int16`` in C-order has strides ``(8, 2)``.  This implies that\n    to move from element to element in memory requires jumps of 2 bytes.\n    To move from row-to-row, one needs to jump 8 bytes at a time\n    (``2 * 4``).\nctypes : ctypes object\n    Class containing properties of the array needed for interaction\n    with ctypes.\nbase : ndarray\n    If the array is a view into another array, that array is its `base`\n    (unless that array is also a view).  The `base` array is where the\n    array data is actually stored.\n\nSee Also\n--------\narray : Construct an array.\nzeros : Create an array, each element of which is zero.\nempty : Create an array, but leave its allocated memory unchanged (i.e.,\n        it contains \"garbage\").\ndtype : Create a data-type.\nnumpy.typing.NDArray : An ndarray alias :term:`generic <generic type>`\n                       w.r.t. its `dtype.type <numpy.dtype.type>`.\n\nNotes\n-----\nThere are two modes of creating an array using ``__new__``:\n\n1. If `buffer` is None, then only `shape`, `dtype`, and `order`\n   are used.\n2. If `buffer` is an object exposing the buffer interface, then\n   all keywords are interpreted.\n\nNo ``__init__`` method is needed because the array is fully initialized\nafter the ``__new__`` method.\n\nExamples\n--------\nThese examples illustrate the low-level `ndarray` constructor.  Refer\nto the `See Also` section above for easier ways of constructing an\nndarray.\n\nFirst mode, `buffer` is None:\n\n>>> import numpy as np\n>>> np.ndarray(shape=(2,2), dtype=float, order='F')\narray([[0.0e+000, 0.0e+000], # random\n       [     nan, 2.5e-323]])\n\nSecond mode:\n\n>>> np.ndarray((2,), buffer=np.array([1,2,3]),\n...            offset=np.int_().itemsize,\n...            dtype=int) # offset = 1*itemsize, i.e. skip first element\narray([2, 3])",
+      "method_scope": "all",
       "methods": [
         {
           "doc_missing_reason": null,
@@ -2778,7 +2779,8 @@
           "signature_source": "runtime"
         }
       ],
-      "module": "Numpy.ndarray",
+      "methods_truncated": false,
+      "module": "Numpy.Ndarray",
       "python_module": "numpy"
     },
     "Pathlib.Path": {
@@ -4528,5 +4530,5 @@
       "signature_available": true
     }
   },
-  "version": "0.14.0"
+  "version": "0.15.0"
 }

@@ -23,7 +23,7 @@ def project do
 end
 
 defp deps do
-  [{:snakebridge, "~> 0.14.0"}]
+  [{:snakebridge, "~> 0.15.0"}]
 end
 
 defp python_deps do
@@ -168,7 +168,7 @@ defp python_deps do
       extras: ["sql"],                # pip extras
       include: ["array", "mean"],     # Only these symbols
       exclude: ["testing"],           # Exclude these
-      module_mode: :public,           # :root | :public | :all (replaces submodules/public_api)
+      module_mode: :public,           # Module discovery mode (see below)
       module_depth: 2,                # Limit submodule depth
       module_include: ["linalg"],     # Force-include specific submodules
       module_exclude: ["testing.*"],  # Exclude submodule patterns
@@ -183,8 +183,13 @@ end
 
 Module discovery modes (for `generate: :all`):
 - `:root` / `:light` - Root module only
+- `:exports` / `:api` - Root `__all__` exported submodules (no package walk)
 - `:public` / `:standard` - Submodules with public APIs (`__all__` or top-level defs)
+- `:explicit` - Only modules/packages that define `__all__`
+- `:docs` - Docs-defined surface from a manifest file
 - `:all` / `:nuclear` - All submodules including private
+
+See [Generated Wrappers](guides/GENERATED_WRAPPERS.md) for docs manifest workflow and class method guardrails.
 
 ### Application Config
 
@@ -196,11 +201,28 @@ config :snakebridge,
   metadata_dir: ".snakebridge",
   strict: false,
   error_mode: :raw,  # :raw | :translated | :raise_translated
-  atom_allowlist: ["ok", "error"]
+  atom_allowlist: ["ok", "error"],
+  scan_extensions: [".ex", ".exs"]  # Include .exs for script/example scanning
 ```
 
-Generated files mirror Python module structure (`dspy/predict/__init__.ex` for `Dspy.Predict`).
+Generated files mirror Python module structure (`examplelib/predict/__init__.ex` for `Examplelib.Predict`).
 See [Generated Wrappers](guides/GENERATED_WRAPPERS.md) for details.
+
+### Runtime Pool Config
+
+```elixir
+# config/runtime.exs
+SnakeBridge.ConfigHelper.configure_snakepit!(
+  pool_size: 4,
+  affinity: :strict_queue,
+  adapter_env: %{                      # Environment for Python adapter
+    "HF_HOME" => "/var/lib/huggingface",
+    "CUDA_VISIBLE_DEVICES" => "0"
+  }
+)
+```
+
+For multi-pool setups, per-pool `adapter_env` overrides global values. See [Configuration](guides/CONFIGURATION.md).
 
 ### Runtime Options
 
@@ -253,10 +275,10 @@ Use the built-in ExUnit template for automatic setup/teardown:
 
 ```elixir
 defmodule MyApp.SomeFeatureTest do
-  use SnakeBridge.TestCase, pool: :dspy_pool
+  use SnakeBridge.TestCase, pool: :example_pool
 
   test "runs pipeline" do
-    {:ok, out} = Dspy.SomeModule.some_call("x", y: 1)
+    {:ok, out} = Examplelib.SomeModule.some_call("x", y: 1)
     assert out != nil
   end
 end
@@ -344,6 +366,12 @@ Events: `[:snakebridge, :compile, :*]`, `[:snakebridge, :runtime, :call, :*]`, `
 mix snakebridge.setup          # Install Python packages
 mix snakebridge.setup --check  # Verify installation
 mix snakebridge.verify         # Hardware compatibility check
+mix snakebridge.regen          # Force wrapper regeneration
+mix snakebridge.regen --clean  # Remove generated artifacts before regeneration
+
+# Docs manifest generation (for module_mode: :docs)
+mix snakebridge.docs.manifest --library <pkg> --inventory <objects.inv> --out priv/snakebridge/<pkg>.docs.json
+mix snakebridge.plan           # Preview generation size for docs manifests
 ```
 
 ## Script Execution

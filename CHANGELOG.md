@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-01-25
+
+### Added
+- **`adapter_env` option**: New configuration option for `SnakeBridge.ConfigHelper.configure_snakepit!/1` and `snakepit_config/1`
+  - Pass extra environment variables to the Python adapter (e.g., `HF_HOME`, `TOKENIZERS_PARALLELISM`, `CUDA_VISIBLE_DEVICES`)
+  - Top-level `adapter_env` is merged into `pool_config` for single-pool setups
+  - Per-pool `adapter_env` overrides top-level values in multi-pool configurations
+  - Environment variables are merged alongside the computed `PYTHONPATH`
+- **New module discovery modes for `generate: :all`**:
+  - `module_mode: :exports` / `:api` - derive submodules from root `__all__` exported module objects (no package walk)
+  - `module_mode: :explicit` - discover submodules but keep only modules/packages that define `__all__` in source
+  - Added introspector flags `--exports-mode` and `--public-api-mode` (used internally by module modes)
+- **Docs-driven public surface generation**:
+  - `module_mode: :docs` / `:manifest` - generate a docs-defined surface from a committed JSON manifest (no package walk)
+  - New `python_deps` options: `docs_manifest:` and `docs_profile:`
+  - `mix snakebridge.docs.manifest` - build a manifest from `objects.inv` (+ optional HTML nav/summary pages for MkDocs/Sphinx sites)
+  - `mix snakebridge.plan` - preview estimated file counts for docs-manifest surfaces without running Python
+- **Class method guardrails**:
+  - New `python_deps` options: `class_method_scope:` and `max_class_methods:`
+  - Prevents runaway wrapper generation for inheritance-heavy classes by falling back to declared-only method enumeration
+- **Used-mode scanning improvements**:
+  - New `config :snakebridge, scan_extensions: [...]` option to include `.exs` (scripts/examples) in used-symbol scanning
+- **Missing symbol UX controls**:
+  - New `python_deps` option: `on_not_found:` (`:error` or `:stub`)
+  - Prevents repeated compile-time retries for missing symbols
+- **Docstring markdown sanitization**:
+  - New `MarkdownSanitizer` module repairs common upstream docstring issues before ExDoc rendering
+  - Closes unclosed fenced code blocks by detecting prose boundaries
+  - Fixes manpage-style backtick quotes (`sys.byteorder'` → `sys.byteorder`)
+- **Explicit regeneration task**:
+  - `mix snakebridge.regen` forces wrapper regeneration regardless of cache state
+  - `mix snakebridge.regen --clean` removes generated artifacts and metadata before regenerating
+
+### Fixed
+- Markdown sanitizer no longer alters inline code containing apostrophes (e.g., `dspy.LM(model='gpt-5', ...)`); manpage quote fix now uses a stricter regex.
+- `generate: :all` now prunes stale manifest module-doc entries for the library, preventing old module wrapper files from sticking around after switching to a smaller module plan.
+- Docs manifest generation no longer treats class members (e.g. `pkg.Class.method`) as importable modules.
+- Used-mode scanning no longer treats SnakeBridge wrapper helpers (e.g. `__functions__/0`, `__search__/1`, `doc/1`, metadata) as Python symbols.
+- Used-mode supports `*_stream` wrappers by resolving them against the base Python function and recording streaming support in the manifest.
+- Manifest loading now normalizes class module keys to canonical Elixir casing, fixing false “missing” calls for class modules (e.g. `Numpy.Ndarray`).
+- Fixed intermittent `:enoent` failures in concurrent test/compile environments by making env/config reads process-overridable (no global env mutation needed for tests).
+- SnakeBridge runs now wait for Snakepit workers to complete the gRPC readiness handshake before executing calls, reducing intermittent stream errors on startup.
+
+### Internal
+- Lock generator hash now includes the Python introspection script and module selection logic so behavior changes correctly trigger regeneration.
+- Library config hashing now incorporates `docs_manifest` content to ensure surface changes trigger regeneration.
+- Added SnakeBridge.Env module for process-scoped environment/config overrides (primarily for async test isolation).
+- Upgraded snakepit to 0.12.0.
+
 ## [0.14.0] - 2026-01-23
 
 ### Added
@@ -58,7 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Lazy Import Handling
 - Introspector now iterates `__all__` to discover lazy-loaded classes
-- Handles `__getattr__` patterns used by libraries like vLLM
+- Handles `__getattr__` patterns used by libraries with lazy public exports
 - Classes not visible to `inspect.getmembers()` are now properly discovered
 
 #### Method Collision Fix
@@ -119,8 +168,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Split layout generation mode**: New `generated_layout: :split` config option (now default) produces Python-shaped directory structure with `__init__.ex` files for package modules.
-  - Mirrors Python module paths: `dspy.predict` → `dspy/predict/__init__.ex`
-  - Class modules get separate files: `Dspy.Predict.RLM` → `dspy/predict/rlm.ex`
+  - Mirrors Python module paths: `examplelib.predict` → `examplelib/predict/__init__.ex`
+  - Class modules get separate files: `Examplelib.Predict.Widget` → `examplelib/predict/widget.ex`
   - Registry tracks all generated files for split layout
 - **`Generator.PathMapper` module**: New path mapping utilities for Python-to-Elixir file path conversion.
 - **`Generator.render_module_file/7`**: Renders individual module files for split layout.
@@ -177,9 +226,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   previous behavior where any non-serializable item caused the entire container
   to become a single ref.
 
-  Example - DSPy history with non-serializable `response` field:
+  Example - history with a non-serializable `response` field:
   ```elixir
-  {:ok, history} = SnakeBridge.call("dspy_module", "get_history", [])
+  {:ok, history} = SnakeBridge.call("examplelib_module", "get_history", [])
 
   # history is a list of maps - NOT a single opaque ref!
   for entry <- history do
@@ -296,7 +345,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Subsequent `get_attr`, `call_method`, `set_attr`, and stream operations automatically reuse the same pool
   - Eliminates the need to pass `pool_name` on every ref operation
 - **`generate: :all` mode**: New library configuration option to generate wrappers for ALL public symbols in a Python module, not just those detected in your code
-  - Use `{:dspy, "2.6.5", generate: :all}` to generate complete bindings
+  - Use `{:mylib, "1.0.0", generate: :all}` to generate complete bindings
   - Supports `submodules` option for recursive module introspection
   - Full module introspection via `Introspector.introspect_module/2`
 - **Context-aware type mapping**: `TypeMapper` now builds context from discovered classes and resolves type references to generated Elixir modules
@@ -793,13 +842,14 @@ Numpy.compute(data, __runtime__: [timeout: 600_000])
 - Type system mapper
 - Basic code generation
 
+[Unreleased]: https://github.com/nshkrdotcom/snakebridge/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.9.0...v0.10.0
-[0.9.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.3...v0.9.0
-[0.8.3]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.2...v0.8.3
+[0.9.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.7.10...v0.8.0

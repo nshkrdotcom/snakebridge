@@ -4,7 +4,7 @@ defmodule SnakeBridge.Generator.NewMethodCollisionTest do
   a method named 'new', which would otherwise conflict with the generated
   constructor (also named 'new').
 
-  This collision occurs in real libraries like vLLM where some classes
+  This collision occurs in real libraries where some classes
   have factory methods named 'new'.
   """
   use ExUnit.Case, async: true
@@ -140,12 +140,12 @@ defmodule SnakeBridge.Generator.NewMethodCollisionTest do
     end
 
     test "variadic __init__ with method named 'new' renames method to avoid arity collision" do
-      # This reproduces the vllm CoreEngineState case:
+      # This reproduces a real-world variadic constructor collision case:
       # __init__(self, *args, **kwds) generates variadic new() clauses at every arity
       # A method named 'new' would conflict at overlapping arities
       class_info = %{
         "name" => "CoreEngineState",
-        "python_module" => "vllm.v1.engine.utils",
+        "python_module" => "examplelib.v1.engine.utils",
         "methods" => [
           %{
             "name" => "__init__",
@@ -170,9 +170,9 @@ defmodule SnakeBridge.Generator.NewMethodCollisionTest do
       }
 
       library = %SnakeBridge.Config.Library{
-        name: :vllm,
-        python_name: "vllm",
-        module_name: Vllm
+        name: :examplelib,
+        python_name: "examplelib",
+        module_name: Examplelib
       }
 
       source = Generator.render_class(class_info, library)

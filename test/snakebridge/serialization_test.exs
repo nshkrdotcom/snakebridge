@@ -11,7 +11,7 @@ defmodule SnakeBridge.SerializationTest do
     test "returns true for unserializable marker" do
       marker = %{
         "__ffi_unserializable__" => true,
-        "__type__" => "dspy.clients.lm.ModelResponse",
+        "__type__" => "examplelib.clients.lm.ModelResponse",
         "__repr__" => "ModelResponse(id='chatcmpl-123')"
       }
 

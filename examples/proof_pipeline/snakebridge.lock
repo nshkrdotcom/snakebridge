@@ -5,7 +5,7 @@
   },
   "environment": {
     "elixir_version": "1.18.4",
-    "generator_hash": "79886ffdbf8011c74b010a281617d713dd8799618d19ca3020def9d89664073e",
+    "generator_hash": "c7a1d5edcd09f124c4faa65dea104391b75196aa2ff80f2c9a15084f7a726481",
     "hardware": {
       "accelerator": "cpu",
       "cpu_features": [
@@ -30,23 +30,23 @@
     "python_platform": "x86_64-pc-linux-gnu",
     "python_runtime_hash": "4933b6c4a8521fb3aa93856701e30b3ac2626d3c47ceb22965a3b0b422e85b44",
     "python_version": "3.12.3",
-    "snakebridge_version": "0.14.0"
+    "snakebridge_version": "0.15.0"
   },
   "libraries": {
     "math_verify": {
-      "config_hash": "746748e98aa51f5a224fe08c02db8387dc4e3395d3d83bbab8db65ec787bd399",
+      "config_hash": "eaa4750c893f9977bafd0faf017cfe9d2a658f44a1da36be2a84c3ed2c3cabd9",
       "hash": null,
       "requested": "~> 0.1",
       "resolved": "~> 0.1"
     },
     "pylatexenc": {
-      "config_hash": "cd4210ae40085734f4fa5138bb1aa4fa0a2076989a721edc076bd961e4977efa",
+      "config_hash": "4365f6a954066b344378a9822813f2fe139cc3e485526f91db65d6b5afd59036",
       "hash": null,
       "requested": "~> 2.10",
       "resolved": "~> 2.10"
     },
     "sympy": {
-      "config_hash": "286f91f9b819af555d5bb57ee9da40c45dffbe00173fc38bd59ae6e8309b01f2",
+      "config_hash": "a9298f0a9765df56e37ff8d2982048298fadbcae638604451bdd92daa921623e",
       "hash": null,
       "requested": "~> 1.12",
       "resolved": "~> 1.12"
@@ -66,5 +66,5 @@
       "hash": null
     }
   },
-  "version": "0.14.0"
+  "version": "0.15.0"
 }

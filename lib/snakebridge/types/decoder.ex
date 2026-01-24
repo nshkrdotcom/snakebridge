@@ -218,7 +218,7 @@ defmodule SnakeBridge.Types.Decoder do
   defp atom_allowed?(_), do: false
 
   defp atom_allowlist do
-    case Application.get_env(:snakebridge, :atom_allowlist, ["ok", "error"]) do
+    case SnakeBridge.Env.app_env(:snakebridge, :atom_allowlist, ["ok", "error"]) do
       :all -> :all
       list -> Enum.map(List.wrap(list), &to_string/1)
     end

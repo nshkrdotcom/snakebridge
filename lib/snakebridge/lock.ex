@@ -210,6 +210,12 @@ defmodule SnakeBridge.Lock do
       {:module_exclude, normalize_list(library.module_exclude)},
       {:module_depth, library.module_depth},
       {:docs_url, library.docs_url},
+      {:docs_manifest, library.docs_manifest},
+      {:docs_profile, library.docs_profile},
+      {:docs_manifest_hash, file_hash(library.docs_manifest)},
+      {:class_method_scope, library.class_method_scope},
+      {:max_class_methods, library.max_class_methods},
+      {:on_not_found, library.on_not_found},
       {:signature_sources, normalize_list(library.signature_sources)},
       {:strict_signatures, library.strict_signatures},
       {:min_signature_tier, library.min_signature_tier},
@@ -244,6 +250,20 @@ defmodule SnakeBridge.Lock do
   defp normalize_stubgen(list) when is_list(list), do: Enum.sort_by(list, &elem(&1, 0))
   defp normalize_stubgen(_), do: []
 
+  defp file_hash(nil), do: nil
+  defp file_hash(path) when not is_binary(path), do: nil
+
+  defp file_hash(path) do
+    case File.read(path) do
+      {:ok, content} ->
+        :crypto.hash(:sha256, content)
+        |> Base.encode16(case: :lower)
+
+      {:error, _} ->
+        nil
+    end
+  end
+
   defp lock_path do
     "snakebridge.lock"
   end
@@ -253,8 +273,18 @@ defmodule SnakeBridge.Lock do
   end
 
   @generator_files [
+    "lib/snakebridge/config.ex",
+    "lib/snakebridge/compiler/pipeline.ex",
+    "lib/snakebridge/introspector.ex",
     "lib/snakebridge/generator.ex",
     "lib/snakebridge/docs.ex",
+    "lib/snakebridge/docs/manifest.ex",
+    "lib/snakebridge/docs/manifest_builder.ex",
+    "lib/snakebridge/docs/markdown_converter.ex",
+    "lib/snakebridge/docs/markdown_sanitizer.ex",
+    "lib/snakebridge/docs/sphinx_inventory.ex",
+    "lib/mix/tasks/compile/snakebridge.ex",
+    "priv/python/introspect.py",
     "priv/python/snakebridge_types.py",
     "priv/python/snakebridge_adapter.py"
   ]

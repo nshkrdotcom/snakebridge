@@ -217,12 +217,17 @@ defmodule Mix.Tasks.Compile.Snakebridge do
     prefix = library.python_name
     symbols = Map.get(manifest, "symbols", %{})
     classes = Map.get(manifest, "classes", %{})
+    modules = Map.get(manifest, "modules", %{})
 
     Enum.any?(symbols, fn {_key, info} ->
       String.starts_with?(info["python_module"] || "", prefix)
     end) or
       Enum.any?(classes, fn {_key, info} ->
         String.starts_with?(info["python_module"] || "", prefix)
+      end) or
+      Enum.any?(modules, fn {python_module, info} ->
+        python_module = to_string(python_module || info["python_module"] || "")
+        String.starts_with?(python_module, prefix)
       end)
   end
 

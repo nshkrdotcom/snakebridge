@@ -10,6 +10,8 @@
   },
   "symbols": {
     "Streaming.generate/1": {
+      "doc_missing_reason": null,
+      "doc_source": "runtime",
       "docstring": "Generate either a full response or a stream of chunks.",
       "elixir_name": "generate",
       "function": "generate",
@@ -20,6 +22,7 @@
       "module": "Streaming",
       "name": "generate",
       "optional_keyword_only": [],
+      "overload_count": null,
       "parameters": [
         {
           "kind": "POSITIONAL_OR_KEYWORD",
@@ -61,8 +64,18 @@
       "return_type": {
         "type": "any"
       },
-      "signature_available": true
+      "signature_available": true,
+      "signature_detail": "inspect.signature",
+      "signature_missing_reason": [
+        "runtime: no type info",
+        "text_signature: unavailable",
+        "runtime_hints: unavailable",
+        "stub: not found",
+        "stubgen: skipped (signature already found)"
+      ],
+      "signature_source": "runtime",
+      "streaming": true
     }
   },
-  "version": "0.14.0"
+  "version": "0.15.0"
 }

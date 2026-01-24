@@ -8,7 +8,7 @@ from typing import Optional, List
 class LazyParams:
     """Parameters class that is lazily loaded.
 
-    Similar to vllm's SamplingParams which uses lazy loading.
+    Similar to parameter structs in libraries that use lazy loading.
     """
 
     temperature: float = 1.0

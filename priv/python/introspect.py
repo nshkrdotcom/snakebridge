@@ -64,6 +64,9 @@ DEFAULT_SIGNATURE_SOURCES = [
     "variadic",
 ]
 
+DEFAULT_CLASS_METHOD_SCOPE = "all"
+DEFAULT_MAX_CLASS_METHODS = 1000
+
 _STUB_CACHE: Dict[str, Dict[str, Any]] = {}
 _STUBGEN_CACHE: Dict[str, Dict[str, Any]] = {}
 
@@ -82,6 +85,8 @@ def _parse_config(config_json: Optional[str]) -> Dict[str, Any]:
             "use_typeshed": False,
             "typeshed_path": None,
             "stubgen": {"enabled": True},
+            "class_method_scope": DEFAULT_CLASS_METHOD_SCOPE,
+            "max_class_methods": DEFAULT_MAX_CLASS_METHODS,
         }
 
     try:
@@ -96,13 +101,110 @@ def _parse_config(config_json: Optional[str]) -> Dict[str, Any]:
     typeshed_path = raw.get("typeshed_path")
     stubgen = raw.get("stubgen") or {}
 
+    class_method_scope = raw.get("class_method_scope")
+    if class_method_scope is None:
+        class_method_scope = DEFAULT_CLASS_METHOD_SCOPE
+    class_method_scope = str(class_method_scope).lower()
+    if class_method_scope not in ("all", "defined"):
+        class_method_scope = DEFAULT_CLASS_METHOD_SCOPE
+
+    raw_max_class_methods = raw.get("max_class_methods")
+    if raw_max_class_methods is None:
+        max_class_methods = DEFAULT_MAX_CLASS_METHODS
+    else:
+        try:
+            max_class_methods = int(raw_max_class_methods)
+        except Exception:
+            max_class_methods = DEFAULT_MAX_CLASS_METHODS
+
+    # Allow disabling guardrails with <= 0
+    if isinstance(max_class_methods, int) and max_class_methods <= 0:
+        max_class_methods = None
+
     return {
         "signature_sources": signature_sources,
         "stub_search_paths": stub_search_paths,
         "use_typeshed": use_typeshed,
         "typeshed_path": typeshed_path,
         "stubgen": stubgen,
+        "class_method_scope": class_method_scope,
+        "max_class_methods": max_class_methods,
     }
+
+
+def _iter_class_method_pairs(
+    cls: type,
+    scope: str,
+    max_methods: Optional[int],
+) -> Tuple[List[Tuple[str, Any]], List[str], bool, str]:
+    """
+    Returns (method_pairs, protocol_dunders, methods_truncated, effective_scope).
+
+    - method_pairs: callables that will become generated wrappers (excluding most dunders)
+    - protocol_dunders: protocol dunder names discovered (kept for reference)
+    - methods_truncated: true when we hit the max_methods guardrail in scope=all
+    - effective_scope: "all" or "defined"
+    """
+    protocol_dunders: List[str] = []
+
+    def include_name(name: str) -> bool:
+        if name.startswith("__") and name != "__init__":
+            if name in PROTOCOL_DUNDERS:
+                protocol_dunders.append(name)
+            return False
+        return True
+
+    def iter_names_defined() -> List[str]:
+        names = list(cls.__dict__.keys())
+        if "__init__" not in cls.__dict__ and hasattr(cls, "__init__"):
+            names.append("__init__")
+        return sorted(set(names))
+
+    def iter_names_all() -> List[str]:
+        # dir() is deterministic and includes inherited members
+        return [name for name in dir(cls)]
+
+    def build_pairs(names: List[str], limit: Optional[int]) -> Tuple[List[Tuple[str, Any]], bool]:
+        pairs: List[Tuple[str, Any]] = []
+        exceeded = False
+
+        for name in names:
+            if not include_name(name):
+                continue
+
+            try:
+                value = getattr(cls, name)
+            except Exception:
+                continue
+
+            if not callable(value):
+                continue
+
+            pairs.append((name, value))
+
+            if limit is not None and len(pairs) > limit:
+                exceeded = True
+                break
+
+        return pairs, exceeded
+
+    scope = (scope or DEFAULT_CLASS_METHOD_SCOPE).lower()
+    if scope not in ("all", "defined"):
+        scope = DEFAULT_CLASS_METHOD_SCOPE
+
+    if scope == "defined":
+        pairs, _ = build_pairs(iter_names_defined(), None)
+        return pairs, protocol_dunders, False, "defined"
+
+    # scope == "all"
+    pairs, exceeded = build_pairs(iter_names_all(), max_methods)
+    if exceeded:
+        # Guardrail: fall back to defined-only methods (plus __init__)
+        protocol_dunders = []
+        pairs, _ = build_pairs(iter_names_defined(), None)
+        return pairs, protocol_dunders, True, "defined"
+
+    return pairs, protocol_dunders, False, "all"
 
 
 def _docstring_text(obj: Any) -> str:
@@ -1294,13 +1396,20 @@ def _build_class_info(
 
     methods: List[Dict[str, Any]] = []
     dunder_methods: List[str] = []
+    methods_truncated = False
+    effective_scope = None
 
     if cls is not None:
-        for method_name, method in inspect.getmembers(cls, predicate=callable):
-            if method_name.startswith("__") and method_name not in ["__init__"]:
-                if method_name in PROTOCOL_DUNDERS:
-                    dunder_methods.append(method_name)
-                continue
+        scope = config.get("class_method_scope") or DEFAULT_CLASS_METHOD_SCOPE
+        max_methods = config.get("max_class_methods")
+
+        pairs, dunders, methods_truncated, effective_scope = _iter_class_method_pairs(
+            cls, str(scope), max_methods
+        )
+
+        dunder_methods.extend(dunders)
+
+        for method_name, method in pairs:
 
             method_stub = _signature_from_stub_method(name, method_name, stub_info)
             signature = _resolve_signature(method_name, method, module_name, config, stub_info)
@@ -1369,6 +1478,8 @@ def _build_class_info(
         "methods": methods,
         "attributes": attributes,
         "dunder_methods": dunder_methods,
+        "methods_truncated": bool(methods_truncated),
+        "method_scope": effective_scope or DEFAULT_CLASS_METHOD_SCOPE,
     }
 
 
@@ -1930,7 +2041,7 @@ def introspect_module_namespace(module_name: str, namespace: str = "", config: O
             )
             continue
 
-    # Handle lazy-loaded symbols from __all__ (e.g., vllm uses __getattr__ for lazy imports)
+    # Handle lazy-loaded symbols from __all__ (for libraries that use __getattr__ for lazy imports)
     # These symbols are declared in __all__ but not visible to inspect.getmembers() until accessed
     if module_all is not None:
         for name in module_all:
@@ -2019,7 +2130,11 @@ def _discover_submodules(module_name: str) -> Tuple[List[str], List[Dict[str, An
     return discovered, issues
 
 
-def _module_has_public_api(module_name: str, base_module: str) -> bool:
+def _module_has_public_api(
+    module_name: str,
+    base_module: str,
+    public_api_mode: str = "heuristic",
+) -> bool:
     """
     Check if a module has a public API worth generating.
 
@@ -2028,12 +2143,14 @@ def _module_has_public_api(module_name: str, base_module: str) -> bool:
     2. It declares __all__, OR
     3. It defines public functions/classes at the top level
 
+    In "explicit_all" mode, packages/modules are included only when they define `__all__`.
+
     This uses static inspection (no import execution) so optional modules
     can still be included when they exist on disk but fail to import.
 
     Args:
         module_name: Full module name to check
-        base_module: Base package name (e.g., "vllm")
+        base_module: Base package name (e.g., "examplelib")
 
     Returns:
         True if module has public API worth generating
@@ -2046,8 +2163,14 @@ def _module_has_public_api(module_name: str, base_module: str) -> bool:
     if spec is None:
         return False
 
+    explicit_all_only = public_api_mode in ("explicit_all", "explicit")
+
     if spec.submodule_search_locations:
         init_path = _package_init_path(spec)
+        if explicit_all_only:
+            return bool(init_path and _source_defines_all(init_path))
+
+        # Heuristic mode: packages are always included (even empty __init__.py).
         if init_path and _source_has_public_api(init_path):
             return True
         return True
@@ -2055,8 +2178,10 @@ def _module_has_public_api(module_name: str, base_module: str) -> bool:
     origin = getattr(spec, "origin", None)
     if origin and os.path.exists(origin):
         if origin.endswith((".py", ".pyi")):
+            if explicit_all_only:
+                return _source_defines_all(origin)
             return _source_has_public_api(origin)
-        return True
+        return not explicit_all_only
 
     return False
 
@@ -2066,6 +2191,32 @@ def _package_init_path(spec: importlib.machinery.ModuleSpec) -> Optional[str]:
     if origin and origin.endswith("__init__.py"):
         return origin
     return None
+
+
+def _source_defines_all(path: str) -> bool:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            source = handle.read()
+    except Exception:
+        return False
+
+    try:
+        tree = ast.parse(source)
+    except Exception:
+        return False
+
+    for node in tree.body:
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                if isinstance(target, ast.Name) and target.id == "__all__":
+                    return True
+        elif isinstance(node, ast.AugAssign):
+            target = node.target
+            if isinstance(target, ast.Name) and target.id == "__all__":
+                return True
+
+    return False
 
 
 def _source_has_public_api(path: str) -> bool:
@@ -2133,6 +2284,8 @@ def introspect_module(
     config: Optional[Dict[str, Any]] = None,
     discover_submodules: bool = False,
     public_api: bool = False,
+    exports_mode: bool = False,
+    public_api_mode: str = "heuristic",
     module_include: Optional[List[str]] = None,
     module_exclude: Optional[List[str]] = None,
     module_depth: Optional[int] = None,
@@ -2147,6 +2300,8 @@ def introspect_module(
         config: Introspection config dict
         discover_submodules: If True, walk packages to discover submodules automatically
         public_api: If True, only include modules with explicit public API (__all__ or defined-in-module)
+        exports_mode: If True, derive submodules from explicit exports (root __all__) instead of walking
+        public_api_mode: "heuristic" (default) or "explicit_all" (only modules/packages defining __all__)
         module_include: Submodules to force-include (relative to root)
         module_exclude: Submodules to exclude (relative to root)
         module_depth: Limit discovery depth (1 = direct children only)
@@ -2181,7 +2336,54 @@ def introspect_module(
     submodule_list: List[str] = [name for name in (submodules or []) if name]
     raw_candidates: List[str] = list(submodule_list)
 
-    if discover_submodules:
+    if exports_mode:
+        module_all = getattr(module, "__all__", None)
+        exported_modules: List[str] = []
+
+        if module_all is None:
+            issues.append(
+                {
+                    "type": "exports_mode_no_all",
+                    "module": module_name,
+                    "message": f"exports_mode enabled but {module_name} has no __all__; no submodules were auto-selected",
+                }
+            )
+        else:
+            for name in module_all:
+                if not name or name.startswith("_"):
+                    continue
+                try:
+                    obj = getattr(module, name, None)
+                except Exception:
+                    continue
+
+                if obj is None:
+                    continue
+
+                if inspect.ismodule(obj):
+                    obj_module_name = getattr(obj, "__name__", None)
+                    if obj_module_name and obj_module_name.startswith(module_name + "."):
+                        relative = obj_module_name[len(module_name) + 1 :]
+                        if relative:
+                            exported_modules.append(relative)
+
+            if exported_modules:
+                unique = sorted(set(exported_modules))
+                for name in unique:
+                    if name not in submodule_list:
+                        submodule_list.append(name)
+
+                issues.append(
+                    {
+                        "type": "exports_mode_modules",
+                        "module": module_name,
+                        "count": len(unique),
+                        "message": f"exports_mode selected {len(unique)} exported submodule(s) from {module_name}.__all__",
+                    }
+                )
+
+        raw_candidates = list(submodule_list)
+    elif discover_submodules:
         discovered, discovery_issues = _discover_submodules(module_name)
         issues.extend(discovery_issues)
         for name in discovered:
@@ -2199,7 +2401,7 @@ def introspect_module(
             if any(part.startswith('_') for part in submodule.split('.')):
                 continue
             # Check if module has public API
-            if _module_has_public_api(full_name, module_name):
+            if _module_has_public_api(full_name, module_name, public_api_mode):
                 filtered_list.append(submodule)
         submodule_list = filtered_list
         # Record how many were filtered
@@ -2429,6 +2631,17 @@ Examples:
         help='Only include modules with explicit public API (__all__ or defined-in-module classes)'
     )
     parser.add_argument(
+        '--exports-mode',
+        action='store_true',
+        help='Derive submodules from explicit exports (root __all__) instead of walking packages'
+    )
+    parser.add_argument(
+        '--public-api-mode',
+        choices=["heuristic", "explicit_all"],
+        default="heuristic",
+        help='When --public-api is set, controls how to detect public API modules'
+    )
+    parser.add_argument(
         '--module-include',
         help='Comma-separated list of submodules to force-include',
         default=None
@@ -2477,6 +2690,8 @@ Examples:
                 config=config,
                 discover_submodules=args.discover_submodules,
                 public_api=args.public_api,
+                exports_mode=args.exports_mode,
+                public_api_mode=args.public_api_mode,
                 module_include=module_include,
                 module_exclude=module_exclude,
                 module_depth=module_depth,

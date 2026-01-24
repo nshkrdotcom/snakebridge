@@ -82,8 +82,8 @@ class TestEncodeResultGraceful:
         assert ref_payload.get("__type__") == "ref"
         assert ref_payload.get("type_name") == "CustomObject"
 
-    def test_nested_structure_dspy_history_like(self):
-        """DSPy history-like structure should preserve list/dict with only response as ref."""
+    def test_nested_structure_history_like(self):
+        """History-like structure should preserve list/dict with only response as ref."""
         response_obj = CustomObject()
         history = [
             {

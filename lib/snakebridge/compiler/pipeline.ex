@@ -3,6 +3,7 @@ defmodule SnakeBridge.Compiler.Pipeline do
 
   alias SnakeBridge.{
     Config,
+    Docs,
     Generator,
     Generator.PathMapper,
     HelperGenerator,
@@ -27,16 +28,37 @@ defmodule SnakeBridge.Compiler.Pipeline do
   def run_with_config(%{libraries: []}), do: {:ok, []}
 
   def run_with_config(config) do
-    if strict_mode?(config) do
-      run_strict(config)
-    else
-      PythonEnv.ensure!(config)
-      with_introspector_config(config, fn -> run_normal(config) end)
+    case strict_mode?(config) do
+      true ->
+        run_strict(config)
+
+      _ ->
+        PythonEnv.ensure!(config)
+        with_introspector_config(config, fn -> run_normal(config) end)
     end
   end
 
   defp update_manifest(manifest, targets) do
+    requested_kinds =
+      targets
+      |> Enum.map(fn {library, python_module, symbols} ->
+        {{library, python_module}, symbol_kind_map(symbols)}
+      end)
+      |> Map.new()
+
     {updates, errors} = IntrospectionRunner.run(targets)
+
+    updates =
+      Enum.sort_by(updates, fn {library, python_module, _infos} ->
+        root_priority =
+          case python_module == library.python_name do
+            true -> 0
+            _ -> 1
+          end
+
+        module_depth = length(String.split(python_module, "."))
+        {library.python_name, root_priority, module_depth, python_module}
+      end)
 
     {existing_class_map, existing_class_modules} = existing_classes_from_manifest(manifest)
     reserved_modules = reserved_modules_from_manifest(manifest)
@@ -46,6 +68,14 @@ defmodule SnakeBridge.Compiler.Pipeline do
         updates,
         {manifest, reserved_modules, existing_class_modules},
         fn {library, python_module, infos}, {acc, reserved, used_class_modules} ->
+          infos =
+            normalize_symbol_infos(
+              library,
+              python_module,
+              infos,
+              Map.get(requested_kinds, {library, python_module}, %{})
+            )
+
           class_keys = class_keys_from_infos(infos, python_module)
 
           {symbol_entries, class_entries, reserved, used_class_modules} =
@@ -71,6 +101,133 @@ defmodule SnakeBridge.Compiler.Pipeline do
     {updated, errors}
   end
 
+  defp symbol_kind_map(symbols) when is_list(symbols) do
+    symbols
+    |> Enum.reduce(%{}, fn
+      {name, kind}, acc when is_binary(name) and kind in [:class, :function, :data, :unknown] ->
+        Map.put(acc, name, kind)
+
+      {name, kind}, acc when is_atom(name) and kind in [:class, :function, :data, :unknown] ->
+        Map.put(acc, Atom.to_string(name), kind)
+
+      name, acc when is_binary(name) ->
+        acc
+
+      name, acc when is_atom(name) ->
+        acc
+
+      _, acc ->
+        acc
+    end)
+  end
+
+  defp normalize_symbol_infos(library, python_module, infos, requested_kinds) do
+    {ok_infos, not_found} =
+      Enum.split_with(infos, fn info ->
+        info["error"] != "not_found"
+      end)
+
+    handle_not_found_infos(ok_infos, not_found, library, python_module, requested_kinds)
+  end
+
+  defp handle_not_found_infos(ok_infos, [], _library, _python_module, _requested_kinds),
+    do: ok_infos
+
+  defp handle_not_found_infos(ok_infos, not_found, library, python_module, requested_kinds) do
+    case on_not_found_mode(library) do
+      :error ->
+        raise_not_found!(not_found, python_module)
+
+      :stub ->
+        ok_infos ++ build_not_found_stubs(not_found, python_module, requested_kinds)
+    end
+  end
+
+  defp raise_not_found!(not_found, python_module) do
+    formatted =
+      not_found
+      |> Enum.map(& &1["name"])
+      |> Enum.sort()
+      |> Enum.map_join("\n", fn name -> "  - #{python_module}.#{name}" end)
+
+    raise SnakeBridge.CompileError, """
+    SnakeBridge could not find #{length(not_found)} symbol(s) in Python module #{python_module}.
+
+    Missing:
+    #{formatted}
+
+    Fix by:
+      - upgrading/downgrading the Python dependency version, or
+      - removing/renaming the call in Elixir, or
+      - setting `on_not_found: :stub` for this library to generate stubs.
+    """
+  end
+
+  defp build_not_found_stubs(not_found, python_module, requested_kinds) do
+    Enum.map(not_found, fn info ->
+      name = info["name"] || ""
+      kind = Map.get(requested_kinds, name) || heuristic_kind(name)
+      not_found_stub_info(name, python_module, kind)
+    end)
+  end
+
+  defp on_not_found_mode(%{on_not_found: mode}) when mode in [:error, :stub], do: mode
+  defp on_not_found_mode(%{generate: :used}), do: :error
+  defp on_not_found_mode(%{generate: :all}), do: :stub
+  defp on_not_found_mode(_), do: :stub
+
+  defp heuristic_kind(name) when is_binary(name) do
+    case name do
+      <<first::utf8, _::binary>> when first in ?A..?Z -> :class
+      _ -> :function
+    end
+  end
+
+  defp heuristic_kind(_), do: :unknown
+
+  defp not_found_stub_info(name, python_module, :class) do
+    %{
+      "name" => name,
+      "type" => "class",
+      "python_module" => python_module,
+      "docstring" => "",
+      "doc_source" => "stub",
+      "doc_missing_reason" => "symbol not found",
+      "methods" => [
+        %{
+          "name" => "__init__",
+          "parameters" => [],
+          "return_type" => %{"type" => "any"},
+          "signature_available" => false,
+          "signature_source" => "stub",
+          "signature_detail" => "variadic",
+          "signature_missing_reason" => "symbol not found",
+          "docstring" => "",
+          "doc_source" => "stub",
+          "doc_missing_reason" => "symbol not found"
+        }
+      ],
+      "attributes" => []
+    }
+  end
+
+  defp not_found_stub_info(name, python_module, _kind) do
+    %{
+      "name" => name,
+      "type" => "function",
+      "python_module" => python_module,
+      "parameters" => [],
+      "return_type" => %{"type" => "any"},
+      "signature_available" => false,
+      "signature_source" => "stub",
+      "signature_detail" => "variadic",
+      "signature_missing_reason" => "symbol not found",
+      "docstring" => "",
+      "doc_source" => "stub",
+      "doc_missing_reason" => "symbol not found"
+    }
+  end
+
   defp build_targets(missing, config, manifest) do
     initial =
       Enum.reduce(missing, %{}, fn entry, acc ->
@@ -88,10 +245,108 @@ defmodule SnakeBridge.Compiler.Pipeline do
 
     with_includes
     |> Enum.map(fn {{library, python_module}, functions} ->
-      filtered = Enum.reject(functions, &(&1 in library.exclude))
-      {library, python_module, Enum.uniq(filtered)}
+      filtered =
+        functions
+        |> Enum.reject(fn symbol -> symbol_request_name(symbol) in library.exclude end)
+        |> uniq_symbol_requests()
+
+      {library, python_module, filtered}
     end)
     |> Enum.reject(fn {_library, _python_module, functions} -> functions == [] end)
+  end
+
+  defp uniq_symbol_requests(symbols) when is_list(symbols) do
+    symbols
+    |> Enum.reduce(%{}, fn symbol, acc ->
+      name = symbol_request_name(symbol)
+      kind = symbol_request_kind(symbol)
+
+      Map.update(acc, name, kind, fn existing ->
+        preferred_kind(existing, kind)
+      end)
+    end)
+    |> Enum.map(fn {name, kind} -> {name, kind} end)
+    |> Enum.sort_by(&elem(&1, 0))
+  end
+
+  defp preferred_kind(:class, _), do: :class
+  defp preferred_kind(_, :class), do: :class
+  defp preferred_kind(:function, _), do: :function
+  defp preferred_kind(_, :function), do: :function
+  defp preferred_kind(existing, _), do: existing
+
+  defp symbol_request_name({name, _kind}) when is_binary(name), do: name
+  defp symbol_request_name({name, _kind}) when is_atom(name), do: Atom.to_string(name)
+  defp symbol_request_name(name) when is_binary(name), do: name
+  defp symbol_request_name(name) when is_atom(name), do: Atom.to_string(name)
+  defp symbol_request_name(other), do: to_string(other)
+
+  defp symbol_request_kind({_, kind}) when kind in [:class, :function, :data, :unknown], do: kind
+  defp symbol_request_kind(_), do: :unknown
+
+  defp apply_truncated_class_method_stubs(manifest, detected, _config) do
+    missing = Manifest.missing(manifest, detected)
+
+    {updated_manifest, unresolved} =
+      Enum.reduce(missing, {manifest, []}, fn {mod, fun, _arity} = call,
+                                              {acc_manifest, acc_unresolved} ->
+        module_key = Manifest.class_key(mod)
+        class_info = get_in(acc_manifest, ["classes", module_key])
+
+        case class_info do
+          %{"methods_truncated" => true} = class_info ->
+            elixir_name = to_string(fun)
+            python_name = python_name_for_elixir_name(elixir_name)
+
+            updated =
+              put_truncated_method_stub(
+                acc_manifest,
+                module_key,
+                class_info,
+                elixir_name,
+                python_name
+              )
+
+            {updated, acc_unresolved}
+
+          _ ->
+            {acc_manifest, [call | acc_unresolved]}
+        end
+      end)
+
+    unresolved = Enum.reverse(unresolved)
+    {updated_manifest, unresolved}
+  end
+
+  defp put_truncated_method_stub(manifest, module_key, class_info, elixir_name, python_name) do
+    methods = List.wrap(class_info["methods"])
+
+    methods =
+      methods
+      |> Enum.reject(fn method ->
+        (method["elixir_name"] || method["name"]) == elixir_name
+      end)
+
+    stub = %{
+      "name" => python_name,
+      "python_name" => python_name,
+      "elixir_name" => elixir_name,
+      "parameters" => [],
+      "return_type" => %{"type" => "any"},
+      "signature_available" => false,
+      "signature_source" => "stub",
+      "signature_detail" => "variadic",
+      "signature_missing_reason" => "class methods truncated",
+      "docstring" => "",
+      "doc_source" => "stub",
+      "doc_missing_reason" => "generated stub"
+    }
+
+    updated_class = Map.put(class_info, "methods", [stub | methods])
+
+    update_in(manifest, ["classes"], fn classes ->
+      Map.put(classes, module_key, updated_class)
+    end)
   end
 
   defp accumulate_missing_target({module, function, _arity}, acc, config) do
@@ -102,39 +357,55 @@ defmodule SnakeBridge.Compiler.Pipeline do
       library ->
         case ModuleResolver.resolve_class_or_submodule(library, module) do
           {:class, class_name, parent_module} ->
-            add_target(acc, library, parent_module, class_name)
+            add_target(acc, library, parent_module, {class_name, :class})
 
           {:submodule, python_module} ->
-            python_function =
-              function
-              |> to_string()
-              |> python_name_for_elixir_name()
+            python_function = python_function_for_call(library, function)
 
-            add_target(acc, library, python_module, python_function)
+            add_target(acc, library, python_module, {python_function, :function})
 
           {:error, _reason} ->
             python_module = python_module_for_elixir(library, module)
 
-            python_function =
-              function
-              |> to_string()
-              |> python_name_for_elixir_name()
+            python_function = python_function_for_call(library, function)
 
-            add_target(acc, library, python_module, python_function)
+            add_target(acc, library, python_module, {python_function, :function})
         end
     end
+  end
+
+  defp python_function_for_call(library, function) when is_atom(function) do
+    function = Atom.to_string(function)
+    streaming = library.streaming |> List.wrap() |> Enum.map(&to_string/1)
+
+    function =
+      if String.ends_with?(function, "_stream") do
+        base_elixir = String.replace_suffix(function, "_stream", "")
+        base_python = python_name_for_elixir_name(base_elixir)
+
+        if base_python in streaming do
+          base_elixir
+        else
+          function
+        end
+      else
+        function
+      end
+
+    python_name_for_elixir_name(function)
   end
 
   defp accumulate_includes([], _library, acc), do: acc
 
   defp accumulate_includes(includes, library, acc) do
     key = {library, library.python_name}
+    includes = Enum.map(includes, &{to_string(&1), :unknown})
     Map.update(acc, key, includes, fn funcs -> includes ++ funcs end)
   end
 
-  defp add_target(acc, library, python_module, function) do
+  defp add_target(acc, library, python_module, symbol) do
     key = {library, python_module}
-    Map.update(acc, key, [function], fn funcs -> [function | funcs] end)
+    Map.update(acc, key, [symbol], fn funcs -> [symbol | funcs] end)
   end
 
   defp library_for_module(config, module) do
@@ -185,12 +456,12 @@ defmodule SnakeBridge.Compiler.Pipeline do
     {elixir_name, _python_name} = sanitize_function_name(python_name)
     attribute? = info["type"] == "attribute"
     params = info["parameters"] || []
+    streaming? = python_name in List.wrap(library.streaming)
 
     {arity, arity_info} =
-      if attribute? do
-        {0, module_attr_arity_info()}
-      else
-        {required_arity(params), compute_arity_info(params, info)}
+      case attribute? do
+        true -> {0, module_attr_arity_info()}
+        _ -> {required_arity(params), compute_arity_info(params, info)}
       end
 
     key = Manifest.symbol_key({module, String.to_atom(elixir_name), arity})
@@ -214,7 +485,8 @@ defmodule SnakeBridge.Compiler.Pipeline do
         "parameters" => params,
         "docstring" => info["docstring"] || "",
         "return_annotation" => info["return_annotation"],
-        "return_type" => info["return_type"]
+        "return_type" => info["return_type"],
+        "streaming" => streaming?
       }
       |> Map.merge(arity_info)
       |> maybe_put_call_type(attribute?)
@@ -222,7 +494,7 @@ defmodule SnakeBridge.Compiler.Pipeline do
   end
 
   defp maybe_put_call_type(entry, true), do: Map.put(entry, "call_type", "module_attr")
-  defp maybe_put_call_type(entry, false), do: entry
+  defp maybe_put_call_type(entry, _attribute?), do: entry
 
   defp module_attr_arity_info do
     %{
@@ -244,22 +516,16 @@ defmodule SnakeBridge.Compiler.Pipeline do
          used_class_modules,
          existing_class_map
        ) do
-    class_name = info["name"] || info["class"] || "Class"
-    class_python_module = info["python_module"] || python_module || library.python_name
+    class_name = class_name_from_info(info)
+    class_python_module = class_python_module_from_info(info, python_module, library)
     class_key = {class_python_module, class_name}
 
     preferred_module = Map.get(existing_class_map, class_key)
 
     class_module =
-      preferred_module ||
-        class_module_for(library, class_python_module, class_name)
+      class_module_for_preference(preferred_module, library, class_python_module, class_name)
 
-    used_class_modules =
-      if preferred_module do
-        MapSet.delete(used_class_modules, preferred_module)
-      else
-        used_class_modules
-      end
+    used_class_modules = drop_preferred_class_module(used_class_modules, preferred_module)
 
     {class_module, used_class_modules} =
       unique_class_module(class_module, reserved_modules, used_class_modules)
@@ -283,11 +549,34 @@ defmodule SnakeBridge.Compiler.Pipeline do
           "doc_source" => info["doc_source"],
           "doc_missing_reason" => info["doc_missing_reason"],
           "methods" => methods,
-          "attributes" => info["attributes"] || []
+          "attributes" => info["attributes"] || [],
+          "methods_truncated" => info["methods_truncated"] == true,
+          "method_scope" => info["method_scope"]
         }
       },
       used_class_modules
     }
+  end
+
+  defp class_name_from_info(info) do
+    info["name"] || info["class"] || "Class"
+  end
+
+  defp class_python_module_from_info(info, python_module, library) do
+    info["python_module"] || python_module || library.python_name
+  end
+
+  defp class_module_for_preference(nil, library, class_python_module, class_name) do
+    class_module_for(library, class_python_module, class_name)
+  end
+
+  defp class_module_for_preference(preferred_module, _library, _class_python_module, _class_name),
+    do: preferred_module
+
+  defp drop_preferred_class_module(used_class_modules, nil), do: used_class_modules
+
+  defp drop_preferred_class_module(used_class_modules, preferred_module) do
+    MapSet.delete(used_class_modules, preferred_module)
   end
 
   defp class_method_entry(method) do
@@ -322,10 +611,9 @@ defmodule SnakeBridge.Compiler.Pipeline do
   defp method_arity_info(params, method, python_name) do
     arity_info = compute_arity_info(params, method)
 
-    if python_name == "__init__" do
-      arity_info
-    else
-      add_ref_arity_info(arity_info)
+    case python_name do
+      "__init__" -> arity_info
+      _ -> add_ref_arity_info(arity_info)
     end
   end
 
@@ -383,35 +671,45 @@ defmodule SnakeBridge.Compiler.Pipeline do
   end
 
   defp unique_class_module(class_module, reserved_modules, used_class_modules) do
-    if MapSet.member?(reserved_modules, class_module) or
-         MapSet.member?(used_class_modules, class_module) do
-      parts = Module.split(class_module)
-      {base_parts, [last]} = Enum.split(parts, -1)
+    # Class module names should take precedence over module wrapper names.
+    # Module wrappers can be disambiguated at generation time by appending `.Module`.
+    case MapSet.member?(used_class_modules, class_module) do
+      true ->
+        parts = Module.split(class_module)
+        {base_parts, [last]} = Enum.split(parts, -1)
 
-      unique =
-        disambiguate_class_module(base_parts, last, reserved_modules, used_class_modules, 2)
+        unique =
+          disambiguate_class_module(base_parts, last, reserved_modules, used_class_modules, 2)
 
-      {unique, MapSet.put(used_class_modules, unique)}
-    else
-      {class_module, MapSet.put(used_class_modules, class_module)}
+        {unique, MapSet.put(used_class_modules, unique)}
+
+      _ ->
+        {class_module, MapSet.put(used_class_modules, class_module)}
     end
   end
 
   defp disambiguate_class_module(base_parts, last, reserved_modules, used_class_modules, counter) do
-    suffix = if counter == 2, do: "Class", else: "Class" <> Integer.to_string(counter)
+    suffix =
+      case counter do
+        2 -> "Class"
+        _ -> "Class" <> Integer.to_string(counter)
+      end
+
     candidate = Module.concat(base_parts ++ [last <> suffix])
 
-    if MapSet.member?(reserved_modules, candidate) or
-         MapSet.member?(used_class_modules, candidate) do
-      disambiguate_class_module(
-        base_parts,
-        last,
-        reserved_modules,
-        used_class_modules,
-        counter + 1
-      )
-    else
-      candidate
+    case MapSet.member?(reserved_modules, candidate) or
+           MapSet.member?(used_class_modules, candidate) do
+      true ->
+        disambiguate_class_module(
+          base_parts,
+          last,
+          reserved_modules,
+          used_class_modules,
+          counter + 1
+        )
+
+      _ ->
+        candidate
     end
   end
 
@@ -434,11 +732,14 @@ defmodule SnakeBridge.Compiler.Pipeline do
       python_module = info["python_module"] || info[:python_module]
       class_name = info["class"] || info["name"] || info[:class] || info[:name]
 
-      if is_binary(python_module) and is_binary(class_name) and is_binary(module) do
-        module_atom = module_from_string(module)
-        {Map.put(map, {python_module, class_name}, module_atom), MapSet.put(set, module_atom)}
-      else
-        {map, set}
+      case {python_module, class_name, module} do
+        {python_module, class_name, module}
+        when is_binary(python_module) and is_binary(class_name) and is_binary(module) ->
+          module_atom = module_from_string(module)
+          {Map.put(map, {python_module, class_name}, module_atom), MapSet.put(set, module_atom)}
+
+        _ ->
+          {map, set}
       end
     end)
   end
@@ -446,10 +747,9 @@ defmodule SnakeBridge.Compiler.Pipeline do
   defp reserved_modules_from_namespaces(library, namespaces) do
     Enum.reduce(namespaces, MapSet.new(), fn {namespace, data}, acc ->
       python_module =
-        if namespace == "" do
-          library.python_name
-        else
-          "#{library.python_name}.#{namespace}"
+        case namespace do
+          "" -> library.python_name
+          _ -> "#{library.python_name}.#{namespace}"
         end
 
       functions = data["functions"] || []
@@ -459,10 +759,9 @@ defmodule SnakeBridge.Compiler.Pipeline do
         (functions ++ attributes)
         |> Enum.reject(fn info -> info["name"] in library.exclude end)
 
-      if visible == [] do
-        acc
-      else
-        MapSet.put(acc, module_for_python(library, python_module))
+      case visible do
+        [] -> acc
+        _ -> MapSet.put(acc, module_for_python(library, python_module))
       end
     end)
   end
@@ -495,25 +794,32 @@ defmodule SnakeBridge.Compiler.Pipeline do
     class_name = info["name"] || info["class"]
     class_python_module = info["python_module"] || python_module
 
-    if is_binary(class_name) and is_binary(class_python_module) do
+    case {class_python_module, class_name} do
       {class_python_module, class_name}
+      when is_binary(class_python_module) and is_binary(class_name) ->
+        {class_python_module, class_name}
+
+      _ ->
+        nil
     end
   end
 
   defp drop_class_entries(manifest, class_keys) do
-    if MapSet.size(class_keys) == 0 do
-      manifest
-    else
-      classes =
+    case MapSet.size(class_keys) do
+      0 ->
         manifest
-        |> Map.get("classes", %{})
-        |> Enum.reject(fn {_module, info} ->
-          key = class_key_from_info(info, info["python_module"] || info[:python_module])
-          key in class_keys
-        end)
-        |> Map.new()
 
-      Map.put(manifest, "classes", classes)
+      _ ->
+        classes =
+          manifest
+          |> Map.get("classes", %{})
+          |> Enum.reject(fn {_module, info} ->
+            key = class_key_from_info(info, info["python_module"] || info[:python_module])
+            key in class_keys
+          end)
+          |> Map.new()
+
+        Map.put(manifest, "classes", classes)
     end
   end
 
@@ -536,9 +842,19 @@ defmodule SnakeBridge.Compiler.Pipeline do
       end)
       |> Map.new()
 
+    modules =
+      manifest
+      |> Map.get("modules", %{})
+      |> Enum.reject(fn {python_module, info} ->
+        python_module = to_string(python_module || info["python_module"] || "")
+        String.starts_with?(python_module, library.python_name)
+      end)
+      |> Map.new()
+
     manifest
     |> Map.put("classes", classes)
     |> Map.put("symbols", symbols)
+    |> Map.put("modules", modules)
   end
 
   defp module_from_string(module) when is_binary(module) do
@@ -628,23 +944,27 @@ defmodule SnakeBridge.Compiler.Pipeline do
     detected = scanner_module().scan_project(config)
     missing = Manifest.missing(manifest, detected)
 
-    if missing != [] do
-      formatted = format_missing(missing)
+    case missing do
+      [] ->
+        :ok
 
-      raise SnakeBridge.CompileError, """
-      Strict mode: #{length(missing)} symbol(s) not in manifest.
+      _ ->
+        formatted = format_missing(missing)
 
-      Missing:
-      #{formatted}
+        raise SnakeBridge.CompileError, """
+        Strict mode: #{length(missing)} symbol(s) not in manifest.
 
-      To fix:
-        1. Run `mix snakebridge.setup` locally
-        2. Run `mix compile` to generate bindings
-        3. Commit the updated manifest and generated files
-        4. Re-run CI
+        Missing:
+        #{formatted}
 
-      Set SNAKEBRIDGE_STRICT=0 to disable strict mode.
-      """
+        To fix:
+          1. Run `mix snakebridge.setup` locally
+          2. Run `mix compile` to generate bindings
+          3. Commit the updated manifest and generated files
+          4. Re-run CI
+
+        Set SNAKEBRIDGE_STRICT=0 to disable strict mode.
+        """
     end
 
     verify_generated_files_exist!(config, manifest)
@@ -675,11 +995,13 @@ defmodule SnakeBridge.Compiler.Pipeline do
       targets = build_targets(missing, used_config, manifest)
 
       {updated_manifest, introspection_errors} =
-        if targets != [] do
-          update_manifest(manifest, targets)
-        else
-          {manifest, []}
+        case targets do
+          [] -> {manifest, []}
+          _ -> update_manifest(manifest, targets)
         end
+
+      {updated_manifest, unresolved_missing} =
+        apply_truncated_class_method_stubs(updated_manifest, detected, used_config)
 
       errors = generate_all_errors ++ format_introspection_errors(introspection_errors)
 
@@ -693,6 +1015,31 @@ defmodule SnakeBridge.Compiler.Pipeline do
       SnakeBridge.Registry.save()
       Lock.write(lock_data)
       SnakeBridge.CoverageReport.write_reports(config, updated_manifest, errors)
+
+      case unresolved_missing do
+        [] ->
+          :ok
+
+        _ ->
+          formatted = format_missing(unresolved_missing)
+
+          raise SnakeBridge.CompileError, """
+          SnakeBridge could not generate bindings for #{length(unresolved_missing)} call(s).
+
+          Missing:
+          #{formatted}
+
+          This usually means:
+            - the Python symbol does not exist in the installed version, or
+            - the call arity does not match the Python signature, or
+            - generation is intentionally restricted (e.g. class method guardrails).
+
+          Fix by:
+            - updating your Python dependency versions, or
+            - adjusting SnakeBridge library options (include/exclude, class_method_scope/max_class_methods), or
+            - using SnakeBridge.Dynamic as an escape hatch for runtime-only calls.
+          """
+      end
 
       symbol_count = count_symbols(updated_manifest)
       file_count = length(config.libraries)
@@ -740,17 +1087,15 @@ defmodule SnakeBridge.Compiler.Pipeline do
   end
 
   defp process_generate_all_library(manifest, library) do
-    submodules =
-      case library.submodules do
-        true -> nil
-        false -> nil
-        list when is_list(list) -> list
-        _ -> nil
-      end
+    case library.module_mode do
+      :docs -> process_generate_docs_library(manifest, library)
+      _ -> process_generate_all_library_introspect(manifest, library)
+    end
+  end
 
-    opts = if submodules, do: [submodules: submodules], else: []
+  defp process_generate_all_library_introspect(manifest, library) do
+    {opts, submodule_msg} = submodule_opts_and_msg(library)
 
-    submodule_msg = if library.submodules == true, do: " with submodules", else: ""
     Mix.shell().info("[SnakeBridge] Introspecting #{library.python_name}#{submodule_msg}...")
 
     case SnakeBridge.Introspector.introspect_module(library, opts) do
@@ -761,6 +1106,150 @@ defmodule SnakeBridge.Compiler.Pipeline do
 
       {:error, reason} ->
         {manifest, [generate_all_error(library, reason)]}
+    end
+  end
+
+  defp submodule_opts_and_msg(library) do
+    submodules = normalize_submodules_list(library.submodules)
+    opts = submodules_opts(submodules)
+    msg = submodules_msg(library.submodules)
+    {opts, msg}
+  end
+
+  defp normalize_submodules_list(list) when is_list(list) and list != [], do: list
+  defp normalize_submodules_list(_), do: nil
+
+  defp submodules_opts(nil), do: []
+  defp submodules_opts(list), do: [submodules: list]
+
+  defp submodules_msg(true), do: " with submodules"
+  defp submodules_msg(_), do: ""
+
+  defp process_generate_docs_library(manifest, library) do
+    case Docs.Manifest.load_profile(library) do
+      {:ok, %{modules: modules, objects: objects}} ->
+        Mix.shell().info(
+          "[SnakeBridge] Docs manifest for #{library.python_name}: #{length(objects)} objects across #{length(modules)} modules"
+        )
+
+        manifest = clear_library_classes(manifest, library)
+        {targets, placeholder_modules} = docs_manifest_targets(library, objects, modules)
+
+        placeholders =
+          placeholder_modules
+          |> Enum.map(fn python_module ->
+            module_entry(
+              python_module,
+              "",
+              nil,
+              "docs_manifest",
+              "module included by docs manifest (no objects selected)"
+            )
+          end)
+
+        manifest =
+          case placeholders do
+            [] -> manifest
+            _ -> Manifest.put_modules(manifest, placeholders)
+          end
+
+        {updated_manifest, introspection_errors} =
+          case targets do
+            [] -> {manifest, []}
+            _ -> update_manifest(manifest, targets)
+          end
+
+        {updated_manifest, format_introspection_errors(introspection_errors)}
+
+      {:error, reason} ->
+        {manifest, [generate_all_error(library, reason)]}
+    end
+  end
+
+  defp docs_manifest_targets(library, objects, modules) do
+    objects_by_module =
+      objects
+      |> Enum.flat_map(&object_symbol_ref(&1, library))
+      |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+      |> Enum.map(fn {python_module, symbols} ->
+        symbols =
+          symbols
+          |> Enum.reduce(%{}, fn {symbol, kind}, acc ->
+            Map.update(acc, symbol, kind, &preferred_kind(&1, kind))
+          end)
+          |> Enum.map(fn {symbol, kind} -> {symbol, kind} end)
+          |> Enum.sort_by(&elem(&1, 0))
+
+        {python_module, symbols}
+      end)
+      |> Map.new()
+
+    targets =
+      objects_by_module
+      |> Enum.sort_by(fn {python_module, symbols} ->
+        root_priority =
+          case python_module == library.python_name do
+            true -> 0
+            _ -> 1
+          end
+
+        module_depth = length(String.split(python_module, "."))
+        {root_priority, module_depth, python_module, length(symbols)}
+      end)
+      |> Enum.map(fn {python_module, symbols} -> {library, python_module, symbols} end)
+
+    placeholder_modules =
+      modules
+      |> Enum.map(&to_string/1)
+      |> Enum.uniq()
+      |> Enum.reject(&(&1 in Map.keys(objects_by_module)))
+
+    {targets, placeholder_modules}
+  end
+
+  defp object_symbol_ref(object, library) do
+    with {name, kind} <- object_name_and_kind(object),
+         {:ok, python_module, symbol} <- split_object_name(name) do
+      python_module =
+        case String.starts_with?(python_module, library.python_name) do
+          true -> python_module
+          _ -> library.python_name <> "." <> python_module
+        end
+
+      [{python_module, {symbol, kind}}]
+    else
+      _ -> []
+    end
+  end
+
+  defp object_name_and_kind(%{name: name, kind: kind}) when is_binary(name),
+    do: {name, kind}
+
+  defp object_name_and_kind(%{name: name}) when is_binary(name),
+    do: {name, :unknown}
+
+  defp object_name_and_kind(name) when is_binary(name),
+    do: {name, :unknown}
+
+  defp object_name_and_kind(_),
+    do: :error
+
+  defp split_object_name(name) when is_binary(name) do
+    parts = String.split(name, ".")
+
+    case parts do
+      [_single] ->
+        :error
+
+      _ ->
+        symbol = List.last(parts)
+        python_module = parts |> Enum.drop(-1) |> Enum.join(".")
+
+        case {python_module, symbol} do
+          {"", _} -> :error
+          {_, ""} -> :error
+          _ -> {:ok, python_module, symbol}
+        end
     end
   end
 
@@ -796,10 +1285,9 @@ defmodule SnakeBridge.Compiler.Pipeline do
         {manifest, base_issues, existing_class_modules},
         fn {namespace, data}, {acc, issues_acc, used_class_modules} ->
           python_module =
-            if namespace == "" do
-              library.python_name
-            else
-              "#{library.python_name}.#{namespace}"
+            case namespace do
+              "" -> library.python_name
+              _ -> "#{library.python_name}.#{namespace}"
             end
 
           functions = data["functions"] || []
@@ -945,11 +1433,13 @@ defmodule SnakeBridge.Compiler.Pipeline do
     existing = Map.get(manifest, "modules", %{})
     missing = Enum.reject(modules, &Map.has_key?(existing, &1))
 
-    if missing == [] do
-      manifest
-    else
-      entries = module_doc_entries(missing, config)
-      Manifest.put_modules(manifest, entries)
+    case missing do
+      [] ->
+        manifest
+
+      _ ->
+        entries = module_doc_entries(missing, config)
+        Manifest.put_modules(manifest, entries)
     end
   end
 
@@ -961,10 +1451,9 @@ defmodule SnakeBridge.Compiler.Pipeline do
       namespaces
       |> Enum.map(fn {namespace, data} ->
         python_module =
-          if namespace == "" do
-            library.python_name
-          else
-            "#{library.python_name}.#{namespace}"
+          case namespace do
+            "" -> library.python_name
+            _ -> "#{library.python_name}.#{namespace}"
           end
 
         module_entry_from_doc_info(python_module, data)
@@ -979,11 +1468,7 @@ defmodule SnakeBridge.Compiler.Pipeline do
 
   defp module_entries_from_module_introspection(library, result) when is_map(result) do
     root_entry = module_entry_from_doc_info(library.python_name, result, result["module_version"])
-
-    case root_entry do
-      nil -> []
-      entry -> [entry]
-    end
+    [root_entry]
   end
 
   defp module_doc_entries(missing, config) do
@@ -1017,29 +1502,27 @@ defmodule SnakeBridge.Compiler.Pipeline do
     module_entry_from_doc_info(python_module, info, info["module_version"])
   end
 
-  defp module_entry_from_doc_info(python_module, info, module_version_override \\ nil) do
-    if is_binary(python_module) do
-      docstring = info["docstring"] || ""
-      doc_source = info["doc_source"]
-      doc_missing_reason = info["doc_missing_reason"]
-      module_version = module_version_override || info["module_version"]
-      error = info["error"]
+  defp module_entry_from_doc_info(python_module, info, module_version_override \\ nil)
+       when is_binary(python_module) do
+    docstring = info["docstring"] || ""
+    doc_source = info["doc_source"]
+    doc_missing_reason = info["doc_missing_reason"]
+    module_version = module_version_override || info["module_version"]
+    error = info["error"]
 
-      {doc_source, doc_missing_reason} =
-        if error && docstring in [nil, ""] do
-          {"error", error}
-        else
-          {doc_source, doc_missing_reason}
-        end
+    {doc_source, doc_missing_reason} =
+      case error && docstring in [nil, ""] do
+        true -> {"error", error}
+        _ -> {doc_source, doc_missing_reason}
+      end
 
-      module_entry(
-        python_module,
-        docstring,
-        module_version,
-        doc_source,
-        doc_missing_reason
-      )
-    end
+    module_entry(
+      python_module,
+      docstring,
+      module_version,
+      doc_source,
+      doc_missing_reason
+    )
   end
 
   defp module_entry(python_module, docstring, module_version, doc_source, doc_missing_reason) do
@@ -1054,10 +1537,9 @@ defmodule SnakeBridge.Compiler.Pipeline do
     }
 
     entry =
-      if module_version do
-        Map.put(entry, "module_version", module_version)
-      else
-        entry
+      case module_version do
+        nil -> entry
+        _ -> Map.put(entry, "module_version", module_version)
       end
 
     {python_module, entry}
@@ -1068,20 +1550,19 @@ defmodule SnakeBridge.Compiler.Pipeline do
   end
 
   defp module_doc_source(docstring, _doc_source, doc_missing_reason) do
-    if docstring in [nil, ""] do
-      {"empty", doc_missing_reason || "docstring missing"}
-    else
-      {"runtime", doc_missing_reason}
+    case docstring in [nil, ""] do
+      true -> {"empty", doc_missing_reason || "docstring missing"}
+      _ -> {"runtime", doc_missing_reason}
     end
   end
 
-  defp module_doc_error(reason) do
-    cond do
-      is_binary(reason) -> reason
-      is_map(reason) -> Map.get(reason, "message") || inspect(reason)
-      true -> inspect(reason)
-    end
+  defp module_doc_error(reason) when is_binary(reason), do: reason
+
+  defp module_doc_error(reason) when is_map(reason) do
+    Map.get(reason, "message") || inspect(reason)
   end
+
+  defp module_doc_error(reason), do: inspect(reason)
 
   defp modules_from_manifest(manifest, config) do
     library_roots = Enum.map(config.libraries, & &1.python_name)
@@ -1198,13 +1679,17 @@ defmodule SnakeBridge.Compiler.Pipeline do
       paths = generated_paths_for_library(config, library, manifest)
       missing = Enum.reject(paths, &File.exists?/1)
 
-      if missing != [] do
-        raise SnakeBridge.CompileError, """
-        Strict mode: Generated files missing for #{library.python_name}:
-        #{format_missing_files(missing)}
+      case missing do
+        [] ->
+          :ok
 
-        Run `mix compile` locally and commit the generated files.
-        """
+        _ ->
+          raise SnakeBridge.CompileError, """
+          Strict mode: Generated files missing for #{library.python_name}:
+          #{format_missing_files(missing)}
+
+          Run `mix compile` locally and commit the generated files.
+          """
       end
     end)
 
@@ -1276,18 +1761,22 @@ defmodule SnakeBridge.Compiler.Pipeline do
   end
 
   defp maybe_raise_missing!(paths, missing_functions, missing_classes, missing_class_members) do
-    if missing_functions != [] or missing_classes != [] or missing_class_members != [] do
-      raise SnakeBridge.CompileError, """
-      Strict mode: Generated files are missing expected bindings.
+    case {missing_functions, missing_classes, missing_class_members} do
+      {[], [], []} ->
+        :ok
 
-      Files checked:
-      #{format_missing_files(paths)}
+      _ ->
+        raise SnakeBridge.CompileError, """
+        Strict mode: Generated files are missing expected bindings.
 
-      #{missing_functions_message(missing_functions)}\
-      #{missing_classes_message(missing_classes)}\
-      #{missing_class_members_message(missing_class_members)}
-      Run `mix compile` locally to regenerate and commit the updated files.
-      """
+        Files checked:
+        #{format_missing_files(paths)}
+
+        #{missing_functions_message(missing_functions)}\
+        #{missing_classes_message(missing_classes)}\
+        #{missing_class_members_message(missing_class_members)}
+        Run `mix compile` locally to regenerate and commit the updated files.
+        """
     end
   end
 
@@ -1355,10 +1844,9 @@ defmodule SnakeBridge.Compiler.Pipeline do
     base = Path.expand(base)
     config_base = Path.expand(config.generated_dir)
 
-    if base == config_base do
-      Enum.map(files, &Path.join(base, &1))
-    else
-      fallback_layout_paths(config, library)
+    case base == config_base do
+      true -> Enum.map(files, &Path.join(base, &1))
+      _ -> fallback_layout_paths(config, library)
     end
   end
 
@@ -1422,11 +1910,18 @@ defmodule SnakeBridge.Compiler.Pipeline do
     variadic_fallback = params == [] and signature_available == false
 
     max_arity =
-      cond do
-        variadic_fallback -> variadic_max_arity() + 1
-        has_var_positional -> :unbounded
-        optional_positional > 0 -> required_positional + 2
-        true -> required_positional + 1
+      case {variadic_fallback, has_var_positional, optional_positional} do
+        {true, _, _} ->
+          variadic_max_arity() + 1
+
+        {_, true, _} ->
+          :unbounded
+
+        {_, _, optional_positional} when optional_positional > 0 ->
+          required_positional + 2
+
+        _ ->
+          required_positional + 1
       end
 
     %{
@@ -1476,10 +1971,9 @@ defmodule SnakeBridge.Compiler.Pipeline do
       |> ensure_valid_identifier()
 
     elixir_name =
-      if elixir_name in @reserved_words do
-        "py_#{elixir_name}"
-      else
-        elixir_name
+      case elixir_name in @reserved_words do
+        true -> "py_#{elixir_name}"
+        _ -> elixir_name
       end
 
     {elixir_name, python_name}
@@ -1488,10 +1982,9 @@ defmodule SnakeBridge.Compiler.Pipeline do
   defp ensure_valid_identifier(""), do: "_"
 
   defp ensure_valid_identifier(name) do
-    if String.match?(name, ~r/^[a-z_][a-z0-9_?!]*$/) do
-      name
-    else
-      "_" <> name
+    case String.match?(name, ~r/^[a-z_][a-z0-9_?!]*$/) do
+      true -> name
+      _ -> "_" <> name
     end
   end
 
@@ -1685,21 +2178,23 @@ defmodule SnakeBridge.Compiler.Pipeline do
   end
 
   defp generate_helper_wrappers(config) do
-    if Helpers.enabled?(config) do
-      case Helpers.discover(config) do
-        {:ok, helpers} ->
-          HelperGenerator.generate_helpers(helpers, config)
+    case Helpers.enabled?(config) do
+      true ->
+        case Helpers.discover(config) do
+          {:ok, helpers} ->
+            HelperGenerator.generate_helpers(helpers, config)
 
-        {:error, %SnakeBridge.HelperRegistryError{} = error} ->
-          Mix.shell().error(Exception.message(error))
-          :ok
+          {:error, %SnakeBridge.HelperRegistryError{} = error} ->
+            Mix.shell().error(Exception.message(error))
+            :ok
 
-        {:error, reason} ->
-          Mix.shell().error("Helper registry failed: #{inspect(reason)}")
-          :ok
-      end
-    else
-      :ok
+          {:error, reason} ->
+            Mix.shell().error("Helper registry failed: #{inspect(reason)}")
+            :ok
+        end
+
+      _ ->
+        :ok
     end
   end
 end

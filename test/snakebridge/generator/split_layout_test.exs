@@ -9,15 +9,15 @@ defmodule SnakeBridge.Generator.SplitLayoutTest do
   describe "generate_library/4 with split layout" do
     test "creates directory structure for functions", %{tmp_dir: tmp_dir} do
       library = %Library{
-        name: :dspy,
-        python_name: "dspy",
-        module_name: Dspy,
+        name: :examplelib,
+        python_name: "examplelib",
+        module_name: Examplelib,
         version: "3.0.0"
       }
 
       functions = [
-        %{"name" => "configure", "python_module" => "dspy", "parameters" => []},
-        %{"name" => "predict", "python_module" => "dspy.predict", "parameters" => []}
+        %{"name" => "configure", "python_module" => "examplelib", "parameters" => []},
+        %{"name" => "predict", "python_module" => "examplelib.predict", "parameters" => []}
       ]
 
       config = %SnakeBridge.Config{
@@ -29,29 +29,29 @@ defmodule SnakeBridge.Generator.SplitLayoutTest do
       :ok = Generator.generate_library(library, functions, [], config)
 
       # Root module file should exist
-      assert File.exists?(Path.join(tmp_dir, "dspy/__init__.ex"))
+      assert File.exists?(Path.join(tmp_dir, "examplelib/__init__.ex"))
       # Submodule file should exist
-      assert File.exists?(Path.join(tmp_dir, "dspy/predict/__init__.ex"))
+      assert File.exists?(Path.join(tmp_dir, "examplelib/predict/__init__.ex"))
     end
 
     test "creates class files as separate .ex files", %{tmp_dir: tmp_dir} do
       library = %Library{
-        name: :dspy,
-        python_name: "dspy",
-        module_name: Dspy,
+        name: :examplelib,
+        python_name: "examplelib",
+        module_name: Examplelib,
         version: "3.0.0"
       }
 
       classes = [
         %{
           "name" => "Module",
-          "python_module" => "dspy",
+          "python_module" => "examplelib",
           "methods" => [],
           "attributes" => []
         },
         %{
           "name" => "Predict",
-          "python_module" => "dspy.predict",
+          "python_module" => "examplelib.predict",
           "methods" => [],
           "attributes" => []
         }
@@ -66,30 +66,30 @@ defmodule SnakeBridge.Generator.SplitLayoutTest do
       :ok = Generator.generate_library(library, [], classes, config)
 
       # Class files should exist
-      assert File.exists?(Path.join(tmp_dir, "dspy/__init__.ex"))
-      assert File.exists?(Path.join(tmp_dir, "dspy/module.ex"))
-      assert File.exists?(Path.join(tmp_dir, "dspy/predict/predict.ex"))
-      assert File.exists?(Path.join(tmp_dir, "dspy/predict/__init__.ex"))
+      assert File.exists?(Path.join(tmp_dir, "examplelib/__init__.ex"))
+      assert File.exists?(Path.join(tmp_dir, "examplelib/module.ex"))
+      assert File.exists?(Path.join(tmp_dir, "examplelib/predict/predict.ex"))
+      assert File.exists?(Path.join(tmp_dir, "examplelib/predict/__init__.ex"))
     end
 
     test "each module definition appears in exactly one file", %{tmp_dir: tmp_dir} do
       library = %Library{
-        name: :dspy,
-        python_name: "dspy",
-        module_name: Dspy,
+        name: :examplelib,
+        python_name: "examplelib",
+        module_name: Examplelib,
         version: "3.0.0"
       }
 
       functions = [
-        %{"name" => "configure", "python_module" => "dspy", "parameters" => []},
-        %{"name" => "predict", "python_module" => "dspy.predict", "parameters" => []}
+        %{"name" => "configure", "python_module" => "examplelib", "parameters" => []},
+        %{"name" => "predict", "python_module" => "examplelib.predict", "parameters" => []}
       ]
 
       classes = [
         %{
           "name" => "Predict",
-          "module" => "Dspy.PredictClass",
-          "python_module" => "dspy.predict",
+          "module" => "Examplelib.PredictClass",
+          "python_module" => "examplelib.predict",
           "methods" => [],
           "attributes" => []
         }
@@ -116,14 +116,14 @@ defmodule SnakeBridge.Generator.SplitLayoutTest do
 
     test "generated files contain correct module names", %{tmp_dir: tmp_dir} do
       library = %Library{
-        name: :dspy,
-        python_name: "dspy",
-        module_name: Dspy,
+        name: :examplelib,
+        python_name: "examplelib",
+        module_name: Examplelib,
         version: "3.0.0"
       }
 
       functions = [
-        %{"name" => "configure", "python_module" => "dspy", "parameters" => []}
+        %{"name" => "configure", "python_module" => "examplelib", "parameters" => []}
       ]
 
       config = %SnakeBridge.Config{
@@ -134,9 +134,9 @@ defmodule SnakeBridge.Generator.SplitLayoutTest do
 
       :ok = Generator.generate_library(library, functions, [], config)
 
-      content = File.read!(Path.join(tmp_dir, "dspy/__init__.ex"))
-      assert content =~ "defmodule Dspy do"
-      assert content =~ "def __snakebridge_python_name__, do: \"dspy\""
+      content = File.read!(Path.join(tmp_dir, "examplelib/__init__.ex"))
+      assert content =~ "defmodule Examplelib do"
+      assert content =~ "def __snakebridge_python_name__, do: \"examplelib\""
     end
 
     test "registry entry contains all generated files", %{tmp_dir: tmp_dir} do

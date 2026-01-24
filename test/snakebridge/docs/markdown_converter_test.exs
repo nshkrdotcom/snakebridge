@@ -138,6 +138,88 @@ defmodule SnakeBridge.Docs.MarkdownConverterTest do
 
       assert result =~ "```\n+---+---+\n| a | b |\n+---+---+\n```"
     end
+
+    test "sanitizes manpage-style backticks" do
+      parsed = %{
+        short_description: "Use `sys.byteorder' as the byte order value.",
+        long_description: nil,
+        params: [],
+        returns: nil,
+        raises: [],
+        examples: []
+      }
+
+      result = MarkdownConverter.convert(parsed)
+
+      assert result =~ "`sys.byteorder`"
+      refute result =~ "`sys.byteorder'"
+    end
+
+    test "does not alter inline code with apostrophes" do
+      parsed = %{
+        short_description:
+          "Consider using `dspy.LM(model='gpt-5', temperature=1.0, max_tokens=32000)` for optimal performance.",
+        long_description: nil,
+        params: [],
+        returns: nil,
+        raises: [],
+        examples: []
+      }
+
+      result = MarkdownConverter.convert(parsed)
+
+      assert result =~
+               "`dspy.LM(model='gpt-5', temperature=1.0, max_tokens=32000)`"
+    end
+
+    test "closes unclosed fences before prose" do
+      parsed = %{
+        short_description: nil,
+        long_description: "capture as:\n\n```python\nx = 1\n\nIn the end, sizes are updated.\n",
+        params: [],
+        returns: nil,
+        raises: [],
+        examples: []
+      }
+
+      result = MarkdownConverter.convert(parsed)
+      [before, _after] = String.split(result, "In the end", parts: 2)
+
+      assert String.trim_trailing(before) |> String.ends_with?("```")
+    end
+
+    test "does not alter balanced fences" do
+      parsed = %{
+        short_description: nil,
+        long_description: "```python\nx = 1\n```\nDone",
+        params: [],
+        returns: nil,
+        raises: [],
+        examples: []
+      }
+
+      result = MarkdownConverter.convert(parsed)
+
+      assert length(Regex.scan(~r/^```/m, result)) == 2
+    end
+
+    test "sanitizes links after closing unclosed fences" do
+      parsed = %{
+        short_description: nil,
+        long_description: "```python\nx = 1\n\nOutside [bad](../x)",
+        params: [],
+        returns: nil,
+        raises: [],
+        examples: []
+      }
+
+      result = MarkdownConverter.convert(parsed)
+      [before, _after] = String.split(result, "Outside", parts: 2)
+
+      assert String.trim_trailing(before) |> String.ends_with?("```")
+      assert result =~ "Outside bad"
+      refute result =~ "(../x)"
+    end
   end
 
   describe "convert_type/1" do

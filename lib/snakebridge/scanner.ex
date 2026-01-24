@@ -48,9 +48,14 @@ defmodule SnakeBridge.Scanner do
   defp source_files(config) do
     scan_paths = config.scan_paths || ["lib"]
     scan_exclude = config.scan_exclude || []
+    scan_extensions = config.scan_extensions || [".ex"]
 
     scan_paths
-    |> Enum.flat_map(&Path.wildcard(Path.join(&1, "**/*.ex")))
+    |> Enum.flat_map(fn scan_path ->
+      Enum.flat_map(scan_extensions, fn ext ->
+        Path.wildcard(Path.join(scan_path, "**/*#{ext}"))
+      end)
+    end)
     |> Enum.reject(fn path ->
       in_generated_dir?(path, config.generated_dir) or excluded_path?(path, scan_exclude)
     end)

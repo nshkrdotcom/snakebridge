@@ -7,6 +7,7 @@ defmodule SnakeBridge.Docs.MarkdownConverter do
   """
 
   alias SnakeBridge.Docs.LinkSanitizer
+  alias SnakeBridge.Docs.MarkdownSanitizer
   alias SnakeBridge.Docs.MathRenderer
 
   @type_map %{
@@ -73,6 +74,7 @@ defmodule SnakeBridge.Docs.MarkdownConverter do
     |> Enum.join("\n\n")
     |> wrap_grid_tables()
     |> MathRenderer.render()
+    |> MarkdownSanitizer.sanitize()
     |> LinkSanitizer.sanitize()
     |> String.trim()
   end

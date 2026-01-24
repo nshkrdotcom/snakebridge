@@ -6,6 +6,7 @@
       "doc_missing_reason": null,
       "doc_source": "runtime",
       "docstring": "Example class for coverage reporting.",
+      "method_scope": "all",
       "methods": [
         {
           "doc_missing_reason": null,
@@ -84,6 +85,7 @@
           "signature_source": "runtime"
         }
       ],
+      "methods_truncated": false,
       "module": "CoverageReportExample.Example",
       "python_module": "coverage_report_example"
     }
@@ -144,7 +146,8 @@
         "stub: not found",
         "stubgen: skipped (signature already found)"
       ],
-      "signature_source": "runtime"
+      "signature_source": "runtime",
+      "streaming": false
     },
     "CoverageReportExample.undocumented/1": {
       "doc_missing_reason": "runtime docstring missing",
@@ -186,8 +189,9 @@
         "stub: not found",
         "stubgen: skipped (signature already found)"
       ],
-      "signature_source": "runtime"
+      "signature_source": "runtime",
+      "streaming": false
     }
   },
-  "version": "0.14.0"
+  "version": "0.15.0"
 }

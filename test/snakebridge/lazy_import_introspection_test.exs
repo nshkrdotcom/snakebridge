@@ -2,7 +2,7 @@ defmodule SnakeBridge.LazyImportIntrospectionTest do
   @moduledoc """
   Tests that introspection correctly handles lazy imports.
 
-  Some Python libraries (like vllm) use __getattr__ for lazy loading.
+  Some Python libraries use __getattr__ for lazy loading.
   Classes declared in __all__ aren't visible to inspect.getmembers()
   until explicitly accessed. The introspector must handle this by
   iterating over __all__ and accessing those names directly.

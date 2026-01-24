@@ -17,8 +17,8 @@ defmodule SnakeBridge.RefInspectTest do
     ref = %SnakeBridge.Ref{
       id: "ref-1",
       session_id: "session-1",
-      python_module: "dspy",
-      library: "dspy"
+      python_module: "examplelib",
+      library: "examplelib"
     }
 
     expect(SnakeBridge.RuntimeClientMock, :execute, 2, fn _tool, _payload, _opts ->

@@ -13,14 +13,14 @@ defmodule SnakeBridge.Generator.PathMapper do
 
   ## Examples
 
-      iex> PathMapper.module_to_path("dspy", "lib/gen")
-      "lib/gen/dspy/__init__.ex"
+      iex> PathMapper.module_to_path("examplelib", "lib/gen")
+      "lib/gen/examplelib/__init__.ex"
 
-      iex> PathMapper.module_to_path("dspy.predict", "lib/gen")
-      "lib/gen/dspy/predict/__init__.ex"
+      iex> PathMapper.module_to_path("examplelib.predict", "lib/gen")
+      "lib/gen/examplelib/predict/__init__.ex"
 
-      iex> PathMapper.class_file_path("dspy.predict", "RLM", "lib/gen")
-      "lib/gen/dspy/predict/rlm.ex"
+      iex> PathMapper.class_file_path("examplelib.predict", "Widget", "lib/gen")
+      "lib/gen/examplelib/predict/widget.ex"
 
   """
 
@@ -32,17 +32,17 @@ defmodule SnakeBridge.Generator.PathMapper do
 
   ## Parameters
 
-    * `python_module` - The Python module path (e.g., "dspy.predict")
+    * `python_module` - The Python module path (e.g., "examplelib.predict")
     * `base_dir` - Base directory for generated files
     * `type` - `:package` (default) or `:leaf`
 
   ## Examples
 
-      iex> module_to_path("dspy", "lib/gen")
-      "lib/gen/dspy/__init__.ex"
+      iex> module_to_path("examplelib", "lib/gen")
+      "lib/gen/examplelib/__init__.ex"
 
-      iex> module_to_path("dspy.predict.rlm", "lib/gen", :leaf)
-      "lib/gen/dspy/predict/rlm.ex"
+      iex> module_to_path("examplelib.predict.widget", "lib/gen", :leaf)
+      "lib/gen/examplelib/predict/widget.ex"
 
   """
   @spec module_to_path(String.t(), String.t(), :package | :leaf) :: String.t()
@@ -66,11 +66,11 @@ defmodule SnakeBridge.Generator.PathMapper do
 
   ## Examples
 
-      iex> module_to_dir("dspy", "lib/gen")
-      "lib/gen/dspy"
+      iex> module_to_dir("examplelib", "lib/gen")
+      "lib/gen/examplelib"
 
-      iex> module_to_dir("dspy.predict", "lib/gen")
-      "lib/gen/dspy/predict"
+      iex> module_to_dir("examplelib.predict", "lib/gen")
+      "lib/gen/examplelib/predict"
 
   """
   @spec module_to_dir(String.t(), String.t()) :: String.t()
@@ -92,14 +92,14 @@ defmodule SnakeBridge.Generator.PathMapper do
 
   ## Examples
 
-      iex> ancestor_modules("dspy")
+      iex> ancestor_modules("examplelib")
       []
 
-      iex> ancestor_modules("dspy.predict")
-      ["dspy"]
+      iex> ancestor_modules("examplelib.predict")
+      ["examplelib"]
 
-      iex> ancestor_modules("dspy.predict.chain.rlm")
-      ["dspy", "dspy.predict", "dspy.predict.chain"]
+      iex> ancestor_modules("examplelib.predict.chain.widget")
+      ["examplelib", "examplelib.predict", "examplelib.predict.chain"]
 
   """
   @spec ancestor_modules(String.t()) :: [String.t()]
@@ -122,11 +122,11 @@ defmodule SnakeBridge.Generator.PathMapper do
 
   ## Examples
 
-      iex> python_module_to_elixir_module("dspy", Dspy)
-      Dspy
+      iex> python_module_to_elixir_module("examplelib", Examplelib)
+      Examplelib
 
-      iex> python_module_to_elixir_module("dspy.predict", Dspy)
-      Dspy.Predict
+      iex> python_module_to_elixir_module("examplelib.predict", Examplelib)
+      Examplelib.Predict
 
   """
   @spec python_module_to_elixir_module(String.t(), module()) :: module()
@@ -159,14 +159,14 @@ defmodule SnakeBridge.Generator.PathMapper do
 
   ## Examples
 
-      iex> class_file_path("dspy.predict", "RLM", "lib/gen")
-      "lib/gen/dspy/predict/rlm.ex"
+      iex> class_file_path("examplelib.predict", "Widget", "lib/gen")
+      "lib/gen/examplelib/predict/widget.ex"
 
   """
   @spec class_file_path(String.t(), String.t(), String.t()) :: String.t()
   def class_file_path(python_module, class_name, base_dir) do
     # Classes are placed in the python_module's directory, named after the class
-    # e.g., class_file_path("dspy.predict", "RLM", "lib/gen") -> "lib/gen/dspy/predict/rlm.ex"
+    # e.g., class_file_path("examplelib.predict", "Widget", "lib/gen") -> "lib/gen/examplelib/predict/widget.ex"
     dir = module_to_dir(python_module, base_dir)
     file_name = Macro.underscore(class_name) <> ".ex"
     Path.join(dir, file_name)

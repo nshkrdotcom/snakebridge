@@ -4,26 +4,26 @@ defmodule SnakeBridge.PipelineClassModuleTest do
   alias SnakeBridge.Compiler.Pipeline
   alias SnakeBridge.Config.Library
 
-  test "avoids class/module collisions when module wrapper exists" do
+  test "prefers class modules over module wrappers" do
     library = %Library{
-      name: :dspy,
-      python_name: "dspy",
-      module_name: Dspy,
-      version: "3.1.2"
+      name: :examplelib,
+      python_name: "examplelib",
+      module_name: Examplelib,
+      version: "1.0.0"
     }
 
-    reserved_modules = MapSet.new([Dspy.Dsp.Utils.Settings])
+    reserved_modules = MapSet.new([Examplelib.Core.Utils.Settings])
 
     class_module =
       Pipeline.test_class_module_for(
         library,
-        "dspy.dsp.utils.settings",
+        "examplelib.core.utils.settings",
         "Settings",
         reserved_modules,
         MapSet.new()
       )
 
-    assert class_module == Dspy.Dsp.Utils.SettingsClass
+    assert class_module == Examplelib.Core.Utils.Settings
   end
 
   test "keeps compact class modules when no module wrapper exists" do
@@ -48,21 +48,21 @@ defmodule SnakeBridge.PipelineClassModuleTest do
 
   test "camelizes lowercase class names" do
     library = %Library{
-      name: :dspy,
-      python_name: "dspy",
-      module_name: Dspy,
-      version: "3.1.2"
+      name: :examplelib,
+      python_name: "examplelib",
+      module_name: Examplelib,
+      version: "1.0.0"
     }
 
     class_module =
       Pipeline.test_class_module_for(
         library,
-        "dspy.dsp.utils.utils",
+        "examplelib.core.utils.utils",
         "dotdict",
         MapSet.new(),
         MapSet.new()
       )
 
-    assert class_module == Dspy.Dsp.Utils.Utils.Dotdict
+    assert class_module == Examplelib.Core.Utils.Utils.Dotdict
   end
 end

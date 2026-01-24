@@ -53,7 +53,9 @@ end
 | `include` | list | `[]` | Symbols to always generate |
 | `exclude` | list | `[]` | Symbols to never generate |
 | `generate` | `:used` or `:all` | `:used` | Generation mode |
-| `module_mode` | atom | `nil` | Module discovery mode (`:light`, `:public`, `:all`) |
+| `module_mode` | atom | `nil` | Module discovery mode (`:root/:light`, `:exports/:api`, `:public/:standard`, `:explicit`, `:docs`, `:all/:nuclear`) |
+| `docs_manifest` | string | `nil` | Docs manifest JSON path (required for `module_mode: :docs`) |
+| `docs_profile` | atom or string | `nil` | Profile key inside `docs_manifest` (`:summary`, `:full`, etc.) |
 | `module_include` | list | `[]` | Force-include submodules |
 | `module_exclude` | list | `[]` | Exclude submodules |
 | `module_depth` | integer | `nil` | Limit submodule discovery depth |
@@ -62,6 +64,9 @@ end
 | `module_name` | atom | derived | Override Elixir module name |
 | `python_name` | string | derived | Override Python module name |
 | `streaming` | list | `[]` | Functions that return generators |
+| `class_method_scope` | `:all` or `:defined` | `:all` | How to enumerate class methods during introspection |
+| `max_class_methods` | non-negative integer | `1000` | Guardrail for inheritance-heavy classes (0 disables) |
+| `on_not_found` | `:error` or `:stub` | depends | Missing-symbol behavior (`:error` for `:used`, `:stub` for `:all`) |
 | `signature_sources` | list | config default | Ordered list of allowed signature sources |
 | `strict_signatures` | boolean | config default | Enforce minimum signature tier for this library |
 | `min_signature_tier` | atom | config default | Minimum tier when strict signatures are enabled |
@@ -73,7 +78,9 @@ end
 ### Generation Modes
 
 **`:used` (default)** - Only generates wrappers for symbols detected in your codebase.
-The compiler scans `lib/` for calls like `Numpy.mean/1` and generates only those.
+The compiler scans your configured `scan_paths` (default `["lib"]`) for calls like
+`Numpy.mean/1` and generates only those. Use `scan_extensions` to include `.exs`
+scripts/examples when needed.
 
 **`:all`** - Generates wrappers for all public symbols in the Python module:
 
@@ -81,19 +88,85 @@ The compiler scans `lib/` for calls like `Numpy.mean/1` and generates only those
 {:mylib, "1.0.0", generate: :all, module_mode: :public}
 ```
 
+#### Missing Symbols (`on_not_found`)
+
+If SnakeBridge requests a symbol that does not exist in the current Python environment:
+
+- `generate: :used` defaults to `on_not_found: :error` (fail fast, since your Elixir code is calling it)
+- `generate: :all` defaults to `on_not_found: :stub` (generate deterministic stubs so the surface can still be generated)
+
+Override per library:
+
+```elixir
+{:mylib, "1.0.0", on_not_found: :stub}
+```
+
 ### Module Discovery Modes
 
 Module discovery determines which submodules are introspected when `generate: :all` is set.
-SnakeBridge provides three standard modes:
+SnakeBridge provides multiple modes:
 
 - `:light` / `:root` - only the root module
+- `:exports` / `:api` - root module plus submodules explicitly exported by root `__all__` (no package walk)
 - `:public` / `:standard` - discover submodules and keep public API modules
+- `:explicit` - discover submodules but keep only modules/packages that define `__all__`
+- `:docs` - generate a docs-defined public surface from a committed manifest file
 - `:all` / `:nuclear` - discover everything (including private)
+
+#### Docs Manifest Mode
+
+Some libraries define their perceived "public API" via published docs rather than `__all__`.
+For these, `module_mode: :docs` uses a docs-derived allowlist so you can generate a large,
+documented surface without walking the full importable module tree.
+
+1. Generate a manifest from Sphinx docs:
+
+```bash
+mix snakebridge.docs.manifest --library <pkg> \
+  --inventory <objects.inv> \
+  --nav <api index url or path> \
+  --nav-depth 1 \
+  --summary <api index url or path> \
+  --out priv/snakebridge/<pkg>.docs.json
+```
+
+2. Configure `python_deps` to use it:
+
+```elixir
+{:mylib, "1.0.0",
+  generate: :all,
+  module_mode: :docs,
+  docs_manifest: "priv/snakebridge/mylib.docs.json",
+  docs_profile: :summary}
+```
+
+### Class Method Guardrails
+
+Some Python classes inherit extremely large APIs (thousands of methods). Generating
+wrappers for these can produce very large `.ex` files and slow compilation/tooling.
+
+Use `max_class_methods` to cap inherited method enumeration, and optionally switch
+to declared-only enumeration with `class_method_scope: :defined`:
+
+```elixir
+{:mylib, "1.0.0",
+  generate: :all,
+  max_class_methods: 500}
+
+{:mylib, "1.0.0",
+  generate: :all,
+  class_method_scope: :defined}
+```
+
+3. Preview expected size:
+
+```bash
+mix snakebridge.plan
+```
 
 ### Lazy Import Handling
 
-Many Python libraries use lazy imports via `__getattr__` patterns (e.g., vLLM,
-transformers). SnakeBridge handles these by iterating over `__all__` when present
+Many Python libraries use lazy imports via `__getattr__` patterns. SnakeBridge handles these by iterating over `__all__` when present
 to discover classes and functions that aren't visible to `inspect.getmembers()`:
 
 ```python
@@ -119,7 +192,9 @@ This ensures libraries using lazy loading patterns generate complete wrappers.
 
 ```elixir
 {:mylib, "1.0.0", generate: :all, module_mode: :light}
+{:mylib, "1.0.0", generate: :all, module_mode: :exports}
 {:mylib, "1.0.0", generate: :all, module_mode: :public}
+{:mylib, "1.0.0", generate: :all, module_mode: :explicit}
 {:mylib, "1.0.0", generate: :all, module_mode: :all}
 ```
 
@@ -164,13 +239,28 @@ Pandas.DataFrame.new(...)  # Class instantiation
 For detected symbols, Python introspection gathers signatures, types, and docstrings
 using Python's `inspect` module.
 
+Docstrings are converted to ExDoc-friendly Markdown and sanitized to repair common
+upstream issues (for example: unclosed fenced code blocks or manpage-style quotes
+like `` `sys.byteorder' `` → `` `sys.byteorder` ``) so generated docs render cleanly.
+
+## Escape Hatch: Dynamic Calls
+
+Generated wrappers are the preferred interface, but SnakeBridge also supports
+dynamic invocation when you need to reach a function or module attribute that
+wasn't generated.
+
+```elixir
+SnakeBridge.Runtime.call("math", "sqrt", [16])
+SnakeBridge.Runtime.get_module_attr("math", "pi")
+```
+
 ### 4. Manifest
 
 Results cache in `.snakebridge/manifest.json`:
 
 ```json
 {
-  "version": "0.13.0",
+  "version": "0.15.0",
   "symbols": {
     "Numpy.mean/1": {
       "module": "Numpy",
@@ -194,6 +284,20 @@ Results cache in `.snakebridge/manifest.json`:
 ### 6. Lock Update
 
 `SnakeBridge.Lock` updates `snakebridge.lock` with environment info.
+
+### Regeneration
+
+To force regeneration even when SnakeBridge considers the project up to date:
+
+```bash
+mix snakebridge.regen
+```
+
+Use `--clean` to remove generated artifacts and metadata first (useful after large surface changes):
+
+```bash
+mix snakebridge.regen --clean
+```
 
 ## Generated File Layout
 
@@ -611,9 +715,9 @@ The `snakebridge.lock` captures environment state:
 
 ```json
 {
-  "version": "0.13.0",
+  "version": "0.15.0",
   "environment": {
-    "snakebridge_version": "0.13.0",
+    "snakebridge_version": "0.15.0",
     "generator_hash": "a1b2c3...",
     "python_version": "3.12.3",
     "elixir_version": "1.18.4",

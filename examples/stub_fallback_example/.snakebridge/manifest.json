@@ -57,8 +57,9 @@
         "text_signature: unavailable",
         "runtime_hints: unavailable"
       ],
-      "signature_source": "stub"
+      "signature_source": "stub",
+      "streaming": false
     }
   },
-  "version": "0.14.0"
+  "version": "0.15.0"
 }

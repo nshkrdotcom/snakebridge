@@ -13,9 +13,9 @@ defmodule SnakeBridge.Generator.ParamSanitizationTest do
     }
 
     library = %SnakeBridge.Config.Library{
-      name: :dspy,
-      python_name: "dspy",
-      module_name: Dspy,
+      name: :examplelib,
+      python_name: "examplelib",
+      module_name: Examplelib,
       streaming: []
     }
 

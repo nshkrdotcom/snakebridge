@@ -88,11 +88,11 @@ defmodule SnakeBridge.GenerateAllTest do
     test "parses 3-tuple with generate: :all" do
       [library] =
         Config.parse_libraries([
-          {:dspy, "2.6.5", generate: :all, submodules: true}
+          {:examplelib, "1.0.0", generate: :all, submodules: true}
         ])
 
-      assert library.name == :dspy
-      assert library.version == "2.6.5"
+      assert library.name == :examplelib
+      assert library.version == "1.0.0"
       assert library.generate == :all
       assert library.submodules == true
     end
@@ -101,12 +101,12 @@ defmodule SnakeBridge.GenerateAllTest do
       libraries =
         Config.parse_libraries([
           {:numpy, "1.26.0"},
-          {:dspy, "2.6.5", generate: :all}
+          {:examplelib, "1.0.0", generate: :all}
         ])
 
-      [numpy, dspy] = libraries
+      [numpy, examplelib] = libraries
       assert numpy.generate == :used
-      assert dspy.generate == :all
+      assert examplelib.generate == :all
     end
   end
 

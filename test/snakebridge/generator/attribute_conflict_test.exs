@@ -3,16 +3,16 @@ defmodule SnakeBridge.Generator.AttributeConflictTest do
 
   test "attributes that collide with methods are suffixed" do
     library = %SnakeBridge.Config.Library{
-      name: :dspy,
-      python_name: "dspy",
-      module_name: Dspy,
-      version: "3.1.2"
+      name: :examplelib,
+      python_name: "examplelib",
+      module_name: Examplelib,
+      version: "1.0.0"
     }
 
     classes = [
       %{
         "name" => "Tokens",
-        "python_module" => "dspy.dsp.utils.dpr",
+        "python_module" => "examplelib.core.utils.dpr",
         "methods" => [
           %{"name" => "pos", "parameters" => []}
         ],
@@ -29,16 +29,16 @@ defmodule SnakeBridge.Generator.AttributeConflictTest do
 
   test "attributes that collide with constructors are suffixed" do
     library = %SnakeBridge.Config.Library{
-      name: :dspy,
-      python_name: "dspy",
-      module_name: Dspy,
-      version: "3.1.2"
+      name: :examplelib,
+      python_name: "examplelib",
+      module_name: Examplelib,
+      version: "1.0.0"
     }
 
     classes = [
       %{
         "name" => "EngineState",
-        "python_module" => "dspy.engine",
+        "python_module" => "examplelib.engine",
         "methods" => [],
         "attributes" => ["NEW"]
       }

@@ -8,6 +8,7 @@
       "doc_missing_reason": null,
       "doc_source": "runtime",
       "docstring": "Subclass of ValueError with the following additional properties:\n\nmsg: The unformatted error message\ndoc: The JSON document being parsed\npos: The start index of doc where parsing failed\nlineno: The line corresponding to pos\ncolno: The column corresponding to pos",
+      "method_scope": "all",
       "methods": [
         {
           "doc_missing_reason": null,
@@ -122,6 +123,7 @@
           "signature_source": "variadic"
         }
       ],
+      "methods_truncated": false,
       "module": "Json.Decoder.JSONDecodeError",
       "python_module": "json.decoder"
     },
@@ -131,6 +133,7 @@
       "doc_missing_reason": null,
       "doc_source": "runtime",
       "docstring": "Simple JSON <https://json.org> decoder\n\nPerforms the following translations in decoding by default:\n\n+---------------+-------------------+\n| JSON          | Python            |\n+===============+===================+\n| object        | dict              |\n+---------------+-------------------+\n| array         | list              |\n+---------------+-------------------+\n| string        | str               |\n+---------------+-------------------+\n| number (int)  | int               |\n+---------------+-------------------+\n| number (real) | float             |\n+---------------+-------------------+\n| true          | True              |\n+---------------+-------------------+\n| false         | False             |\n+---------------+-------------------+\n| null          | None              |\n+---------------+-------------------+\n\nIt also understands ``NaN``, ``Infinity``, and ``-Infinity`` as\ntheir corresponding ``float`` values, which is outside the JSON spec.",
+      "method_scope": "all",
       "methods": [
         {
           "doc_missing_reason": null,
@@ -239,7 +242,7 @@
               }
             },
             {
-              "default": "<built-in method match of re.Pattern object at 0x79e7432076b0>",
+              "default": "<built-in method match of re.Pattern object at 0x7c1d2a6cb5e0>",
               "kind": "POSITIONAL_OR_KEYWORD",
               "name": "_w",
               "type": {
@@ -311,6 +314,7 @@
           "signature_source": "runtime"
         }
       ],
+      "methods_truncated": false,
       "module": "Json.Decoder.JSONDecoder",
       "python_module": "json.decoder"
     },
@@ -323,6 +327,7 @@
       "doc_missing_reason": null,
       "doc_source": "runtime",
       "docstring": "Extensible JSON <https://json.org> encoder for Python data structures.\n\nSupports the following objects and types by default:\n\n+-------------------+---------------+\n| Python            | JSON          |\n+===================+===============+\n| dict              | object        |\n+-------------------+---------------+\n| list, tuple       | array         |\n+-------------------+---------------+\n| str               | string        |\n+-------------------+---------------+\n| int, float        | number        |\n+-------------------+---------------+\n| True              | true          |\n+-------------------+---------------+\n| False             | false         |\n+-------------------+---------------+\n| None              | null          |\n+-------------------+---------------+\n\nTo extend this to recognize other objects, subclass and implement a\n``.default()`` method with another method that returns a serializable\nobject for ``o`` if possible, otherwise it should call the superclass\nimplementation (to raise ``TypeError``).",
+      "method_scope": "all",
       "methods": [
         {
           "doc_missing_reason": null,
@@ -551,6 +556,7 @@
           "signature_source": "runtime"
         }
       ],
+      "methods_truncated": false,
       "module": "Json.Encoder.JSONEncoder",
       "python_module": "json.encoder"
     },
@@ -562,6 +568,7 @@
       "doc_missing_reason": null,
       "doc_source": "runtime",
       "docstring": "Subclass of ValueError with the following additional properties:\n\nmsg: The unformatted error message\ndoc: The JSON document being parsed\npos: The start index of doc where parsing failed\nlineno: The line corresponding to pos\ncolno: The column corresponding to pos",
+      "method_scope": "all",
       "methods": [
         {
           "doc_missing_reason": null,
@@ -676,6 +683,7 @@
           "signature_source": "variadic"
         }
       ],
+      "methods_truncated": false,
       "module": "Json.JSONDecodeError",
       "python_module": "json"
     },
@@ -685,6 +693,7 @@
       "doc_missing_reason": null,
       "doc_source": "runtime",
       "docstring": "Simple JSON <https://json.org> decoder\n\nPerforms the following translations in decoding by default:\n\n+---------------+-------------------+\n| JSON          | Python            |\n+===============+===================+\n| object        | dict              |\n+---------------+-------------------+\n| array         | list              |\n+---------------+-------------------+\n| string        | str               |\n+---------------+-------------------+\n| number (int)  | int               |\n+---------------+-------------------+\n| number (real) | float             |\n+---------------+-------------------+\n| true          | True              |\n+---------------+-------------------+\n| false         | False             |\n+---------------+-------------------+\n| null          | None              |\n+---------------+-------------------+\n\nIt also understands ``NaN``, ``Infinity``, and ``-Infinity`` as\ntheir corresponding ``float`` values, which is outside the JSON spec.",
+      "method_scope": "all",
       "methods": [
         {
           "doc_missing_reason": null,
@@ -793,7 +802,7 @@
               }
             },
             {
-              "default": "<built-in method match of re.Pattern object at 0x79e7432076b0>",
+              "default": "<built-in method match of re.Pattern object at 0x7c1d2a6cb5e0>",
               "kind": "POSITIONAL_OR_KEYWORD",
               "name": "_w",
               "type": {
@@ -865,6 +874,7 @@
           "signature_source": "runtime"
         }
       ],
+      "methods_truncated": false,
       "module": "Json.JSONDecoder",
       "python_module": "json"
     },
@@ -877,6 +887,7 @@
       "doc_missing_reason": null,
       "doc_source": "runtime",
       "docstring": "Extensible JSON <https://json.org> encoder for Python data structures.\n\nSupports the following objects and types by default:\n\n+-------------------+---------------+\n| Python            | JSON          |\n+===================+===============+\n| dict              | object        |\n+-------------------+---------------+\n| list, tuple       | array         |\n+-------------------+---------------+\n| str               | string        |\n+-------------------+---------------+\n| int, float        | number        |\n+-------------------+---------------+\n| True              | true          |\n+-------------------+---------------+\n| False             | false         |\n+-------------------+---------------+\n| None              | null          |\n+-------------------+---------------+\n\nTo extend this to recognize other objects, subclass and implement a\n``.default()`` method with another method that returns a serializable\nobject for ``o`` if possible, otherwise it should call the superclass\nimplementation (to raise ``TypeError``).",
+      "method_scope": "all",
       "methods": [
         {
           "doc_missing_reason": null,
@@ -1105,6 +1116,7 @@
           "signature_source": "runtime"
         }
       ],
+      "methods_truncated": false,
       "module": "Json.JSONEncoder",
       "python_module": "json"
     },
@@ -1121,6 +1133,7 @@
       "doc_missing_reason": null,
       "doc_source": "runtime",
       "docstring": "JSON scanner object",
+      "method_scope": "all",
       "methods": [
         {
           "doc_missing_reason": null,
@@ -1168,6 +1181,7 @@
           "signature_source": "runtime"
         }
       ],
+      "methods_truncated": false,
       "module": "Json.Scanner.MakeScanner",
       "python_module": "json.scanner"
     }
@@ -1252,7 +1266,8 @@
         "stub: not found",
         "stubgen: skipped (signature already found)"
       ],
-      "signature_source": "runtime"
+      "signature_source": "runtime",
+      "streaming": false
     },
     "Json.Encoder.py_encode_basestring_ascii/1": {
       "doc_missing_reason": null,
@@ -1294,7 +1309,8 @@
         "stub: not found",
         "stubgen: skipped (signature already found)"
       ],
-      "signature_source": "runtime"
+      "signature_source": "runtime",
+      "streaming": false
     },
     "Json.Tool.main/0": {
       "doc_missing_reason": "runtime docstring missing",
@@ -1328,7 +1344,8 @@
         "stub: not found",
         "stubgen: skipped (signature already found)"
       ],
-      "signature_source": "runtime"
+      "signature_source": "runtime",
+      "streaming": false
     },
     "Json.dump/2": {
       "doc_missing_reason": null,
@@ -1466,7 +1483,8 @@
         "stub: not found",
         "stubgen: skipped (signature already found)"
       ],
-      "signature_source": "runtime"
+      "signature_source": "runtime",
+      "streaming": false
     },
     "Json.dumps/1": {
       "doc_missing_reason": null,
@@ -1597,7 +1615,8 @@
         "stub: not found",
         "stubgen: skipped (signature already found)"
       ],
-      "signature_source": "runtime"
+      "signature_source": "runtime",
+      "streaming": false
     },
     "Json.load/1": {
       "doc_missing_reason": null,
@@ -1701,7 +1720,8 @@
         "stub: not found",
         "stubgen: skipped (signature already found)"
       ],
-      "signature_source": "runtime"
+      "signature_source": "runtime",
+      "streaming": false
     },
     "Json.loads/1": {
       "doc_missing_reason": null,
@@ -1805,7 +1825,8 @@
         "stub: not found",
         "stubgen: skipped (signature already found)"
       ],
-      "signature_source": "runtime"
+      "signature_source": "runtime",
+      "streaming": false
     },
     "Math.cos/1": {
       "docstring": "Return the cosine of x.",
@@ -1850,5 +1871,5 @@
       "return_annotation": null
     }
   },
-  "version": "0.14.0"
+  "version": "0.15.0"
 }

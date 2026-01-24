@@ -16,6 +16,7 @@ defmodule SnakeBridge.Config do
     :strict,
     :verbose,
     :scan_paths,
+    :scan_extensions,
     :scan_exclude,
     :introspector,
     :docs,
@@ -42,7 +43,12 @@ defmodule SnakeBridge.Config do
       - `:all` - Generate wrappers for ALL public symbols in the Python module
     - `:module_mode` - Controls which Python submodules are generated when `generate: :all`:
       - `:root` / `:light` / `:top` - Only the root module
+      - `:exports` / `:api` - Only the root module, plus submodules explicitly exported
+        by the root module via `__all__` (avoids walking large internal trees)
       - `:public` / `:standard` - Discover submodules and keep public API modules
+      - `:explicit` - Discover submodules and keep only modules/packages that explicitly
+        define `__all__` (smallest “discover” mode; use `module_include` for overrides)
+      - `:docs` / `:manifest` - Generate a docs-defined public surface from a manifest file
       - `:all` / `:nuclear` - Discover all submodules (including private)
       - `{:only, ["linalg", "fft"]}` - Explicit submodule allowlist
     - `:submodules` - When `true`, introspect all submodules (can generate thousands of files)
@@ -53,6 +59,16 @@ defmodule SnakeBridge.Config do
     - `:module_exclude` - Submodules to exclude (relative to the library root)
     - `:module_depth` - Limit discovery depth (e.g. 1 = only direct children)
     - `:docs_url` - Explicit documentation URL for third-party libraries
+    - `:docs_manifest` - Path to a SnakeBridge docs manifest JSON file (used with `module_mode: :docs`)
+    - `:docs_profile` - Profile key inside `docs_manifest` (`:summary`, `:full`, or custom string)
+    - `:class_method_scope` - Controls how class methods are discovered during introspection:
+      - `:all` (default) - include inherited methods (can be huge for tensor-like bases)
+      - `:defined` - only methods defined on the class itself (plus `__init__`)
+    - `:max_class_methods` - Guardrail for class method enumeration. When `class_method_scope: :all`
+      would exceed this limit, SnakeBridge falls back to `:defined` for that class.
+    - `:on_not_found` - Behavior when a requested symbol is not present in the current Python env:
+      - `:error` - fail compilation (recommended for `generate: :used`)
+      - `:stub` - generate deterministic stubs and continue (recommended for docs-derived surfaces)
     """
 
     defstruct [
@@ -62,11 +78,16 @@ defmodule SnakeBridge.Config do
       :python_name,
       :pypi_package,
       :docs_url,
+      :docs_manifest,
+      :docs_profile,
       :extras,
       :module_mode,
       :module_include,
       :module_exclude,
       :module_depth,
+      :class_method_scope,
+      :max_class_methods,
+      :on_not_found,
       include: [],
       exclude: [],
       streaming: [],
@@ -83,7 +104,10 @@ defmodule SnakeBridge.Config do
     ]
 
     @type generate_mode :: :all | :used
-    @type module_mode :: :root | :public | :all | {:only, [String.t()]}
+    @type module_mode ::
+            :root | :exports | :public | :explicit | :docs | :all | {:only, [String.t()]}
+    @type class_method_scope :: :all | :defined
+    @type on_not_found :: :error | :stub
 
     @type t :: %__MODULE__{
             name: atom(),
@@ -92,11 +116,16 @@ defmodule SnakeBridge.Config do
             python_name: String.t(),
             pypi_package: String.t() | nil,
             docs_url: String.t() | nil,
+            docs_manifest: String.t() | nil,
+            docs_profile: String.t() | nil,
             extras: [String.t()],
             module_mode: module_mode() | nil,
             module_include: [String.t()],
             module_exclude: [String.t()],
             module_depth: pos_integer() | nil,
+            class_method_scope: class_method_scope() | nil,
+            max_class_methods: non_neg_integer() | nil,
+            on_not_found: on_not_found() | nil,
             include: [String.t()],
             exclude: [String.t()],
             streaming: [String.t()],
@@ -126,6 +155,7 @@ defmodule SnakeBridge.Config do
           strict: boolean(),
           verbose: boolean(),
           scan_paths: [String.t()],
+          scan_extensions: [String.t()],
           scan_exclude: [String.t()],
           introspector: keyword(),
           docs: keyword(),
@@ -184,6 +214,7 @@ defmodule SnakeBridge.Config do
       strict: env_flag(:strict, "SNAKEBRIDGE_STRICT", false),
       verbose: env_flag(:verbose, "SNAKEBRIDGE_VERBOSE", false),
       scan_paths: Application.get_env(:snakebridge, :scan_paths, ["lib"]),
+      scan_extensions: Application.get_env(:snakebridge, :scan_extensions, [".ex"]),
       scan_exclude: Application.get_env(:snakebridge, :scan_exclude, []),
       introspector: Application.get_env(:snakebridge, :introspector, []),
       docs: Application.get_env(:snakebridge, :docs, []),
@@ -249,10 +280,19 @@ defmodule SnakeBridge.Config do
     module_include = normalize_module_list(Keyword.get(opts, :module_include, []))
     module_exclude = normalize_module_list(Keyword.get(opts, :module_exclude, []))
     module_depth = Keyword.get(opts, :module_depth)
+    docs_manifest = Keyword.get(opts, :docs_manifest)
+    docs_profile = normalize_docs_profile(Keyword.get(opts, :docs_profile))
+    class_method_scope = normalize_class_method_scope(Keyword.get(opts, :class_method_scope))
+    max_class_methods = Keyword.get(opts, :max_class_methods)
+    on_not_found = normalize_on_not_found(Keyword.get(opts, :on_not_found))
 
     validate_generate_option!(generate, name)
     validate_module_mode!(module_mode, name)
     validate_module_depth!(module_depth, name)
+    validate_docs_manifest!(module_mode, docs_manifest, name)
+    validate_class_method_scope!(class_method_scope, name)
+    validate_max_class_methods!(max_class_methods, name)
+    validate_on_not_found!(on_not_found, name)
 
     %Library{
       name: name,
@@ -261,11 +301,16 @@ defmodule SnakeBridge.Config do
       python_name: python_name,
       pypi_package: Keyword.get(opts, :pypi_package),
       docs_url: Keyword.get(opts, :docs_url),
+      docs_manifest: docs_manifest,
+      docs_profile: docs_profile,
       extras: List.wrap(extras),
       module_mode: module_mode,
       module_include: module_include,
       module_exclude: module_exclude,
       module_depth: normalize_module_depth(module_depth),
+      class_method_scope: class_method_scope,
+      max_class_methods: normalize_max_class_methods(max_class_methods),
+      on_not_found: on_not_found,
       include: Keyword.get(opts, :include, []),
       exclude: Keyword.get(opts, :exclude, []),
       streaming: Keyword.get(opts, :streaming, []),
@@ -291,7 +336,7 @@ defmodule SnakeBridge.Config do
     The generate option must be :all or :used.
 
     Examples:
-      {:dspy, "2.6.5", generate: :all}   # Generate all public symbols
+      {:mylib, "1.0.0", generate: :all}   # Generate all public symbols
       {:numpy, "1.26.0", generate: :used} # Only generate used symbols (default)
     """
   end
@@ -300,6 +345,11 @@ defmodule SnakeBridge.Config do
   defp normalize_module_mode(:light), do: :root
   defp normalize_module_mode(:top), do: :root
   defp normalize_module_mode(:root), do: :root
+  defp normalize_module_mode(:api), do: :exports
+  defp normalize_module_mode(:exports), do: :exports
+  defp normalize_module_mode(:explicit), do: :explicit
+  defp normalize_module_mode(:manifest), do: :docs
+  defp normalize_module_mode(:docs), do: :docs
   defp normalize_module_mode(:standard), do: :public
   defp normalize_module_mode(:public), do: :public
   defp normalize_module_mode(:full), do: :all
@@ -335,7 +385,7 @@ defmodule SnakeBridge.Config do
   defp validate_module_mode!(nil, _name), do: :ok
 
   defp validate_module_mode!(mode, _name)
-       when mode in [:root, :public, :all],
+       when mode in [:root, :exports, :public, :explicit, :docs, :all],
        do: :ok
 
   defp validate_module_mode!({:only, list}, _name) when is_list(list), do: :ok
@@ -346,9 +396,83 @@ defmodule SnakeBridge.Config do
 
     module_mode must be one of:
       :root | :light | :top
+      :exports | :api
       :public | :standard
+      :explicit
+      :docs | :manifest
       :all | :full | :nuclear
       {:only, ["submodule", "submodule.nested"]}
+    """
+  end
+
+  defp normalize_docs_profile(nil), do: nil
+  defp normalize_docs_profile(value) when is_atom(value), do: Atom.to_string(value)
+  defp normalize_docs_profile(value) when is_binary(value), do: value
+  defp normalize_docs_profile(_), do: nil
+
+  defp validate_docs_manifest!(:docs, nil, name) do
+    raise ArgumentError, """
+    Missing :docs_manifest for #{inspect(name)}.
+
+    When using `module_mode: :docs`, you must provide a docs manifest JSON path:
+
+        {:mylib, "1.0.0",
+          generate: :all,
+          module_mode: :docs,
+          docs_manifest: "priv/snakebridge/mylib.docs.json",
+          docs_profile: :summary}
+    """
+  end
+
+  defp validate_docs_manifest!(_mode, _manifest, _name), do: :ok
+
+  defp normalize_class_method_scope(nil), do: nil
+  defp normalize_class_method_scope(:all), do: :all
+  defp normalize_class_method_scope(:defined), do: :defined
+  defp normalize_class_method_scope(:declared), do: :defined
+  defp normalize_class_method_scope(:declared_only), do: :defined
+  defp normalize_class_method_scope(:defined_only), do: :defined
+  defp normalize_class_method_scope(_), do: nil
+
+  defp validate_class_method_scope!(nil, _name), do: :ok
+  defp validate_class_method_scope!(scope, _name) when scope in [:all, :defined], do: :ok
+
+  defp validate_class_method_scope!(invalid, name) do
+    raise ArgumentError, """
+    Invalid class_method_scope option for #{inspect(name)}: #{inspect(invalid)}
+
+    class_method_scope must be :all or :defined.
+    """
+  end
+
+  defp normalize_max_class_methods(nil), do: nil
+  defp normalize_max_class_methods(value) when is_integer(value) and value >= 0, do: value
+  defp normalize_max_class_methods(_), do: nil
+
+  defp validate_max_class_methods!(nil, _name), do: :ok
+  defp validate_max_class_methods!(value, _name) when is_integer(value) and value >= 0, do: :ok
+
+  defp validate_max_class_methods!(invalid, name) do
+    raise ArgumentError, """
+    Invalid max_class_methods option for #{inspect(name)}: #{inspect(invalid)}
+
+    max_class_methods must be a non-negative integer (e.g. 1000). Use 0 to disable the guardrail.
+    """
+  end
+
+  defp normalize_on_not_found(nil), do: nil
+  defp normalize_on_not_found(:error), do: :error
+  defp normalize_on_not_found(:stub), do: :stub
+  defp normalize_on_not_found(_), do: nil
+
+  defp validate_on_not_found!(nil, _name), do: :ok
+  defp validate_on_not_found!(mode, _name) when mode in [:error, :stub], do: :ok
+
+  defp validate_on_not_found!(invalid, name) do
+    raise ArgumentError, """
+    Invalid on_not_found option for #{inspect(name)}: #{inspect(invalid)}
+
+    on_not_found must be :error or :stub.
     """
   end
 

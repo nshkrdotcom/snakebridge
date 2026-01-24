@@ -30,13 +30,52 @@ Need to call Python?
 
 ```elixir
 # mix.exs
-config :snakebridge, python_deps: [{:numpy, ">=1.20"}, {:pandas, ">=2.0"}]
+defp python_deps do
+  [{:numpy, "1.26.0"}, {:pandas, "2.0.0"}]
+end
 
 # Usage
-{:ok, array} = Python.Numpy.array([[1, 2], [3, 4]])
+{:ok, array} = Numpy.array([[1, 2], [3, 4]])
 ```
 
 Both approaches coexist in the same project.
+
+### Choosing Module Discovery Modes (`generate: :all`)
+
+When generating wrappers for an entire library, choose the mode that matches the library's API surface:
+
+| Mode | Best For | Trade-offs |
+|------|----------|------------|
+| `:root` | Small libs, quick start | Misses submodule APIs |
+| `:exports` | Libraries with clean `__all__` exports | Requires well-maintained exports |
+| `:public` | Most libraries | May include internal modules |
+| `:explicit` | Strict public-only APIs | Excludes modules without `__all__` |
+| `:docs` | Large libs with published docs | Requires manifest generation step |
+| `:all` | Complete coverage / debugging | Large output, slow compilation |
+
+```elixir
+# Recommended for most libraries
+{:mylib, "1.0.0", generate: :all, module_mode: :public}
+
+# For libraries with thousands of internal modules (e.g., ML frameworks)
+{:torch, "2.0.0", generate: :all, module_mode: :docs,
+  docs_manifest: "priv/snakebridge/torch.docs.json"}
+```
+
+### Class Method Guardrails for Large Libraries
+
+Some libraries (e.g., PyTorch, JAX) have classes that inherit thousands of methods.
+Use guardrails to prevent massive generated files:
+
+```elixir
+# Limit inherited methods (falls back to declared-only if exceeded)
+{:torch, "2.0.0", generate: :all, max_class_methods: 500}
+
+# Only generate methods declared on the class itself
+{:torch, "2.0.0", generate: :all, class_method_scope: :defined}
+```
+
+Preview the impact with `mix snakebridge.plan` before generation.
 
 ## 2. Session Management
 

@@ -3,6 +3,16 @@ defmodule SnakeBridge.Manifest do
   Manifest storage for generated symbols.
   """
 
+  @internal_wrapper_calls %{
+    __snakebridge_python_name__: [0],
+    __snakebridge_python_class__: [0],
+    __snakebridge_library__: [0],
+    __functions__: [0],
+    __classes__: [0],
+    __search__: [1],
+    doc: [1]
+  }
+
   @spec load(SnakeBridge.Config.t()) :: map()
   def load(config) do
     path = manifest_path(config)
@@ -48,6 +58,15 @@ defmodule SnakeBridge.Manifest do
 
   @spec call_supported?(map(), module(), atom(), non_neg_integer()) :: boolean()
   def call_supported?(manifest, module, function, call_site_arity) do
+    if internal_wrapper_call?(function, call_site_arity) do
+      true
+    else
+      streaming_call_supported?(manifest, module, function) or
+        symbol_call_supported?(manifest, module, function, call_site_arity)
+    end
+  end
+
+  defp symbol_call_supported?(manifest, module, function, call_site_arity) do
     prefix = "#{module_to_string(module)}.#{function}/"
 
     manifest
@@ -56,6 +75,22 @@ defmodule SnakeBridge.Manifest do
       String.starts_with?(key, prefix) and
         symbol_arity_matches?(key, info, call_site_arity)
     end)
+  end
+
+  defp streaming_call_supported?(manifest, module, function) do
+    function_name = to_string(function)
+
+    with true <- String.ends_with?(function_name, "_stream"),
+         base <- String.replace_suffix(function_name, "_stream", ""),
+         prefix <- "#{module_to_string(module)}.#{base}/" do
+      manifest
+      |> Map.get("symbols", %{})
+      |> Enum.any?(fn {key, info} ->
+        String.starts_with?(key, prefix) and info["streaming"] == true
+      end)
+    else
+      _ -> false
+    end
   end
 
   defp symbol_arity_matches?(key, info, call_site_arity) do
@@ -81,6 +116,12 @@ defmodule SnakeBridge.Manifest do
   end
 
   defp class_call_supported?(class_info, function, call_site_arity) do
+    if internal_wrapper_call?(function, call_site_arity),
+      do: true,
+      else: do_class_call_supported?(class_info, function, call_site_arity)
+  end
+
+  defp do_class_call_supported?(class_info, function, call_site_arity) do
     function_name = to_string(function)
     methods = method_field(class_info, "methods") || []
     attrs = method_field(class_info, "attributes") || []
@@ -276,6 +317,7 @@ defmodule SnakeBridge.Manifest do
 
   defp normalize_manifest(manifest) do
     symbols = Map.get(manifest, "symbols", %{})
+    classes = Map.get(manifest, "classes", %{})
     modules = Map.get(manifest, "modules", %{})
 
     normalized_symbols =
@@ -289,10 +331,39 @@ defmodule SnakeBridge.Manifest do
         end
       end)
 
+    normalized_classes =
+      Enum.reduce(classes, %{}, fn {key, value}, acc ->
+        normalized_key = normalize_class_key(key)
+        value = normalize_class_entry(value, normalized_key)
+
+        if normalized_key == key do
+          Map.put(acc, normalized_key, value)
+        else
+          Map.put_new(acc, normalized_key, value)
+        end
+      end)
+
     manifest
     |> Map.put("symbols", normalized_symbols)
+    |> Map.put("classes", normalized_classes)
     |> Map.put("modules", modules)
   end
+
+  defp normalize_class_entry(value, normalized_key) when is_map(value) do
+    module = Map.get(value, "module") || Map.get(value, :module)
+
+    normalized_module =
+      case module do
+        module when is_binary(module) -> normalize_class_key(module)
+        _ -> normalized_key
+      end
+
+    value
+    |> Map.put("module", normalized_module)
+    |> Map.delete(:module)
+  end
+
+  defp normalize_class_entry(value, _normalized_key), do: value
 
   defp normalize_symbol_key(key) when is_binary(key) do
     case String.split(key, ".") do
@@ -311,6 +382,31 @@ defmodule SnakeBridge.Manifest do
   end
 
   defp normalize_symbol_key(key), do: key
+
+  defp normalize_class_key(key) when is_binary(key) do
+    key
+    |> strip_elixir_prefix()
+    |> String.split(".")
+    |> Enum.map_join(".", &Macro.camelize/1)
+  end
+
+  defp normalize_class_key(key), do: key
+
+  defp strip_elixir_prefix(key) when is_binary(key) do
+    case String.split(key, ".") do
+      ["Elixir" | rest] -> Enum.join(rest, ".")
+      _ -> key
+    end
+  end
+
+  defp internal_wrapper_call?(function, arity) when is_atom(function) and is_integer(arity) do
+    case Map.get(@internal_wrapper_calls, function) do
+      nil -> false
+      arities -> arity in arities
+    end
+  end
+
+  defp internal_wrapper_call?(_, _), do: false
 
   defp sort_manifest(manifest) do
     manifest

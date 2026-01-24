@@ -93,6 +93,8 @@ defmodule SnakeBridge.Introspector do
       submodules: submodules,
       discover_submodules?: discover_submodules?,
       public_api?: public_api?,
+      exports_mode?: exports_mode?,
+      public_api_mode: public_api_mode,
       module_include: module_include,
       module_exclude: module_exclude,
       module_depth: module_depth
@@ -102,6 +104,8 @@ defmodule SnakeBridge.Introspector do
     |> maybe_add_submodules(submodules)
     |> maybe_add_discover_submodules(discover_submodules?)
     |> maybe_add_public_api(public_api?)
+    |> maybe_add_exports_mode(exports_mode?)
+    |> maybe_add_public_api_mode(public_api_mode)
     |> maybe_add_module_include(module_include)
     |> maybe_add_module_exclude(module_exclude)
     |> maybe_add_module_depth(module_depth)
@@ -119,6 +123,14 @@ defmodule SnakeBridge.Introspector do
 
   defp maybe_add_public_api(args, true), do: args ++ ["--public-api"]
   defp maybe_add_public_api(args, _), do: args
+
+  defp maybe_add_exports_mode(args, true), do: args ++ ["--exports-mode"]
+  defp maybe_add_exports_mode(args, _), do: args
+
+  defp maybe_add_public_api_mode(args, nil), do: args
+
+  defp maybe_add_public_api_mode(args, mode) when is_atom(mode) or is_binary(mode),
+    do: args ++ ["--public-api-mode", to_string(mode)]
 
   defp maybe_add_module_include(args, []), do: args
   defp maybe_add_module_include(args, nil), do: args
@@ -268,7 +280,7 @@ defmodule SnakeBridge.Introspector do
   end
 
   @spec introspect_batch([
-          {SnakeBridge.Config.Library.t() | map(), String.t(), [function_name()]}
+          {SnakeBridge.Config.Library.t() | map(), String.t(), list()}
         ]) ::
           list(
             {SnakeBridge.Config.Library.t() | map(), {:ok, list()} | {:error, term()}, String.t()}
@@ -286,8 +298,12 @@ defmodule SnakeBridge.Introspector do
     results =
       libs_and_functions
       |> Task.async_stream(
-        fn {library, python_module, functions} ->
-          {library, introspect_symbols(library, functions, python_module), python_module}
+        fn {library, python_module, symbol_requests} ->
+          names =
+            symbol_requests
+            |> Enum.map(&symbol_request_name/1)
+
+          {library, introspect_symbols(library, names, python_module), python_module}
         end,
         max_concurrency: max_concurrency,
         timeout: timeout
@@ -307,6 +323,12 @@ defmodule SnakeBridge.Introspector do
         {library, {:error, batch_error(library, python_module, functions, reason)}, python_module}
     end)
   end
+
+  defp symbol_request_name({name, _kind}) when is_binary(name), do: name
+  defp symbol_request_name({name, _kind}) when is_atom(name), do: Atom.to_string(name)
+  defp symbol_request_name(name) when is_binary(name), do: name
+  defp symbol_request_name(name) when is_atom(name), do: Atom.to_string(name)
+  defp symbol_request_name(other), do: to_string(other)
 
   @doc """
   Introspects a single attribute on a module to determine its type.
@@ -334,49 +356,71 @@ defmodule SnakeBridge.Introspector do
   end
 
   defp introspection_config_json(library) do
-    library_config =
-      cond do
-        is_struct(library) -> Map.from_struct(library)
-        is_map(library) -> library
-        true -> %{}
-      end
-
-    signature_sources =
-      library_config
-      |> Map.get(:signature_sources)
-      |> default_signature_sources()
-      |> Enum.map(&to_string/1)
-
-    stub_search_paths =
-      Application.get_env(:snakebridge, :stub_search_paths, [])
-      |> Kernel.++(List.wrap(Map.get(library_config, :stub_search_paths) || []))
-      |> Enum.map(&to_string/1)
-      |> Enum.uniq()
-
-    use_typeshed =
-      case Map.get(library_config, :use_typeshed) do
-        nil -> Application.get_env(:snakebridge, :use_typeshed, false)
-        value -> value
-      end
-
-    typeshed_path =
-      Map.get(library_config, :typeshed_path) ||
-        Application.get_env(:snakebridge, :typeshed_path)
-
-    stubgen_config =
-      Application.get_env(:snakebridge, :stubgen, [])
-      |> Keyword.merge(List.wrap(Map.get(library_config, :stubgen) || []))
-      |> Enum.into(%{}, fn {key, value} -> {to_string(key), value} end)
+    library_config = normalize_library_config(library)
 
     config = %{
-      "signature_sources" => signature_sources,
-      "stub_search_paths" => stub_search_paths,
-      "use_typeshed" => use_typeshed,
-      "typeshed_path" => typeshed_path,
-      "stubgen" => stubgen_config
+      "signature_sources" => signature_sources_config(library_config),
+      "stub_search_paths" => stub_search_paths_config(library_config),
+      "use_typeshed" => use_typeshed_config(library_config),
+      "typeshed_path" => typeshed_path_config(library_config),
+      "stubgen" => stubgen_config(library_config),
+      "class_method_scope" => class_method_scope_config(library_config),
+      "max_class_methods" => max_class_methods_config(library_config)
     }
 
     Jason.encode!(config)
+  end
+
+  defp normalize_library_config(library) when is_struct(library), do: Map.from_struct(library)
+  defp normalize_library_config(library) when is_map(library), do: library
+  defp normalize_library_config(_library), do: %{}
+
+  defp signature_sources_config(library_config) do
+    library_config
+    |> Map.get(:signature_sources)
+    |> default_signature_sources()
+    |> Enum.map(&to_string/1)
+  end
+
+  defp stub_search_paths_config(library_config) do
+    Application.get_env(:snakebridge, :stub_search_paths, [])
+    |> Kernel.++(List.wrap(Map.get(library_config, :stub_search_paths)))
+    |> Enum.map(&to_string/1)
+    |> Enum.uniq()
+  end
+
+  defp use_typeshed_config(library_config) do
+    case Map.fetch(library_config, :use_typeshed) do
+      {:ok, value} -> value
+      :error -> Application.get_env(:snakebridge, :use_typeshed, false)
+    end
+  end
+
+  defp typeshed_path_config(library_config) do
+    Map.get(library_config, :typeshed_path) || Application.get_env(:snakebridge, :typeshed_path)
+  end
+
+  defp stubgen_config(library_config) do
+    Application.get_env(:snakebridge, :stubgen, [])
+    |> Keyword.merge(List.wrap(Map.get(library_config, :stubgen)))
+    |> Enum.into(%{}, fn {key, value} -> {to_string(key), value} end)
+  end
+
+  defp class_method_scope_config(library_config) do
+    case library_or_global(library_config, :class_method_scope) do
+      nil -> nil
+      scope -> to_string(scope)
+    end
+  end
+
+  defp max_class_methods_config(library_config),
+    do: library_or_global(library_config, :max_class_methods)
+
+  defp library_or_global(library_config, key) do
+    case Map.fetch(library_config, key) do
+      {:ok, value} -> value
+      :error -> Application.get_env(:snakebridge, key)
+    end
   end
 
   defp default_signature_sources(nil) do
@@ -410,12 +454,16 @@ defmodule SnakeBridge.Introspector do
 
   defp resolve_module_settings(library, opts) do
     mode = resolve_module_mode(library, opts)
-    {submodules, discover_submodules?, public_api?} = module_mode_flags(mode)
+
+    {submodules, discover_submodules?, public_api?, exports_mode?, public_api_mode} =
+      module_mode_flags(mode)
 
     %{
       submodules: submodules,
       discover_submodules?: discover_submodules?,
       public_api?: public_api?,
+      exports_mode?: exports_mode?,
+      public_api_mode: public_api_mode,
       module_include: resolve_module_list_option(library, opts, :module_include),
       module_exclude: resolve_module_list_option(library, opts, :module_exclude),
       module_depth: resolve_module_depth_option(library, opts)
@@ -475,14 +523,24 @@ defmodule SnakeBridge.Introspector do
     end
   end
 
-  defp module_mode_flags({:only, list}) when is_list(list), do: {list, false, false}
-  defp module_mode_flags(:public), do: {nil, true, true}
-  defp module_mode_flags(:all), do: {nil, true, false}
-  defp module_mode_flags(:root), do: {nil, false, false}
+  defp module_mode_flags({:only, list}) when is_list(list),
+    do: {list, false, false, false, nil}
+
+  defp module_mode_flags(:exports), do: {nil, false, false, true, nil}
+  defp module_mode_flags(:explicit), do: {nil, true, true, false, :explicit_all}
+  defp module_mode_flags(:public), do: {nil, true, true, false, nil}
+  defp module_mode_flags(:docs), do: {nil, false, false, false, nil}
+  defp module_mode_flags(:all), do: {nil, true, false, false, nil}
+  defp module_mode_flags(:root), do: {nil, false, false, false, nil}
 
   defp normalize_module_mode(:light), do: :root
   defp normalize_module_mode(:top), do: :root
   defp normalize_module_mode(:root), do: :root
+  defp normalize_module_mode(:api), do: :exports
+  defp normalize_module_mode(:exports), do: :exports
+  defp normalize_module_mode(:explicit), do: :explicit
+  defp normalize_module_mode(:manifest), do: :docs
+  defp normalize_module_mode(:docs), do: :docs
   defp normalize_module_mode(:standard), do: :public
   defp normalize_module_mode(:public), do: :public
   defp normalize_module_mode(:full), do: :all

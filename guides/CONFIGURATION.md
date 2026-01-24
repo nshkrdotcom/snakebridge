@@ -49,6 +49,8 @@ end
 |--------|------|---------|-------------|
 | `pypi_package` | `String` | library name | PyPI package name if different from Elixir atom |
 | `docs_url` | `String` | `nil` | Explicit docs URL for third-party libraries |
+| `docs_manifest` | `String` | `nil` | Path to a docs manifest JSON file (required for `module_mode: :docs`) |
+| `docs_profile` | `atom \| String` | `nil` | Profile inside `docs_manifest` (e.g. `:summary`, `:full`) |
 | `extras` | `[String]` | `[]` | pip extras (e.g., `["sql", "excel"]`) |
 | `include` | `[String]` | `[]` | Only generate these symbols |
 | `exclude` | `[String]` | `[]` | Exclude these symbols from generation |
@@ -60,6 +62,9 @@ end
 | `public_api` | `boolean` | `false` | Legacy public filter (use `module_mode`) |
 | `generate` | `:used \| :all` | `:used` | Generation mode |
 | `streaming` | `[String]` | `[]` | Functions that get `*_stream` variants |
+| `class_method_scope` | `:all \| :defined` | `:all` | Class method enumeration scope during introspection |
+| `max_class_methods` | `non_neg_integer` | `1000` | Guardrail for inheritance-heavy classes (0 disables) |
+| `on_not_found` | `:error \| :stub` | depends | Missing-symbol behavior (`:error` for `:used`, `:stub` for `:all`) |
 | `min_signature_tier` | `atom` | `nil` | Minimum signature quality threshold |
 | `signature_sources` | `[atom]` | all | Allowed signature sources |
 | `strict_signatures` | `boolean` | `false` | Fail on low-quality signatures |
@@ -88,6 +93,12 @@ end
 # Standard (public) module discovery
 {:numpy, "1.26.0", generate: :all, module_mode: :public}
 
+# Export-driven mode (root `__all__` exported submodules only; avoids package walking)
+{:numpy, "1.26.0", generate: :all, module_mode: :exports}
+
+# Explicit export list mode (only modules/packages defining `__all__`)
+{:numpy, "1.26.0", generate: :all, module_mode: :explicit}
+
 # Nuclear mode (all submodules)
 {:numpy, "1.26.0", generate: :all, module_mode: :all}
 
@@ -103,6 +114,20 @@ end
   module_mode: :public,
   module_include: ["linalg"],
   module_exclude: ["random.*"]}
+
+# Docs manifest mode (Sphinx docs → allowlisted public surface).
+# This is the most controllable option when a library's "public surface"
+# is defined by published documentation rather than `__all__`.
+#
+# Generate (and commit) a manifest with:
+#   mix snakebridge.docs.manifest --library <pkg> --inventory <objects.inv> --nav <api index page> --nav-depth 1 --summary <api page> --out priv/snakebridge/<pkg>.docs.json
+# Preview size with:
+#   mix snakebridge.plan
+{:mylib, "1.0.0",
+  generate: :all,
+  module_mode: :docs,
+  docs_manifest: "priv/snakebridge/mylib.docs.json",
+  docs_profile: :summary}
 
 # Legacy options (still supported)
 {:numpy, "1.26.0", submodules: true, public_api: true}
@@ -137,6 +162,7 @@ config :snakebridge,
   generated_dir: "lib/snakebridge_generated",  # Generated code location
   metadata_dir: ".snakebridge",                 # Metadata and cache
   scan_paths: ["lib"],                          # Paths to scan for usage
+  scan_extensions: [".ex", ".exs"],             # File extensions to scan (defaults to [".ex"])
   scan_exclude: ["lib/generated"]               # Exclude from scanning
 ```
 
@@ -175,6 +201,14 @@ config :snakebridge,
 config :snakebridge, :introspector,
   max_concurrency: 4,    # Parallel introspection workers
   timeout: 30_000        # Introspection timeout (ms)
+```
+
+Class method guardrail defaults (used by the Python introspector):
+
+```elixir
+config :snakebridge,
+  class_method_scope: :all,   # or :defined
+  max_class_methods: 1000     # 0 disables the guardrail
 ```
 
 ### Documentation
@@ -228,9 +262,17 @@ SnakeBridge.ConfigHelper.configure_snakepit!()
 SnakeBridge.ConfigHelper.configure_snakepit!(
   pool_size: 4,                    # Workers per pool
   affinity: :strict_queue,         # Default affinity mode
-  venv_path: "/path/to/venv"       # Explicit venv location
+  venv_path: "/path/to/venv",      # Explicit venv location
+  adapter_env: %{
+    "HF_HOME" => "/var/lib/huggingface",
+    "TOKENIZERS_PARALLELISM" => "false"
+  }
 )
 ```
+
+`adapter_env` is merged into the Python adapter environment (alongside the
+computed `PYTHONPATH`). In multi-pool configurations, per-pool `adapter_env`
+overrides these values.
 
 ### Multi-Pool Setup
 
@@ -238,7 +280,12 @@ SnakeBridge.ConfigHelper.configure_snakepit!(
 SnakeBridge.ConfigHelper.configure_snakepit!(
   pools: [
     %{name: :cpu_pool, pool_size: 4, affinity: :hint},
-    %{name: :gpu_pool, pool_size: 2, affinity: :strict_queue}
+    %{
+      name: :gpu_pool,
+      pool_size: 2,
+      affinity: :strict_queue,
+      adapter_env: %{"CUDA_VISIBLE_DEVICES" => "0"}
+    }
   ]
 )
 ```

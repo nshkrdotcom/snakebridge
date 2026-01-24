@@ -670,7 +670,7 @@ test/adapters/unsloth/
 ├── unsloth_model_test.exs         # Model loading (4-bit, LoRA)
 ├── unsloth_finetune_test.exs      # Fine-tuning workflows
 ├── unsloth_inference_test.exs     # Fast inference
-├── unsloth_export_test.exs        # Export to GGUF/vLLM
+├── unsloth_export_test.exs        # Export to GGUF / serving format
 ├── unsloth_streaming_test.exs     # Streaming generation
 └── unsloth_memory_test.exs        # Memory optimization tests
 ```

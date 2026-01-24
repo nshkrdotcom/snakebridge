@@ -36,30 +36,42 @@ defmodule SnakeBridge.DynamicException do
   """
   @spec get_or_create_module(String.t()) :: module()
   def get_or_create_module(python_class_name) when is_binary(python_class_name) do
-    ensure_cache_exists()
     class_name = sanitize_class_name(python_class_name)
     module_name = Module.concat(__MODULE__, class_name)
 
     if Code.ensure_loaded?(module_name) do
-      :ets.insert(@exception_cache, {module_name, true})
+      maybe_cache_module(module_name)
       module_name
     else
-      case :ets.lookup(@exception_cache, module_name) do
-        [{^module_name, true}] ->
-          module_name
+      ensure_module_created(module_name, python_class_name)
+    end
+  end
 
-        [] ->
-          create_exception_module(module_name, python_class_name)
-          module_name
-      end
+  defp maybe_cache_module(module_name) do
+    if cache_table() != :undefined do
+      :ets.insert(@exception_cache, {module_name, true})
+    end
+  end
+
+  defp ensure_module_created(module_name, python_class_name) do
+    if cache_table() == :undefined or not module_in_cache?(module_name) do
+      create_exception_module(module_name, python_class_name)
+    end
+
+    module_name
+  end
+
+  defp module_in_cache?(module_name) do
+    case :ets.lookup(@exception_cache, module_name) do
+      [{^module_name, true}] -> true
+      [] -> false
     end
   end
 
   @doc false
   def ensure_cache_exists do
-    if :ets.whereis(@exception_cache) == :undefined do
-      :ets.new(@exception_cache, [:named_table, :set, :public])
-    end
+    _ = cache_table()
+    :ok
   end
 
   defp create_exception_module(module_name, python_class_name) do
@@ -80,7 +92,16 @@ defmodule SnakeBridge.DynamicException do
       )
     end
 
-    :ets.insert(@exception_cache, {module_name, true})
+    if cache_table() != :undefined do
+      :ets.insert(@exception_cache, {module_name, true})
+    end
+  end
+
+  defp cache_table do
+    case :ets.whereis(@exception_cache) do
+      :undefined -> :undefined
+      _ -> @exception_cache
+    end
   end
 
   defp sanitize_class_name(python_class_name) do

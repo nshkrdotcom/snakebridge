@@ -269,10 +269,16 @@ config :snakebridge,
 
 ```elixir
 config :snakebridge,
-  session_max_refs: 10_000,        # Max refs per session
-  session_ttl_seconds: 3600,       # Session TTL (1 hour)
-  session_cleanup_log_level: :debug # Optional cleanup logging
+  session_max_refs: 10_000,           # Max refs per session
+  session_ttl_seconds: 3600,          # Session TTL (1 hour)
+  session_cleanup_log_level: :debug,  # Optional cleanup logging
+  session_cleanup_timeout_ms: 10_000  # Cleanup task timeout (default: 10s)
 ```
+
+The `session_cleanup_timeout_ms` option controls how long supervised cleanup tasks
+wait for Python session release before timing out. This prevents cleanup from blocking
+indefinitely if the Python runtime is unresponsive. Set to `:infinity` to wait
+indefinitely (not recommended for production).
 
 ## Environment Variables
 

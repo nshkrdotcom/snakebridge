@@ -76,15 +76,21 @@ defmodule SnakeBridge.Compiler.IntrospectionRunner do
         _ -> :unknown
       end
 
-    :telemetry.execute(
-      [:snakebridge, :introspection, :error],
-      %{count: 1},
-      %{
-        library: library_name,
-        python_module: python_module,
-        error_type: error_type,
-        reason: reason
-      }
-    )
+    if telemetry_ready?() do
+      :telemetry.execute(
+        [:snakebridge, :introspection, :error],
+        %{count: 1},
+        %{
+          library: library_name,
+          python_module: python_module,
+          error_type: error_type,
+          reason: reason
+        }
+      )
+    end
+  end
+
+  defp telemetry_ready? do
+    Code.ensure_loaded?(:telemetry) and :ets.whereis(:telemetry_handler_table) != :undefined
   end
 end

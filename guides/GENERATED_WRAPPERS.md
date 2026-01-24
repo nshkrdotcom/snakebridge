@@ -90,6 +90,33 @@ SnakeBridge provides three standard modes:
 - `:public` / `:standard` - discover submodules and keep public API modules
 - `:all` / `:nuclear` - discover everything (including private)
 
+### Lazy Import Handling
+
+Many Python libraries use lazy imports via `__getattr__` patterns (e.g., vLLM,
+transformers). SnakeBridge handles these by iterating over `__all__` when present
+to discover classes and functions that aren't visible to `inspect.getmembers()`:
+
+```python
+# Python library with lazy imports
+# mylib/__init__.py
+__all__ = ["LazyClass", "lazy_function"]
+
+def __getattr__(name):
+    if name == "LazyClass":
+        from .internal import LazyClass
+        return LazyClass
+    raise AttributeError(name)
+```
+
+When introspecting, SnakeBridge:
+
+1. Checks if `__all__` is defined on the module
+2. Iterates over `__all__` entries to trigger lazy loading
+3. Discovers the actual class/function after it's loaded
+4. Records any import errors for later reference
+
+This ensures libraries using lazy loading patterns generate complete wrappers.
+
 ```elixir
 {:mylib, "1.0.0", generate: :all, module_mode: :light}
 {:mylib, "1.0.0", generate: :all, module_mode: :public}
@@ -502,6 +529,31 @@ Python names conflicting with Elixir reserved words are prefixed with `py_`:
 ```elixir
 def py_class(ref, opts \\ [])  # Python method named "class"
 ```
+
+### Method Name Collision Handling
+
+When a Python class has both `__init__` (mapped to `new`) and a method literally
+named `new`, SnakeBridge renames the method to `python_new` to avoid arity conflicts:
+
+```python
+# Python class with collision
+class MyClass:
+    def __init__(self, value):
+        self.value = value
+
+    def new(self, other_value):  # Collides with __init__ -> new
+        return MyClass(other_value)
+```
+
+```elixir
+# Generated Elixir module
+defmodule MyLib.MyClass do
+  def new(value, opts \\ [])           # From __init__
+  def python_new(ref, other_value)     # Renamed from 'new' method
+end
+```
+
+This prevents "function new/N defined multiple times" compilation errors.
 
 ## Strict Mode
 

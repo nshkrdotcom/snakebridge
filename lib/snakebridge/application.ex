@@ -12,6 +12,8 @@ defmodule SnakeBridge.Application do
     suppress_otel_transitive_logs()
 
     children = [
+      {Task.Supervisor, name: SnakeBridge.TaskSupervisor},
+      SnakeBridge.CacheOwner,
       SnakeBridge.Registry,
       SnakeBridge.SessionManager,
       SnakeBridge.CallbackRegistry

@@ -279,6 +279,53 @@ result = extract_values(large_data)
 SnakeBridge.release_ref(large_data)
 ```
 
+## 10. Callback Safety (v0.14.0+)
+
+### Deadlock-Free Callbacks
+
+As of v0.14.0, callbacks registered with `SnakeBridge.CallbackRegistry` are invoked
+asynchronously via supervised tasks. This means:
+
+- Callbacks can safely invoke other callbacks without deadlocking the registry
+- Long-running callbacks don't block the registry from handling other requests
+- Nested/recursive callback patterns now work correctly
+
+```elixir
+# Safe: callback invoking another callback
+SnakeBridge.CallbackRegistry.register("outer", fn data ->
+  # This would deadlock before v0.14.0
+  SnakeBridge.CallbackRegistry.invoke("inner", data)
+  :ok
+end)
+
+SnakeBridge.CallbackRegistry.register("inner", fn data ->
+  process(data)
+end)
+```
+
+### Session Cleanup Error Handling
+
+Session cleanup now runs in supervised tasks and emits telemetry on failure.
+Monitor cleanup errors to detect Python runtime issues:
+
+```elixir
+# Attach handler for cleanup failures
+:telemetry.attach(
+  "cleanup-monitor",
+  [:snakebridge, :session, :cleanup, :error],
+  fn _event, _measurements, metadata, _config ->
+    Logger.warning("Cleanup failed: #{inspect(metadata.error)}")
+  end,
+  nil
+)
+```
+
+Configure cleanup timeout to prevent indefinite waits:
+
+```elixir
+config :snakebridge, session_cleanup_timeout_ms: 10_000  # 10 seconds (default)
+```
+
 ---
 
 ## See Also

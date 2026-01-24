@@ -353,22 +353,27 @@ defmodule SnakeBridge.Docs do
   end
 
   defp lookup_cache(key) do
-    if cache_enabled?() do
-      ensure_cache_table()
-
-      case :ets.lookup(@cache_table, key) do
-        [{^key, doc}] -> {:hit, doc}
-        [] -> :miss
-      end
+    with true <- cache_enabled?(),
+         table when table != :undefined <- cache_table() do
+      lookup_cache_table(key)
     else
-      :miss
+      _ -> :miss
+    end
+  end
+
+  defp lookup_cache_table(key) do
+    case :ets.lookup(@cache_table, key) do
+      [{^key, doc}] -> {:hit, doc}
+      [] -> :miss
     end
   end
 
   defp maybe_cache(key, doc) do
     if cache_enabled?() do
-      ensure_cache_table()
-      :ets.insert(@cache_table, {key, doc})
+      case cache_table() do
+        :undefined -> :ok
+        _ -> :ets.insert(@cache_table, {key, doc})
+      end
     end
   end
 
@@ -377,13 +382,10 @@ defmodule SnakeBridge.Docs do
     |> Keyword.get(:cache_enabled, true)
   end
 
-  defp ensure_cache_table do
+  defp cache_table do
     case :ets.whereis(@cache_table) do
-      :undefined ->
-        :ets.new(@cache_table, [:set, :public, :named_table, read_concurrency: true])
-
-      _ ->
-        @cache_table
+      :undefined -> :undefined
+      _ -> @cache_table
     end
   end
 end

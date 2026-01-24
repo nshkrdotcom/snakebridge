@@ -35,8 +35,13 @@ Forwarded from Snakepit via RuntimeForwarder (see below):
 | Event | Measurements | Metadata |
 |-------|-------------|----------|
 | `[:snakebridge, :session, :cleanup]` | `system_time` | `session_id`, `source`, `reason` |
+| `[:snakebridge, :session, :cleanup, :error]` | `system_time` | `session_id`, `source`, `reason`, `error` |
 
 The `source` is `:manual` or `:owner_down`. The `reason` provides the exit reason.
+
+The `:error` event is emitted when best-effort session cleanup fails. The `error` field
+contains the failure reason (exception, exit, or throw). This helps identify Python
+runtime issues or timeout problems during cleanup.
 
 ### Documentation Events
 
@@ -128,6 +133,37 @@ defmodule MyApp.SnakeBridgeHandler do
       library: metadata.library,
       function: metadata.function
     })
+  end
+end
+```
+
+### Session Cleanup Error Handler
+
+Monitor cleanup failures to detect Python runtime issues:
+
+```elixir
+defmodule MyApp.CleanupMonitor do
+  require Logger
+
+  def attach do
+    :telemetry.attach(
+      "cleanup-error-handler",
+      [:snakebridge, :session, :cleanup, :error],
+      &handle_cleanup_error/4,
+      %{}
+    )
+  end
+
+  def handle_cleanup_error(_event, _measurements, metadata, _config) do
+    Logger.warning(
+      "Session cleanup failed",
+      session_id: metadata.session_id,
+      source: metadata.source,
+      error: inspect(metadata.error)
+    )
+
+    # Alert on repeated failures
+    MyApp.Alerting.increment(:session_cleanup_failures)
   end
 end
 ```

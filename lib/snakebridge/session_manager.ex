@@ -218,7 +218,10 @@ defmodule SnakeBridge.SessionManager do
         new_state = remove_session(state, session_id, session_data)
 
         # Best-effort cleanup: errors are surfaced via telemetry but do not affect state.
-        Task.start(fn -> release_session_best_effort(session_id, reason) end)
+        _ =
+          Task.Supervisor.start_child(SnakeBridge.TaskSupervisor, fn ->
+            release_session_best_effort(session_id, reason, cleanup_runtime_opts())
+          end)
 
         new_state
     end
@@ -261,8 +264,8 @@ defmodule SnakeBridge.SessionManager do
     end
   end
 
-  defp release_session_best_effort(session_id, reason) do
-    case SnakeBridge.Runtime.release_session(session_id, []) do
+  defp release_session_best_effort(session_id, reason, runtime_opts) do
+    case SnakeBridge.Runtime.release_session(session_id, runtime_opts) do
       :ok ->
         :ok
 
@@ -275,5 +278,10 @@ defmodule SnakeBridge.SessionManager do
   catch
     :exit, exit_reason ->
       emit_session_cleanup_error(session_id, reason, exit_reason)
+  end
+
+  defp cleanup_runtime_opts do
+    timeout_ms = Application.get_env(:snakebridge, :session_cleanup_timeout_ms, 10_000)
+    [__runtime__: [timeout: timeout_ms]]
   end
 end

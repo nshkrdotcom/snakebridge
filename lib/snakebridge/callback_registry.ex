@@ -132,24 +132,43 @@ defmodule SnakeBridge.CallbackRegistry do
   end
 
   @impl true
-  def handle_call({:invoke, callback_id, args}, _from, state) do
+  def handle_call({:invoke, callback_id, args}, from, state) do
     case Map.get(state.callbacks, callback_id) do
       nil ->
         {:reply, {:error, :callback_not_found}, state}
 
-      %{fun: fun, arity: arity} = _data ->
-        if length(args) != arity do
-          {:reply, {:error, {:arity_mismatch, arity}}, state}
-        else
-          try do
-            result = apply(fun, args)
-            {:reply, {:ok, result}, state}
-          rescue
-            exception ->
-              {:reply, {:error, {:exception, exception}}, state}
-          end
-        end
+      %{fun: fun, arity: arity} ->
+        invoke_callback(fun, arity, args, from, state)
     end
+  end
+
+  defp invoke_callback(fun, arity, args, from, state) do
+    if length(args) != arity do
+      {:reply, {:error, {:arity_mismatch, arity}}, state}
+    else
+      spawn_callback_task(fun, args, from, state)
+    end
+  end
+
+  defp spawn_callback_task(fun, args, from, state) do
+    case Task.Supervisor.start_child(SnakeBridge.TaskSupervisor, fn ->
+           reply = execute_callback(fun, args)
+           GenServer.reply(from, reply)
+         end) do
+      {:ok, _pid} ->
+        {:noreply, state}
+
+      {:error, reason} ->
+        {:reply, {:error, {:invoke_failed, reason}}, state}
+    end
+  end
+
+  defp execute_callback(fun, args) do
+    {:ok, apply(fun, args)}
+  rescue
+    exception -> {:error, {:exception, exception}}
+  catch
+    kind, reason -> {:error, {kind, reason}}
   end
 
   @impl true

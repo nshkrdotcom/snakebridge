@@ -679,8 +679,29 @@ defmodule SnakeBridge.Generator do
   end
 
   defp with_lock(path, fun) when is_function(fun, 0) do
-    lock_key = {:snakebridge_write, Path.expand(path)}
-    :global.trans(lock_key, fun)
+    lock_path = Path.expand(path) <> ".lock"
+    File.mkdir_p!(Path.dirname(lock_path))
+
+    acquire_lock(lock_path, fun, 100)
+  end
+
+  defp acquire_lock(lock_path, fun, retries_left) do
+    case File.open(lock_path, [:write, :exclusive]) do
+      {:ok, device} ->
+        try do
+          fun.()
+        after
+          File.close(device)
+          File.rm(lock_path)
+        end
+
+      {:error, :eexist} when retries_left > 0 ->
+        Process.sleep(50)
+        acquire_lock(lock_path, fun, retries_left - 1)
+
+      {:error, reason} ->
+        raise "Failed to acquire lock #{lock_path}: #{inspect(reason)}"
+    end
   end
 
   defp cleanup_stale_generated_files(library, config, expected_paths) do

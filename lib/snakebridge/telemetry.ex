@@ -350,9 +350,14 @@ defmodule SnakeBridge.Telemetry do
   end
 
   defp emit(event, measurements, metadata) do
-    case Application.ensure_all_started(:telemetry) do
-      {:ok, _} -> :telemetry.execute(event, measurements, metadata)
-      {:error, _} -> :ok
+    if telemetry_ready?() do
+      :telemetry.execute(event, measurements, metadata)
+    else
+      :ok
     end
+  end
+
+  defp telemetry_ready? do
+    Code.ensure_loaded?(:telemetry) and :ets.whereis(:telemetry_handler_table) != :undefined
   end
 end

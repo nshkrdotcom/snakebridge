@@ -244,6 +244,50 @@ StreamRefs carry their `session_id` and `pool_name`, ensuring subsequent `stream
 calls route to the same Python worker that holds the iterator state. See the
 [Session Affinity](SESSION_AFFINITY.md) guide for configuration options.
 
+### Stream Timeout Configuration
+
+For `stream_dynamic` operations (streaming via generated wrappers with callbacks),
+configure timeouts to prevent indefinite waits:
+
+```elixir
+# Per-call stream timeout
+MyLib.generate_stream(input, __runtime__: [stream_timeout: 300_000])  # 5 minutes
+
+# Unlimited timeout for long-running streams
+MyLib.generate_stream(input, __runtime__: [stream_timeout: :infinity])
+```
+
+The `stream_timeout` option controls how long the streaming operation waits for
+completion. When a timeout occurs:
+
+1. The stream worker task is terminated (`:kill` signal)
+2. Resources are released to prevent leaks
+3. An `{:error, :timeout}` is returned
+
+Configure default stream timeout via application config:
+
+```elixir
+config :snakebridge,
+  runtime: [
+    default_stream_timeout: 1_800_000  # 30 minutes (default)
+  ]
+```
+
+Or use timeout profiles for library-specific defaults:
+
+```elixir
+config :snakebridge,
+  runtime: [
+    profiles: %{
+      ml_inference: [timeout: 600_000, stream_timeout: 1_800_000],
+      batch_job: [timeout: :infinity, stream_timeout: :infinity]
+    },
+    library_profiles: %{
+      "transformers" => :ml_inference
+    }
+  ]
+```
+
 ## Async Generators
 
 SnakeBridge recognizes async generators (`stream_type: "async_generator"`) in the wire

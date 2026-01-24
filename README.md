@@ -168,8 +168,10 @@ defp python_deps do
       extras: ["sql"],                # pip extras
       include: ["array", "mean"],     # Only these symbols
       exclude: ["testing"],           # Exclude these
-      submodules: true,               # Include submodules
-      public_api: true,               # Filter to public API modules only
+      module_mode: :public,           # :root | :public | :all (replaces submodules/public_api)
+      module_depth: 2,                # Limit submodule depth
+      module_include: ["linalg"],     # Force-include specific submodules
+      module_exclude: ["testing.*"],  # Exclude submodule patterns
       generate: :all,                 # Generate all symbols
       streaming: ["generate"],        # *_stream variants
       min_signature_tier: :stub},     # Signature quality threshold
@@ -178,6 +180,11 @@ defp python_deps do
   ]
 end
 ```
+
+Module discovery modes (for `generate: :all`):
+- `:root` / `:light` - Root module only
+- `:public` / `:standard` - Submodules with public APIs (`__all__` or top-level defs)
+- `:all` / `:nuclear` - All submodules including private
 
 ### Application Config
 
@@ -305,6 +312,22 @@ SnakeBridge.method(ref, "compute", [], __runtime__: [affinity: :strict_fail_fast
 
 Modes: `:hint` (default), `:strict_queue`, `:strict_fail_fast`
 
+### Supervised Execution (v0.14.0+)
+
+Stream workers, callbacks, and session cleanup run under `SnakeBridge.TaskSupervisor`:
+
+- **Deadlock-free callbacks**: Callbacks can invoke other callbacks without blocking
+- **Reliable cleanup**: Session cleanup tasks are supervised with configurable timeout
+- **Stream timeouts**: Configure `stream_timeout` for `stream_dynamic` operations
+
+```elixir
+# Configure session cleanup timeout
+config :snakebridge, session_cleanup_timeout_ms: 10_000  # 10 seconds
+
+# Per-call stream timeout
+MyLib.generate_stream(input, __runtime__: [stream_timeout: 300_000])
+```
+
 ### Telemetry
 
 ```elixir
@@ -313,7 +336,7 @@ Modes: `:hint` (default), `:strict_queue`, `:strict_fail_fast`
 end, nil)
 ```
 
-Events: `[:snakebridge, :compile, :*]`, `[:snakebridge, :runtime, :call, :*]`, `[:snakebridge, :session, :cleanup]`
+Events: `[:snakebridge, :compile, :*]`, `[:snakebridge, :runtime, :call, :*]`, `[:snakebridge, :session, :cleanup]`, `[:snakebridge, :session, :cleanup, :error]`
 
 ## Mix Tasks
 

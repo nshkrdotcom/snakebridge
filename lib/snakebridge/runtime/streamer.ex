@@ -89,11 +89,18 @@ defmodule SnakeBridge.Runtime.Streamer do
     caller = self()
     stream_ref = make_ref()
 
+    timeout_ms =
+      Keyword.get(
+        runtime_opts,
+        :stream_timeout,
+        SnakeBridge.Defaults.runtime_default_stream_timeout()
+      )
+
     chunk_callback = fn chunk -> send(caller, {stream_ref, :chunk, chunk}) end
 
-    # Per-call stream worker: monitored by the caller and intentionally unsupervised.
-    {:ok, pid} =
-      Task.start(fn ->
+    # Per-call stream worker supervised under TaskSupervisor.
+    start_result =
+      Task.Supervisor.start_child(SnakeBridge.TaskSupervisor, fn ->
         stream_result =
           Runtime.execute_with_telemetry(metadata, fn ->
             Runtime.runtime_client().execute_stream(
@@ -108,8 +115,15 @@ defmodule SnakeBridge.Runtime.Streamer do
         send(caller, {stream_ref, :done, stream_result})
       end)
 
-    monitor_ref = Process.monitor(pid)
-    result = consume_stream_chunks(stream_ref, monitor_ref, callback)
+    result =
+      case start_result do
+        {:ok, pid} ->
+          monitor_ref = Process.monitor(pid)
+          consume_stream_chunks(stream_ref, monitor_ref, pid, timeout_ms, callback)
+
+        {:error, reason} ->
+          {:error, reason}
+      end
 
     case result do
       :ok ->
@@ -172,7 +186,7 @@ defmodule SnakeBridge.Runtime.Streamer do
 
   defp decode_stream_chunk(chunk), do: {:ok, Types.decode(chunk)}
 
-  defp consume_stream_chunks(stream_ref, monitor_ref, callback) do
+  defp consume_stream_chunks(stream_ref, monitor_ref, pid, :infinity, callback) do
     receive do
       {^stream_ref, :chunk, chunk} ->
         case decode_stream_chunk(chunk) do
@@ -180,7 +194,7 @@ defmodule SnakeBridge.Runtime.Streamer do
           {:ok, value} -> callback.(value)
         end
 
-        consume_stream_chunks(stream_ref, monitor_ref, callback)
+        consume_stream_chunks(stream_ref, monitor_ref, pid, :infinity, callback)
 
       {^stream_ref, :done, result} ->
         Process.demonitor(monitor_ref, [:flush])
@@ -188,6 +202,35 @@ defmodule SnakeBridge.Runtime.Streamer do
 
       {:DOWN, ^monitor_ref, :process, _pid, reason} ->
         {:error, reason}
+    end
+  end
+
+  defp consume_stream_chunks(stream_ref, monitor_ref, pid, timeout_ms, callback)
+       when is_integer(timeout_ms) and timeout_ms >= 0 do
+    receive do
+      {^stream_ref, :chunk, chunk} ->
+        case decode_stream_chunk(chunk) do
+          :skip -> :ok
+          {:ok, value} -> callback.(value)
+        end
+
+        consume_stream_chunks(stream_ref, monitor_ref, pid, timeout_ms, callback)
+
+      {^stream_ref, :done, result} ->
+        Process.demonitor(monitor_ref, [:flush])
+        result
+
+      {:DOWN, ^monitor_ref, :process, _pid, reason} ->
+        {:error, reason}
+    after
+      timeout_ms ->
+        Process.demonitor(monitor_ref, [:flush])
+
+        if Process.alive?(pid) do
+          Process.exit(pid, :kill)
+        end
+
+        {:error, :stream_timeout}
     end
   end
 

@@ -26,6 +26,8 @@ defmodule SnakeBridge.Lock.Verifier do
 
   """
 
+  require Logger
+
   @type verification_result :: :ok | {:warning, [String.t()]} | {:error, [String.t()]}
 
   @doc """
@@ -96,7 +98,7 @@ defmodule SnakeBridge.Lock.Verifier do
         :ok
 
       {:warning, warnings} ->
-        Enum.each(warnings, &Mix.shell().info("Warning: #{&1}"))
+        Enum.each(warnings, &Logger.warning("Warning: #{&1}"))
         :ok
 
       {:error, errors} ->

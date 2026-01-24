@@ -10,16 +10,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.14.0] - 2026-01-23
 
 ### Added
-- **Public API filtering** (`public_api: true`): New option for submodule introspection that filters to only modules with explicit public APIs
-  - Modules with `__all__` defined are included
-  - Modules with classes/functions defined in the module (not imported) are included
-  - Private modules (any path component starting with `_`) are excluded
-- **Compilation progress output**: Progress messages during introspection and generation phases
-- **Method collision fix**: When a Python class has both `__init__` and a method named `new`, the method is renamed to `python_new` to avoid arity collisions
-- **Session cleanup failure telemetry**: Emits `[:snakebridge, :session, :cleanup, :error]` when best-effort cleanup fails
+
+#### Task Supervision
+- **SnakeBridge.TaskSupervisor**: New supervisor for async operations in the application tree
+- Stream workers now run under TaskSupervisor instead of unsupervised `Task.start`
+- Session cleanup tasks are supervised for reliable resource release
+- Callback invocations execute in supervised tasks with `GenServer.reply/2`
+
+#### Callback Registry Deadlock Prevention
+- Refactored `invoke/2` to spawn async tasks instead of blocking `handle_call`
+- Callbacks can now safely invoke other callbacks without deadlocking
+- Registry remains responsive during long-running callback execution
+- Added catch clause for non-exception throws in callback execution
+
+#### ETS Table Ownership
+- **CacheOwner GenServer**: New process to own long-lived ETS tables
+- Tables `:snakebridge_docs` and `:snakebridge_exception_cache` survive caller exit
+- Modules gracefully handle missing tables during compile-time tooling
+- Removed on-demand table creation from Docs and DynamicException modules
+
+#### Stream Timeout Support
+- Added `:stream_timeout` runtime option for `stream_dynamic` operations
+- Configurable timeout with `:infinity` support for unlimited waits
+- Workers are killed on timeout to prevent resource leaks
+- Default timeout available via `SnakeBridge.Defaults.runtime_default_stream_timeout/0`
+
+#### Session Cleanup Configuration
+- Added `:session_cleanup_timeout_ms` application config option
+- Cleanup tasks pass timeout to `Runtime.release_session/2`
+- Default cleanup timeout of 10 seconds
+
+#### Telemetry Robustness
+- Added `telemetry_ready?/0` checks before emitting events
+- Prevents crashes when telemetry tables don't exist during compilation
+- Applied consistently across Runtime, Streamer, Telemetry, and IntrospectionRunner
+
+#### Module Discovery System
+- **module_mode**: New configuration option with three modes:
+  - `:root` / `:light` - only the root module
+  - `:public` / `:standard` - discover submodules with public APIs
+  - `:all` / `:nuclear` - discover everything including private
+- **module_include/module_exclude**: Fine-grained submodule control
+- **module_depth**: Limit discovery depth (e.g., 1 = direct children only)
+- Public mode uses static AST inspection to detect modules with public APIs
+- Modules with `__all__` or top-level definitions are included; private (`_`) excluded
+- Legacy `submodules`/`public_api` options remain supported but deprecated
+
+#### Lazy Import Handling
+- Introspector now iterates `__all__` to discover lazy-loaded classes
+- Handles `__getattr__` patterns used by libraries like vLLM
+- Classes not visible to `inspect.getmembers()` are now properly discovered
+
+#### Method Collision Fix
+- Python classes with both `__init__` and a method named `new` now work correctly
+- The `new` method is renamed to `python_new` to avoid arity collisions
+- Prevents "defaults multiple times" compilation errors in generated code
+
+#### Build System Improvements
+- Compilation progress output during introspection and generation phases
+- Config hash tracking in lock file detects library option changes
+- Auto-generates `priv/python/requirements.txt` from `python_deps` in mix.exs
+- Modules that fail to import now record errors instead of being silently skipped
+
+#### File Locking Improvements
+- Replaced `:global.trans` with file-based `.lock` mechanism
+- Retry logic with configurable attempts and backoff
+- More reliable across distributed compilation scenarios
+
+#### Documentation Generation
+- Module files are now generated from module_docs even without symbols
+- Error notes added to moduledoc when Python import fails during generation
+- Split layout correctly handles submodule documentation
+- Session cleanup failure telemetry: Emits `[:snakebridge, :session, :cleanup, :error]` when best-effort cleanup fails
 
 ### Changed
 - Registry is now supervised at runtime while keeping lazy startup for compile-time tasks
+- `Lock.Verifier` uses `Logger.warning` instead of `Mix.shell().info`
+- Extracted helper functions for cache table access patterns
+
+### Internal
+- Added CacheOwnerTest verifying table ownership semantics
+- Added callback tests for non-blocking invocation behavior
+- Added nested callback invocation test proving deadlock prevention
+- Added RuntimeStreamerTimeoutTest for timeout and worker cleanup
+- Added RegistrySupervisionTest for idempotent start_link behavior
+- Added SessionCleanupTelemetryTest with RuntimeClientStub for failure simulation
+- Added fixture_lazy_import, fixture_module_modes, fixture_new_collision for testing
+- New test suites: LazyImportIntrospectionTest, ModuleModeIntrospectionTest, NewMethodCollisionTest
+- Introspector catches all import exceptions, not just ImportError
+- JSON parser extracts objects from output with warning prefixes
+- Pipeline clears stale classes when regenerating with new filters
+- Reserved attribute names list prevents 'new' attribute collisions
+- Updated ex_doc from 0.39.3 to 0.40.0
+- Updated snakepit from v0.11.0 to v0.11.1
 
 ## [0.13.0] - 2026-01-21
 

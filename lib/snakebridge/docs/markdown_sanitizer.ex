@@ -8,8 +8,53 @@ defmodule SnakeBridge.Docs.MarkdownSanitizer do
 
   def sanitize(markdown) when is_binary(markdown) do
     markdown
+    |> wrap_doctest_blocks()
     |> fix_unclosed_fences()
     |> fix_manpage_quotes_outside_fences()
+  end
+
+  defp wrap_doctest_blocks(markdown) do
+    lines = String.split(markdown, "\n", trim: false)
+
+    {out, _in_fence, in_doctest} =
+      Enum.reduce(lines, {[], false, false}, &process_doctest_line/2)
+
+    out = close_trailing_doctest(out, in_doctest)
+
+    out
+    |> Enum.reverse()
+    |> Enum.join("\n")
+  end
+
+  defp process_doctest_line(line, {acc, in_fence, in_doctest}) do
+    cond do
+      fence_line?(line) -> handle_fence_line(line, acc, in_doctest)
+      in_fence -> {[line | acc], true, in_doctest}
+      doctest_start?(line) -> handle_doctest_start(line, acc, in_doctest)
+      in_doctest and String.trim(line) == "" -> {[line, "```" | acc], false, false}
+      in_doctest -> {[line | acc], false, true}
+      true -> {[line | acc], false, false}
+    end
+  end
+
+  defp handle_fence_line(line, acc, in_doctest) do
+    acc = close_trailing_doctest(acc, in_doctest)
+    {[line | acc], true, false}
+  end
+
+  defp handle_doctest_start(line, acc, true = _in_doctest), do: {[line | acc], false, true}
+
+  defp handle_doctest_start(line, acc, false = _in_doctest) do
+    {[line, "```python" | acc], false, true}
+  end
+
+  defp close_trailing_doctest(acc, true = _in_doctest), do: ["```" | acc]
+  defp close_trailing_doctest(acc, false = _in_doctest), do: acc
+
+  defp doctest_start?(line) do
+    line
+    |> String.trim_leading()
+    |> String.starts_with?(">>>")
   end
 
   defp fix_unclosed_fences(markdown) do

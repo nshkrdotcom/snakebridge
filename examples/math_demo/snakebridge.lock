@@ -5,7 +5,7 @@
   },
   "environment": {
     "elixir_version": "1.18.4",
-    "generator_hash": "c7a1d5edcd09f124c4faa65dea104391b75196aa2ff80f2c9a15084f7a726481",
+    "generator_hash": "b42fe11f5e562e661535f7df00ee90c76624920d03cf35f9fbca687ac22b0c0f",
     "hardware": {
       "accelerator": "cpu",
       "cpu_features": [
@@ -30,7 +30,7 @@
     "python_platform": "x86_64-pc-linux-gnu",
     "python_runtime_hash": "df2bb64c335c6096abfe779d140288d2ff1f66d033f7472986e3032854e5c9ee",
     "python_version": "3.12.3",
-    "snakebridge_version": "0.15.0"
+    "snakebridge_version": "0.15.1"
   },
   "libraries": {
     "json": {
@@ -47,5 +47,5 @@
     }
   },
   "python_packages": {},
-  "version": "0.15.0"
+  "version": "0.15.1"
 }

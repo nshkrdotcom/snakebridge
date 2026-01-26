@@ -23,10 +23,13 @@ import importlib
 import importlib.util
 import types
 import os
+import re
+import textwrap
 import ast
 import pkgutil
 import subprocess
 import fnmatch
+import enum
 from typing import Any, Dict, List, Optional, Tuple, Union, get_type_hints
 import typing
 import argparse
@@ -207,8 +210,102 @@ def _iter_class_method_pairs(
     return pairs, protocol_dunders, False, "all"
 
 
+def _module_root(module_name: Optional[str]) -> str:
+    if not module_name:
+        return ""
+    return module_name.split(".", 1)[0]
+
+
+def _enum_member_comments(cls: type) -> Dict[str, str]:
+    try:
+        source = inspect.getsource(cls)
+    except Exception:
+        return {}
+
+    source = textwrap.dedent(source)
+    lines = source.splitlines()
+    comments: Dict[str, str] = {}
+
+    # Skip the class definition line.
+    for line in lines[1:]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith(('"""', "'''")):
+            # Docstring lines are not enum member definitions.
+            continue
+
+        match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*[^#]*#\s*(.+)$", stripped)
+        if match:
+            name, comment = match.groups()
+            if name in cls.__members__:
+                comments[name] = comment.strip()
+
+    return comments
+
+
+def _enum_members_doc(cls: type) -> str:
+    if not issubclass(cls, enum.Enum):
+        return ""
+
+    members = list(cls.__members__.items())
+    if not members:
+        return ""
+
+    comments = _enum_member_comments(cls)
+    lines = [f"Enum members for `{cls.__name__}`.", "", "Members:"]
+
+    for name, member in members:
+        try:
+            value_repr = ascii(member.value)
+        except Exception:
+            value_repr = repr(member.value)
+
+        if name in comments:
+            lines.append(f"- `{name}` = `{value_repr}`: {comments[name]}")
+        else:
+            lines.append(f"- `{name}` = `{value_repr}`")
+
+    return "\n".join(lines)
+
+
+def _inherits_external_docstring(cls: type, doc: str) -> bool:
+    if not doc:
+        return False
+
+    if cls.__dict__.get("__doc__") is not None:
+        return False
+
+    cls_root = _module_root(getattr(cls, "__module__", None))
+
+    for base in cls.__mro__[1:]:
+        base_doc = base.__dict__.get("__doc__")
+        if not base_doc:
+            continue
+
+        cleaned = inspect.cleandoc(base_doc).strip()
+        if cleaned and doc.strip() == cleaned:
+            base_root = _module_root(getattr(base, "__module__", None))
+            return base_root != cls_root
+
+    return False
+
+
 def _docstring_text(obj: Any) -> str:
+    """Get docstring, avoiding inherited base docs and synthesizing enum docs."""
     doc = inspect.getdoc(obj) or ""
+
+    if inspect.isclass(obj):
+        cls = obj
+
+        if cls.__dict__.get("__doc__") is None:
+            enum_doc = _enum_members_doc(cls)
+            if enum_doc:
+                return enum_doc[:8000]
+
+            if _inherits_external_docstring(cls, doc):
+                return ""
+
     return doc[:8000] if doc else ""
 
 
@@ -1366,7 +1463,6 @@ def _build_attribute_info(
     module_name: str,
     module_doc: Optional[str],
 ) -> Dict[str, Any]:
-    doc = _resolve_docstring(obj, None, module_doc)
     return {
         "name": name,
         "type": "attribute",
@@ -1377,9 +1473,9 @@ def _build_attribute_info(
         "signature_detail": "attribute",
         "parameters": [],
         "return_type": type_to_dict(type(obj)),
-        "docstring": doc.get("docstring", ""),
-        "doc_source": doc.get("doc_source"),
-        "doc_missing_reason": doc.get("doc_missing_reason"),
+        "docstring": "",
+        "doc_source": "empty",
+        "doc_missing_reason": "attribute docstring not supported",
     }
 
 

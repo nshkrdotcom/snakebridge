@@ -293,15 +293,7 @@ defmodule SnakeBridge.Registry do
 
     case File.read(registry_path) do
       {:ok, content} ->
-        with {:ok, data} <- Jason.decode(content),
-             {:ok, libraries} <- parse_registry_data(data) do
-          registry_update(fn _state -> libraries end)
-          :ok
-        else
-          {:error, reason} = error ->
-            Logger.error("Failed to parse registry from #{registry_path}: #{inspect(reason)}")
-            error
-        end
+        load_content(content, registry_path)
 
       {:error, :enoent} ->
         # File doesn't exist yet - start with empty registry
@@ -310,6 +302,19 @@ defmodule SnakeBridge.Registry do
 
       {:error, reason} = error ->
         Logger.error("Failed to read registry from #{registry_path}: #{inspect(reason)}")
+        error
+    end
+  end
+
+  # Parses and loads registry content from a JSON string
+  defp load_content(content, registry_path) do
+    with {:ok, data} <- Jason.decode(content),
+         {:ok, libraries} <- parse_registry_data(data) do
+      registry_update(fn _state -> libraries end)
+      :ok
+    else
+      {:error, reason} = error ->
+        Logger.error("Failed to parse registry from #{registry_path}: #{inspect(reason)}")
         error
     end
   end

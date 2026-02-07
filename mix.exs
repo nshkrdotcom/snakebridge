@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.15.1"
+  @version "0.16.0"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -43,7 +43,7 @@ defmodule SnakeBridge.MixProject do
   defp deps do
     [
       # Core - Python bridge
-      {:snakepit, "~> 0.12.0"},
+      {:snakepit, "~> 0.13.0"},
 
       # JSON encoding
       {:jason, "~> 1.4"},
@@ -52,7 +52,7 @@ defmodule SnakeBridge.MixProject do
       {:telemetry_metrics, "~> 1.0"},
 
       # Development & Testing
-      {:ex_doc, "~> 0.31", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:mox, "~> 1.1", only: :test},
@@ -164,6 +164,9 @@ defmodule SnakeBridge.MixProject do
         SnakeBridge.PythonEnv,
         SnakeBridge.EnvironmentError,
         SnakeBridge.IntrospectionError
+      ],
+      Utilities: [
+        SnakeBridge.Examples
       ]
     ]
   end

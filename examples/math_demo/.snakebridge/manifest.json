@@ -242,7 +242,7 @@
               }
             },
             {
-              "default": "<built-in method match of re.Pattern object at 0x7007cb4cb5e0>",
+              "default": "<built-in method match of re.Pattern object at 0x790065fa35e0>",
               "kind": "POSITIONAL_OR_KEYWORD",
               "name": "_w",
               "type": {
@@ -802,7 +802,7 @@
               }
             },
             {
-              "default": "<built-in method match of re.Pattern object at 0x7007cb4cb5e0>",
+              "default": "<built-in method match of re.Pattern object at 0x790065fa35e0>",
               "kind": "POSITIONAL_OR_KEYWORD",
               "name": "_w",
               "type": {
@@ -1871,5 +1871,5 @@
       "return_annotation": null
     }
   },
-  "version": "0.15.1"
+  "version": "0.16.0"
 }

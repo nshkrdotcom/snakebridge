@@ -54,6 +54,8 @@ defmodule Demo do
     preferred_worker = wait_for_worker_id(session_id, 25)
     IO.puts("  Preferred worker: #{preferred_worker || "unknown"}")
 
+    monitor_id = Examples.attach_dispatch_monitor()
+
     sleep_task =
       Task.async(fn ->
         SessionContext.with_session([session_id: session_id], fn ->
@@ -61,7 +63,8 @@ defmodule Demo do
         end)
       end)
 
-    Process.sleep(40)
+    Examples.await_dispatch(command: "sleep")
+    Examples.detach_dispatch_monitor(monitor_id)
 
     {result, duration_ms} =
       timed(fn ->
@@ -111,6 +114,8 @@ defmodule Demo do
     preferred_worker = wait_for_worker_id(session_id, 25)
     IO.puts("  Preferred worker: #{preferred_worker || "unknown"}")
 
+    monitor_id = Examples.attach_dispatch_monitor()
+
     sleep_task =
       Task.async(fn ->
         SessionContext.with_session([session_id: session_id], fn ->
@@ -118,7 +123,8 @@ defmodule Demo do
         end)
       end)
 
-    Process.sleep(40)
+    Examples.await_dispatch(command: "sleep")
+    Examples.detach_dispatch_monitor(monitor_id)
 
     {result, duration_ms} =
       timed(fn ->
@@ -159,6 +165,8 @@ defmodule Demo do
     preferred_worker = wait_for_worker_id(session_id, 25)
     IO.puts("  Preferred worker: #{preferred_worker || "unknown"}")
 
+    monitor_id = Examples.attach_dispatch_monitor()
+
     sleep_task =
       Task.async(fn ->
         SessionContext.with_session([session_id: session_id], fn ->
@@ -166,7 +174,8 @@ defmodule Demo do
         end)
       end)
 
-    Process.sleep(40)
+    Examples.await_dispatch(command: "sleep")
+    Examples.detach_dispatch_monitor(monitor_id)
 
     {result, duration_ms} =
       timed(fn ->
@@ -178,7 +187,7 @@ defmodule Demo do
     IO.puts("  Current worker: #{current_worker || "unknown"}")
 
     case result do
-      {:error, :worker_busy} ->
+      {:error, %Snakepit.Error{details: %{reason: :worker_busy}}} ->
         IO.puts("  Strict fail-fast returned :worker_busy as expected")
 
       {:ok, _} ->

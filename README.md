@@ -23,7 +23,7 @@ def project do
 end
 
 defp deps do
-  [{:snakebridge, "~> 0.15.1"}]
+  [{:snakebridge, "~> 0.16.0"}]
 end
 
 defp python_deps do

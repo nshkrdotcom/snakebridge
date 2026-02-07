@@ -195,6 +195,8 @@ defmodule Demo do
     preferred_worker = wait_for_worker_id(session_id, 25)
     IO.puts("  Preferred worker: #{preferred_worker || "unknown"}")
 
+    monitor_id = Examples.attach_dispatch_monitor()
+
     sleep_task =
       Task.async(fn ->
         SessionContext.with_session([session_id: session_id], fn ->
@@ -202,7 +204,8 @@ defmodule Demo do
         end)
       end)
 
-    Process.sleep(40)
+    Examples.await_dispatch(command: "sleep")
+    Examples.detach_dispatch_monitor(monitor_id)
 
     {result, duration_ms} =
       timed(fn ->
@@ -234,10 +237,11 @@ defmodule Demo do
           IO.puts("  Strict queue completed; worker check unavailable")
         end
 
-      {"strict_fail_fast", {:error, :worker_busy}} ->
+      {"strict_fail_fast", {:error, %Snakepit.Error{details: %{reason: :worker_busy}}}} ->
         IO.puts("  Strict fail-fast returned :worker_busy while preferred worker was busy")
 
-      {"strict_fail_fast", {:error, :session_worker_unavailable}} ->
+      {"strict_fail_fast",
+       {:error, %Snakepit.Error{details: %{reason: :session_worker_unavailable}}}} ->
         IO.puts("  Strict fail-fast returned :session_worker_unavailable")
 
       {"strict_fail_fast", {:ok, _}} ->
@@ -291,6 +295,8 @@ defmodule Demo do
     preferred_worker = wait_for_worker_id(session_id, 25)
     IO.puts("  Preferred worker: #{preferred_worker || "unknown"}")
 
+    monitor_id = Examples.attach_dispatch_monitor()
+
     sleep_task =
       Task.async(fn ->
         SessionContext.with_session([session_id: session_id], fn ->
@@ -298,7 +304,8 @@ defmodule Demo do
         end)
       end)
 
-    Process.sleep(40)
+    Examples.await_dispatch(command: "sleep")
+    Examples.detach_dispatch_monitor(monitor_id)
 
     {result, duration_ms} =
       timed(fn ->
@@ -401,7 +408,7 @@ defmodule Demo do
         Dynamic.call(ref, :exists, [], __runtime__: [pool_name: pool_name])
 
       case result do
-        {:error, :session_worker_unavailable} ->
+        {:error, %Snakepit.Error{details: %{reason: :session_worker_unavailable}}} ->
           IO.puts("  Got :session_worker_unavailable as expected")
 
         {:error, other} ->
@@ -450,14 +457,19 @@ defmodule Demo do
 
     sleep_task =
       if contend? do
-        Task.async(fn ->
-          SessionContext.with_session([session_id: session_id], fn ->
-            SnakeBridge.call("time", "sleep", [0.4], __runtime__: [pool_name: pool_name])
-          end)
-        end)
-      end
+        monitor_id = Examples.attach_dispatch_monitor()
 
-    if contend?, do: Process.sleep(40)
+        sleep_task =
+          Task.async(fn ->
+            SessionContext.with_session([session_id: session_id], fn ->
+              SnakeBridge.call("time", "sleep", [0.4], __runtime__: [pool_name: pool_name])
+            end)
+          end)
+
+        Examples.await_dispatch(command: "sleep")
+        Examples.detach_dispatch_monitor(monitor_id)
+        sleep_task
+      end
 
     {result, duration_ms} =
       timed(fn ->
@@ -481,7 +493,7 @@ defmodule Demo do
       {"strict_queue", {:ok, :done}} ->
         IO.puts("  Stream completed (items=#{length(items)})")
 
-      {"strict_queue", {:error, :worker_busy}} ->
+      {"strict_queue", {:error, %Snakepit.Error{details: %{reason: :worker_busy}}}} ->
         IO.puts("  Strict queue stream returned :worker_busy under contention")
 
       {"strict_queue", {:error, reason}} ->

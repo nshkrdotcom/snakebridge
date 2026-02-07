@@ -61,17 +61,18 @@ defmodule SnakeBridge.Docs.LinkSanitizer do
   defp parse_link(rest, is_image) do
     with {:ok, label, after_label} <- split_label(rest, []),
          {:ok, target, remainder} <- parse_target(after_label) do
-      replacement =
-        if unsafe_target?(target) do
-          label
-        else
-          prefix = if is_image, do: "![", else: "["
-          prefix <> label <> "](" <> target <> ")"
-        end
-
-      {:ok, replacement, remainder}
+      {:ok, build_replacement(label, target, is_image), remainder}
     else
       _ -> :error
+    end
+  end
+
+  defp build_replacement(label, target, is_image) do
+    if unsafe_target?(target) do
+      label
+    else
+      prefix = if is_image, do: "![", else: "["
+      prefix <> label <> "](" <> target <> ")"
     end
   end
 

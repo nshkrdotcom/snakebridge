@@ -44,6 +44,25 @@ defmodule SnakeBridge.RuntimeErrorModeTest do
              SnakeBridge.Runtime.call(NumpyLinalg, :solve, [1, 2])
   end
 
+  test "translated error_mode unwraps Snakepit.Error details.reason payloads" do
+    Application.put_env(:snakebridge, :error_mode, :translated)
+
+    reason =
+      wrapped_reason(%{
+        message: "Unexpected value",
+        python_type: "ValueError",
+        python_traceback: "traceback"
+      })
+
+    expect(SnakeBridge.RuntimeClientMock, :execute, fn _tool, _payload, _opts ->
+      {:error, reason}
+    end)
+
+    assert {:error, exception} = SnakeBridge.Runtime.call(NumpyLinalg, :solve, [1, 2])
+    assert exception.__struct__ == SnakeBridge.DynamicException.get_or_create_module("ValueError")
+    assert Map.get(exception, :python_traceback) == "traceback"
+  end
+
   test "raise_translated error_mode raises for translated errors" do
     Application.put_env(:snakebridge, :error_mode, :raise_translated)
 
@@ -74,5 +93,36 @@ defmodule SnakeBridge.RuntimeErrorModeTest do
     assert_raise SnakeBridge.DynamicException.ValueError, fn ->
       SnakeBridge.Runtime.call(NumpyLinalg, :solve, [1, 2])
     end
+  end
+
+  test "raise_translated error_mode raises for wrapped Snakepit.Error reasons" do
+    Application.put_env(:snakebridge, :error_mode, :raise_translated)
+
+    nested_reason = %Snakepit.Error.ValueError{
+      message: "invalid literal for int() with base 10: 'not-a-number'",
+      python_type: "ValueError",
+      python_traceback: "traceback"
+    }
+
+    reason = wrapped_reason(nested_reason)
+
+    expect(SnakeBridge.RuntimeClientMock, :execute, fn _tool, _payload, _opts ->
+      {:error, reason}
+    end)
+
+    assert_raise SnakeBridge.DynamicException.ValueError, fn ->
+      SnakeBridge.Runtime.call(NumpyLinalg, :solve, [1, 2])
+    end
+  end
+
+  defp wrapped_reason(inner_reason) do
+    %Snakepit.Error{
+      category: :worker,
+      message: "Request failed",
+      details: %{
+        command: "snakebridge.call",
+        reason: inner_reason
+      }
+    }
   end
 end

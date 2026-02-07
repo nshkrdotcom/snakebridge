@@ -929,10 +929,12 @@ defmodule SnakeBridge.Runtime do
   defp normalize_release_result(result), do: result
 
   defp translate_reason(reason) do
-    case python_error_payload(reason) do
+    reason_to_translate = unwrap_reason(reason)
+
+    case python_error_payload(reason_to_translate) do
       {_message, traceback, type} when is_binary(type) ->
-        translated = SnakeBridge.ErrorTranslator.translate(reason, traceback)
-        if translated == reason, do: reason, else: translated
+        translated = SnakeBridge.ErrorTranslator.translate(reason_to_translate, traceback)
+        if translated == reason_to_translate, do: reason, else: translated
 
       {message, traceback, _type} when is_binary(message) ->
         translated =
@@ -947,6 +949,28 @@ defmodule SnakeBridge.Runtime do
         reason
     end
   end
+
+  defp unwrap_reason(%Snakepit.Error{details: details} = reason) when is_map(details) do
+    case Map.get(details, :reason) || Map.get(details, "reason") do
+      nil -> reason
+      nested -> unwrap_reason(nested)
+    end
+  end
+
+  defp unwrap_reason(%{} = reason) do
+    case Map.get(reason, :details) || Map.get(reason, "details") do
+      details when is_map(details) ->
+        case Map.get(details, :reason) || Map.get(details, "reason") do
+          nil -> reason
+          nested -> unwrap_reason(nested)
+        end
+
+      _ ->
+        reason
+    end
+  end
+
+  defp unwrap_reason(reason), do: reason
 
   defp python_error_payload(error) when is_map(error) do
     {extract_error_message(error), extract_error_traceback(error), extract_error_type(error)}

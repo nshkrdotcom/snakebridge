@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-02-06
+
+### Added
+- **Dispatch monitoring for examples**: `SnakeBridge.Examples.attach_dispatch_monitor/1` and `await_dispatch/1` use telemetry-based observation to deterministically wait for pool dispatch events, replacing timing-based `Process.sleep` synchronization in example code.
+- **PYTHONPATH includes project `priv/python`**: `ConfigHelper` now adds `priv/python` from the project root to `PYTHONPATH`, making project-local Python modules discoverable without manual configuration.
+- **Error unwrapping tests**: New tests for `translated` and `raise_translated` error modes with wrapped `Snakepit.Error` payloads.
+
+### Fixed
+- **Runtime error unwrapping**: `Runtime.translate_reason/1` now unwraps nested `Snakepit.Error` `details.reason` payloads before translation, so Python exceptions wrapped inside worker error structures are properly translated to Elixir exceptions.
+- **Example error patterns**: Updated pattern matches from bare atoms (`:worker_busy`, `:session_worker_unavailable`) to structured `%Snakepit.Error{details: %{reason: ...}}` matches, aligning with upstream Snakepit error wrapping changes.
+
+### Internal
+- Extracted `LinkSanitizer.build_replacement/3` helper for cleaner link parse logic.
+- Extracted a `load_content` helper in `Registry` for registry JSON parsing.
+- Upgraded snakepit to ~> 0.13.0.
+- Upgraded ex_doc to ~> 0.40.0.
+- Upgraded plug_cowboy from 2.7.5 to 2.8.0 across all examples.
+
 ## [0.15.1] - 2026-01-25
 
 ### Fixed
@@ -849,7 +867,8 @@ Numpy.compute(data, __runtime__: [timeout: 600_000])
 - Type system mapper
 - Basic code generation
 
-[Unreleased]: https://github.com/nshkrdotcom/snakebridge/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/snakebridge/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.13.0...v0.14.0

@@ -252,6 +252,7 @@ defmodule SnakeBridge.ConfigHelper do
     paths =
       [
         SnakeBridge.Env.system_env("PYTHONPATH"),
+        project_priv_python(),
         snakepit_priv_python(),
         snakebridge_priv_python()
       ]
@@ -264,6 +265,10 @@ defmodule SnakeBridge.ConfigHelper do
     else
       Enum.join(paths, path_sep)
     end
+  end
+
+  defp project_priv_python do
+    Path.join(project_root(), "priv/python")
   end
 
   defp snakepit_priv_python do

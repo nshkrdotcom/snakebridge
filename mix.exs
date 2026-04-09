@@ -175,7 +175,7 @@ defmodule SnakeBridge.MixProject do
     [
       name: "snakebridge",
       files:
-        ~w(lib assets priv/snakebridge priv/python .formatter.exs mix.exs README.md LICENSE CHANGELOG.md),
+        ~w(lib assets priv/snakebridge priv/python .formatter.exs mix.exs README.md LICENSE CHANGELOG.md examples guides),
       exclude_patterns: [
         # Python bytecode and cache directories
         ~r/__pycache__/,

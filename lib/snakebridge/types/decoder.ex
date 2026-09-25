@@ -215,8 +215,6 @@ defmodule SnakeBridge.Types.Decoder do
     end
   end
 
-  defp atom_allowed?(_), do: false
-
   defp atom_allowlist do
     case SnakeBridge.Env.app_env(:snakebridge, :atom_allowlist, ["ok", "error"]) do
       :all -> :all

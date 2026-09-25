@@ -594,12 +594,7 @@ defmodule Demo do
     # Make the actual call to get Python type
     start_time = System.monotonic_time(:microsecond)
 
-    result =
-      case snakepit_call(opts[:python_module], opts[:python_function], [opts[:elixir_value]]) do
-        {:ok, value} -> {:ok, value}
-        {:error, reason} -> {:error, reason}
-        other -> {:ok, other}
-      end
+    result = snakepit_call(opts[:python_module], opts[:python_function], [opts[:elixir_value]])
 
     elapsed = System.monotonic_time(:microsecond) - start_time
 

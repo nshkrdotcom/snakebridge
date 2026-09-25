@@ -468,9 +468,6 @@ defmodule Demo do
 
           {:error, reason} ->
             {:error, reason}
-
-          other ->
-            {:ok, other}
         end
       rescue
         e ->
@@ -533,7 +530,6 @@ defmodule Demo do
   defp record_expectation(true, {:translated, _error}), do: :ok
   defp record_expectation(true, {:error, _reason}), do: :ok
   defp record_expectation(true, {:rescue, _exception}), do: Examples.record_failure()
-  defp record_expectation(true, _other), do: Examples.record_failure()
 
   defp record_expectation(false, {:ok, _value}), do: :ok
   defp record_expectation(false, _other), do: Examples.record_failure()
@@ -551,10 +547,6 @@ defmodule Demo do
         "idempotent" => false
       })
 
-    case Snakepit.execute("snakebridge.call", payload) do
-      {:ok, value} -> {:ok, value}
-      {:error, reason} -> {:error, reason}
-      other -> {:ok, other}
-    end
+    Snakepit.execute("snakebridge.call", payload)
   end
 end

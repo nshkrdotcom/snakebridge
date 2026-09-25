@@ -1,55 +1,6 @@
 {
-  "generated_at": "2026-02-07T03:05:39.563707Z",
-  "issues": [
-    {
-      "reason": [
-        "runtime: signature unavailable",
-        "text_signature: unavailable",
-        "runtime_hints: unavailable",
-        "stub: not found",
-        "stubgen: not found"
-      ],
-      "type": "signature_missing",
-      "symbol": "Json.Decoder.JSONDecodeError.add_note",
-      "source": "variadic"
-    },
-    {
-      "reason": [
-        "runtime: signature unavailable",
-        "text_signature: unavailable",
-        "runtime_hints: unavailable",
-        "stub: not found",
-        "stubgen: not found"
-      ],
-      "type": "signature_missing",
-      "symbol": "Json.Decoder.JSONDecodeError.with_traceback",
-      "source": "variadic"
-    },
-    {
-      "reason": [
-        "runtime: signature unavailable",
-        "text_signature: unavailable",
-        "runtime_hints: unavailable",
-        "stub: not found",
-        "stubgen: not found"
-      ],
-      "type": "signature_missing",
-      "symbol": "Json.JSONDecodeError.add_note",
-      "source": "variadic"
-    },
-    {
-      "reason": [
-        "runtime: signature unavailable",
-        "text_signature: unavailable",
-        "runtime_hints: unavailable",
-        "stub: not found",
-        "stubgen: not found"
-      ],
-      "type": "signature_missing",
-      "symbol": "Json.JSONDecodeError.with_traceback",
-      "source": "variadic"
-    }
-  ],
+  "generated_at": "2026-09-25T22:35:12.349099Z",
+  "issues": [],
   "library": "json",
   "stubs": {
     "count": 0,
@@ -63,10 +14,9 @@
       "runtime": 27
     },
     "functions": 7,
-    "non_variadic_ratio": 0.8571428571428571,
+    "non_variadic_ratio": 1.0,
     "signature_tiers": {
-      "runtime": 24,
-      "variadic": 4
+      "runtime": 28
     },
     "symbols_total": 28
   }

@@ -2,6 +2,7 @@ defmodule SnakeBridge.Docs.MarkdownSanitizer do
   @moduledoc false
 
   @manpage_quote_regex ~r/`([A-Za-z0-9_.:\/-]+)'/
+  @double_backtick_regex ~r/(?<!`)``(?!`)/
 
   @spec sanitize(String.t() | nil) :: String.t()
   def sanitize(nil), do: ""
@@ -11,6 +12,7 @@ defmodule SnakeBridge.Docs.MarkdownSanitizer do
     |> wrap_doctest_blocks()
     |> fix_unclosed_fences()
     |> fix_manpage_quotes_outside_fences()
+    |> normalize_backticks_outside_fences()
   end
 
   defp wrap_doctest_blocks(markdown) do
@@ -179,6 +181,35 @@ defmodule SnakeBridge.Docs.MarkdownSanitizer do
 
       replace_quotes(rest, in_fence, [updated | acc])
     end
+  end
+
+  defp normalize_backticks_outside_fences(markdown) do
+    markdown
+    |> String.split("\n", trim: false)
+    |> normalize_backticks_lines(false, [])
+    |> Enum.reverse()
+    |> Enum.join("\n")
+  end
+
+  defp normalize_backticks_lines([], _in_fence, acc), do: acc
+
+  defp normalize_backticks_lines([line | rest], in_fence, acc) do
+    if fence_line?(line) do
+      normalize_backticks_lines(rest, not in_fence, [line | acc])
+    else
+      updated =
+        if in_fence do
+          line
+        else
+          normalize_backticks_on_line(line)
+        end
+
+      normalize_backticks_lines(rest, in_fence, [updated | acc])
+    end
+  end
+
+  defp normalize_backticks_on_line(line) do
+    Regex.replace(@double_backtick_regex, line, "`")
   end
 
   defp fence_line?(line) do

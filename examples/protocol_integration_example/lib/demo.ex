@@ -38,8 +38,8 @@ defmodule Demo do
         IO.puts("Inspect: #{inspect(ref)}")
         IO.puts("Interpolated: #{ref}")
 
-      other ->
-        print_result(other)
+      {:error, reason} ->
+        print_error(reason)
     end
   end
 
@@ -51,8 +51,8 @@ defmodule Demo do
         IO.puts("Mapped values: #{inspect(values)}")
         IO.puts("Count: #{count}")
 
-      other ->
-        print_result(other)
+      {:error, reason} ->
+        print_error(reason)
     end
   end
 
@@ -91,16 +91,8 @@ defmodule Demo do
     IO.puts("== #{title} ==")
   end
 
-  defp print_result({:ok, value}) do
-    IO.puts("Result: {:ok, #{inspect(value)}}")
-  end
-
-  defp print_result({:error, reason}) do
+  defp print_error(reason) do
     IO.puts("Result: {:error, #{inspect(reason)}}")
     Examples.record_failure()
-  end
-
-  defp print_result(other) do
-    IO.puts("Result: #{inspect(other)}")
   end
 end

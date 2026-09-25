@@ -33,7 +33,7 @@ defmodule SnakeBridge.PythonRefSafetyIntegrationTest do
       {:ok, result} = SnakeBridge.call("datetime", "datetime", [2025, 12, 30])
       # datetime is a tagged type, so it should decode properly
       # This verifies our tagged type handling works
-      is_valid = is_binary(result) or is_map(result) or match?(%SnakeBridge.Ref{}, result)
+      is_valid = is_binary(result) or is_map(result)
       assert is_valid
     end
   end

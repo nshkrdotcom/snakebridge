@@ -51,7 +51,7 @@ defmodule Demo do
     IO.puts("Result: #{inspect(other)}")
   end
 
-  defp run_strict_check(config, expect_failure: expect_failure) do
+  defp run_strict_check(%Config{} = config, expect_failure: expect_failure) do
     tmp_dir =
       Path.join(
         System.tmp_dir!(),

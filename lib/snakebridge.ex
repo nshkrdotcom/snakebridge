@@ -132,8 +132,6 @@ defmodule SnakeBridge do
   | `SNAKEBRIDGE_STRICT_MODE_THRESHOLD` | `1000` | Strict mode warning threshold |
   """
 
-  require SnakeBridge.WithContext
-
   alias SnakeBridge.{Bytes, Dynamic, Ref, Runtime, RuntimeContext, ScriptOptions}
 
   # ============================================================================

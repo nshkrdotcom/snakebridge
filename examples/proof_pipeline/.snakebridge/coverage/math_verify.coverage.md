@@ -1,6 +1,6 @@
 # Coverage Report: math_verify
 
-Generated at: 2026-02-07T03:06:02.548235Z
+Generated at: 2026-09-25T22:47:19.448498Z
 
 ## Summary
 

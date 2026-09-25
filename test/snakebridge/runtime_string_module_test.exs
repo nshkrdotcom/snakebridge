@@ -34,12 +34,12 @@ defmodule SnakeBridge.RuntimeStringModuleTest do
     test "returns error for non-existent module" do
       {:error, error} = SnakeBridge.Runtime.call("nonexistent_module_xyz", "fn", [])
       # Accept various error types for import failures
-      assert is_map(error) or is_struct(error)
+      assert is_map(error)
     end
 
     test "returns error for non-existent function" do
       {:error, error} = SnakeBridge.Runtime.call("math", "nonexistent_fn_xyz", [])
-      assert is_map(error) or is_struct(error)
+      assert is_map(error)
     end
   end
 

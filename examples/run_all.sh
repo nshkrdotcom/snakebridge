@@ -180,7 +180,9 @@ run_example() {
 
     # Compile (deps already updated in upfront phase)
     echo -e "${YELLOW}Compiling...${NC}"
-    if ! mix compile --quiet 2>&1; then
+    local compile_output
+    if ! compile_output=$(mix compile --quiet 2>&1); then
+        echo "$compile_output"
         EXAMPLE_RESULTS+=("1")
         EXAMPLE_DURATIONS+=("0")
         print_failure "$name"

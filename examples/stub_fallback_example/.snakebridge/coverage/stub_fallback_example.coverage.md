@@ -1,6 +1,6 @@
 # Coverage Report: stub_fallback_example
 
-Generated at: 2026-02-07T03:06:28.028849Z
+Generated at: 2026-09-25T22:40:42.004601Z
 
 ## Summary
 
@@ -24,4 +24,4 @@ Generated at: 2026-02-07T03:06:28.028849Z
 
 ## Issues
 
-No issues detected.
+- [introspection_error] stub_fallback (reason=%{"message" => "Unexpected error during introspection", "package" => "stub_fallback_example", "python_error" => "", "suggestion" => "Please report this issue with the Python error output", "type" => "introspection_bug"} python_module="stub_fallback_example")

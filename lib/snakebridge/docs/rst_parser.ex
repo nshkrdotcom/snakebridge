@@ -155,7 +155,7 @@ defmodule SnakeBridge.Docs.RstParser do
           |> Enum.join("\n")
           |> String.trim()
 
-        {(long_desc == "" && nil) || long_desc, []}
+        {if(long_desc == "", do: nil, else: long_desc), []}
 
       index ->
         {desc_lines, section_lines} = Enum.split(lines, index)
@@ -165,7 +165,7 @@ defmodule SnakeBridge.Docs.RstParser do
           |> Enum.join("\n")
           |> String.trim()
 
-        {(long_desc == "" && nil) || long_desc, section_lines}
+        {if(long_desc == "", do: nil, else: long_desc), section_lines}
     end
   end
 

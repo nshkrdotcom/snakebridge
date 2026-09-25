@@ -358,6 +358,9 @@ defmodule SnakeBridge.Telemetry do
   end
 
   defp telemetry_ready? do
-    Code.ensure_loaded?(:telemetry) and :ets.whereis(:telemetry_handler_table) != :undefined
+    Code.ensure_loaded?(:telemetry) and
+      (:persistent_term.get(:telemetry, nil) != nil or
+         Process.whereis(:telemetry_handler_table) != nil or
+         :ets.whereis(:telemetry_handler_table) != :undefined)
   end
 end

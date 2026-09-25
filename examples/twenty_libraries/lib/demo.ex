@@ -283,10 +283,6 @@ defmodule Demo do
         "idempotent" => false
       })
 
-    case Snakepit.execute("snakebridge.call", payload) do
-      {:ok, value} -> {:ok, value}
-      {:error, reason} -> {:error, reason}
-      other -> {:ok, other}
-    end
+    Snakepit.execute("snakebridge.call", payload)
   end
 end

@@ -32,9 +32,9 @@ defmodule SnakeBridge.ErrorTest do
 
   describe "error type introspection" do
     test "all error types are exceptions" do
-      assert Exception.exception?(Error.ShapeMismatchError.exception([]))
-      assert Exception.exception?(Error.OutOfMemoryError.exception([]))
-      assert Exception.exception?(Error.DtypeMismatchError.exception([]))
+      assert is_exception(Error.ShapeMismatchError.exception([]))
+      assert is_exception(Error.OutOfMemoryError.exception([]))
+      assert is_exception(Error.DtypeMismatchError.exception([]))
     end
 
     test "error messages are strings" do

@@ -22,7 +22,7 @@ defmodule SnakeBridge.DynamicExceptionTest do
     test "exception implements Exception protocol" do
       exception = SnakeBridge.DynamicException.create("CustomError", "test")
 
-      assert Exception.exception?(exception)
+      assert is_exception(exception)
       assert is_binary(Exception.message(exception))
     end
   end

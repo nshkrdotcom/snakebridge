@@ -1,13 +1,13 @@
 {
   "compatibility": {
     "compute_capability_min": null,
-    "cuda_min": null
+    "cuda_min": "13.3"
   },
   "environment": {
-    "elixir_version": "1.18.4",
+    "elixir_version": "1.20.3",
     "generator_hash": "b42fe11f5e562e661535f7df00ee90c76624920d03cf35f9fbca687ac22b0c0f",
     "hardware": {
-      "accelerator": "cpu",
+      "accelerator": "cuda",
       "cpu_features": [
         "pclmul",
         "ssse3",
@@ -19,18 +19,20 @@
         "f16c",
         "avx2"
       ],
-      "gpu_count": 0
+      "cuda_version": "13.3",
+      "cudnn_version": null,
+      "gpu_count": 1
     },
-    "otp_version": "28",
+    "otp_version": "29",
     "platform": {
       "arch": "x86_64",
       "os": "linux"
     },
-    "python_packages_hash": "sha256:67ded8e74b12664c6ec48d3e7388d0133854554b365219f5b5d745a73f637ef6",
+    "python_packages_hash": "sha256:2f3bc206840bd560996e98c50d31347e281eabe8210faae1d42463d8bb0c836c",
     "python_platform": "x86_64-pc-linux-gnu",
-    "python_runtime_hash": "4933b6c4a8521fb3aa93856701e30b3ac2626d3c47ceb22965a3b0b422e85b44",
-    "python_version": "3.12.3",
-    "snakebridge_version": "0.16.0"
+    "python_runtime_hash": "52e0a13e60a981d8c4b6478be2ba5176f69da07948a056bf49cf6f077e30cb41",
+    "python_version": "3.14.4",
+    "snakebridge_version": "0.17.0"
   },
   "libraries": {
     "math_verify": {
@@ -54,11 +56,11 @@
   },
   "python_packages": {
     "math-verify": {
-      "version": "0.8.0",
+      "version": "0.9.0",
       "hash": null
     },
     "pylatexenc": {
-      "version": "2.10",
+      "version": "2.11",
       "hash": null
     },
     "sympy": {
@@ -66,5 +68,5 @@
       "hash": null
     }
   },
-  "version": "0.16.0"
+  "version": "0.17.0"
 }

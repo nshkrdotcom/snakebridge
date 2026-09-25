@@ -233,11 +233,6 @@ defmodule Demo do
         IO.puts("│  Error from Python (#{elapsed} us)")
         IO.puts("│")
         IO.puts("└─ Result: {:error, #{inspect(reason, limit: 50)}}")
-
-      other ->
-        IO.puts("│  Response (#{elapsed} us)")
-        IO.puts("│")
-        IO.puts("└─ Result: #{inspect(other, limit: 50)}")
     end
 
     IO.puts("")
@@ -253,11 +248,9 @@ defmodule Demo do
 
   defp format_result({:ok, value}), do: inspect(value, limit: 20)
   defp format_result({:error, _}), do: "<error>"
-  defp format_result(other), do: inspect(other, limit: 20)
 
   defp record_expectation(true, {:ok, _value}), do: Examples.record_failure()
   defp record_expectation(true, {:error, _reason}), do: :ok
-  defp record_expectation(true, _other), do: Examples.record_failure()
 
   defp record_expectation(false, {:ok, _value}), do: :ok
   defp record_expectation(false, _other), do: Examples.record_failure()
@@ -359,15 +352,6 @@ defmodule Demo do
         )
 
         {:error, reason}
-
-      other ->
-        emit_call_event(
-          [:snakepit, :python, :call, :stop],
-          %{duration: System.monotonic_time() - start_time},
-          metadata
-        )
-
-        {:ok, other}
     end
   end
 

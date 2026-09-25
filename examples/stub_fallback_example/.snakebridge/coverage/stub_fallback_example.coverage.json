@@ -1,6 +1,19 @@
 {
-  "generated_at": "2026-02-07T03:06:28.028849Z",
-  "issues": [],
+  "generated_at": "2026-09-25T22:40:42.004601Z",
+  "issues": [
+    {
+      "reason": {
+        "message": "Unexpected error during introspection",
+        "package": "stub_fallback_example",
+        "python_error": "",
+        "suggestion": "Please report this issue with the Python error output",
+        "type": "introspection_bug"
+      },
+      "type": "introspection_error",
+      "library": "stub_fallback",
+      "python_module": "stub_fallback_example"
+    }
+  ],
   "library": "stub_fallback_example",
   "stubs": {
     "count": 1,

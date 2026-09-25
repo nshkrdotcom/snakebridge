@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.16.0"
+  @version "0.17.0"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -43,20 +43,20 @@ defmodule SnakeBridge.MixProject do
   defp deps do
     [
       # Core - Python bridge
-      {:snakepit, "~> 0.13.0"},
+      {:snakepit, "~> 0.14.0"},
 
       # JSON encoding
       {:jason, "~> 1.4"},
       # Telemetry
-      {:telemetry, "~> 1.2"},
-      {:telemetry_metrics, "~> 1.0"},
+      {:telemetry, "~> 1.4"},
+      {:telemetry_metrics, "~> 1.2"},
 
       # Development & Testing
       {:ex_doc, "~> 0.40", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:mox, "~> 1.1", only: :test},
-      {:supertester, "~> 0.5.1", only: :test}
+      {:mox, "~> 1.3", only: :test},
+      {:supertester, "~> 0.6.0", only: :test}
     ]
   end
 
@@ -177,7 +177,13 @@ defmodule SnakeBridge.MixProject do
       files:
         ~w(lib assets priv/snakebridge priv/python .formatter.exs mix.exs README.md LICENSE CHANGELOG.md examples guides),
       exclude_patterns: [
-        # Python bytecode and cache directories
+        # Build artifacts, dependencies, and caches
+        ~r/_build/,
+        ~r/(^|\/)deps(\/|$)/,
+        ~r/\.snakebridge/,
+        # Python environments, bytecode, and cache directories
+        ~r/priv\/snakepit/,
+        ~r/\.venv/,
         ~r/__pycache__/,
         ~r/\.pyc$/,
         ~r/\.pytest_cache/,

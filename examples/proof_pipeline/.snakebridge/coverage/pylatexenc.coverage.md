@@ -1,6 +1,6 @@
 # Coverage Report: pylatexenc
 
-Generated at: 2026-02-07T03:06:02.548084Z
+Generated at: 2026-09-25T22:47:19.448359Z
 
 ## Summary
 

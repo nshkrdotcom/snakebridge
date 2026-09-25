@@ -532,7 +532,6 @@ defmodule SnakeBridge.Generator do
   end
 
   defp requested_version(%{version: nil}), do: nil
-  defp requested_version(%{version: :stdlib}), do: nil
 
   defp requested_version(%{version: version}) do
     to_string(version)

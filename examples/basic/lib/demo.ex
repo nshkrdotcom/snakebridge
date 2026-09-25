@@ -244,12 +244,7 @@ defmodule Demo do
         "idempotent" => false
       })
 
-    result =
-      case Snakepit.execute("snakebridge.call", payload) do
-        {:ok, value} -> {:ok, value}
-        {:error, reason} -> {:error, reason}
-        other -> {:ok, other}
-      end
+    result = Snakepit.execute("snakebridge.call", payload)
 
     elapsed = System.monotonic_time(:microsecond) - start_time
 

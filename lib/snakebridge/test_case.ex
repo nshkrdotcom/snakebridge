@@ -38,9 +38,6 @@ defmodule SnakeBridge.TestCase do
 
       {:error, {app, reason}} ->
         raise "Failed to start #{app}: #{inspect(reason)}"
-
-      {:error, reason} ->
-        raise "Failed to start snakebridge: #{inspect(reason)}"
     end
 
     :ok

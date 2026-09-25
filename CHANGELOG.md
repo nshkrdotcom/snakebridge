@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-25
+
+### Fixed
+- **Markdown backtick normalization**: The docstring markdown sanitizer now normalizes reST double backticks (`foo`) and asymmetric leading/trailing backticks (`foo` or `foo`) to standard single backticks outside code fences, preventing Earmark and ExDoc parser warnings on malformed Python docstrings.
+- **Compiler and Dialyzer warnings**: Fixed all compiler and test warnings (unused requires, rst_parser empty string handling, unreachable match clauses, and deprecated Exception.exception?/1 calls).
+
+### Internal
+- Upgraded snakepit to ~> 0.14.0.
+- Updated Hex dependencies to latest versions (telemetry 1.4.2, telemetry_metrics 1.2.0, dialyxir 1.4.8, ex_doc 0.40.4, credo 1.7.19, mox 1.3.2, supertester 0.6.0).
+
 ## [0.16.0] - 2026-02-06
 
 ### Added
@@ -867,7 +877,8 @@ Numpy.compute(data, __runtime__: [timeout: 600_000])
 - Type system mapper
 - Basic code generation
 
-[Unreleased]: https://github.com/nshkrdotcom/snakebridge/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/snakebridge/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.14.0...v0.15.0

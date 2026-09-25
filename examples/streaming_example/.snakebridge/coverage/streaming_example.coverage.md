@@ -1,6 +1,6 @@
 # Coverage Report: streaming_example
 
-Generated at: 2026-02-07T03:07:28.851243Z
+Generated at: 2026-09-25T23:09:43.948748Z
 
 ## Summary
 

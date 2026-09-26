@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.17.0"
+  @version "0.17.1"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do
@@ -178,7 +178,7 @@ defmodule SnakeBridge.MixProject do
         ~w(lib assets priv/snakebridge priv/python .formatter.exs mix.exs README.md LICENSE CHANGELOG.md examples guides),
       exclude_patterns: [
         # Build artifacts, dependencies, and caches
-        ~r/_build/,
+        ~r/(^|\/)_build(\/|$)/,
         ~r/(^|\/)deps(\/|$)/,
         ~r/\.snakebridge/,
         # Python environments, bytecode, and cache directories

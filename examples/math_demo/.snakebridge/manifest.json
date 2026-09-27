@@ -258,7 +258,7 @@
               }
             },
             {
-              "default": "<built-in method match of re.Pattern object at 0x716e9b4464d0>",
+              "default": "<built-in method match of re.Pattern object>",
               "kind": "POSITIONAL_OR_KEYWORD",
               "name": "_w",
               "type": {
@@ -834,7 +834,7 @@
               }
             },
             {
-              "default": "<built-in method match of re.Pattern object at 0x716e9b4464d0>",
+              "default": "<built-in method match of re.Pattern object>",
               "kind": "POSITIONAL_OR_KEYWORD",
               "name": "_w",
               "type": {
@@ -1909,5 +1909,5 @@
       "return_annotation": null
     }
   },
-  "version": "0.17.0"
+  "version": "0.18.0"
 }

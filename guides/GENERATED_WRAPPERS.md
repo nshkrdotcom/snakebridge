@@ -464,6 +464,16 @@ Doc tiers:
 Each symbol records `signature_source`, `signature_detail`, `signature_missing_reason`,
 `doc_source`, and `doc_missing_reason` in the manifest.
 
+
+When multiple sources contribute to one signature, `signature_source` names the
+source that owns the callable structure. For example, if `inspect.signature`
+provides positional/default/keyword structure and a `types-` package contributes
+better annotations, the source remains `runtime` while `signature_detail`
+records both `inspect.signature` and the stub provenance. This prevents type
+enrichment from changing Python call semantics.
+
+Runtime default representations are also normalized when CPython embeds a process-local memory address in an angle-bracket object repr. That address is not part of the callable contract and is omitted from committed manifests and generated documentation so repeated generation remains stable.
+
 ### Stub Discovery and Configuration
 
 Stub discovery checks, in order:

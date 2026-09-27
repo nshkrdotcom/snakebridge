@@ -538,10 +538,39 @@ def _unwrap_index(node: ast.Index) -> ast.AST:  # pragma: no cover
     return node.value
 
 
+
+_MEMORY_ADDRESS_SUFFIX_RE = re.compile(
+    r" at 0x[0-9a-fA-F]+(?=>$)"
+)
+
+
+def _stable_repr(value: Any) -> str:
+    """Return a deterministic repr for generated metadata.
+
+    CPython includes process-local memory addresses in reprs for many
+    functions, methods, and arbitrary objects. Those addresses are not part
+    of the Python callable contract and must not make committed manifests or
+    generated documentation vary between otherwise identical runs.
+
+    Literal/container reprs are preserved. For angle-bracket object reprs,
+    only the trailing process-local memory address is removed.
+    """
+    try:
+        rendered = repr(value)
+    except Exception:
+        return "<non-serializable>"
+
+    if rendered.startswith("<") and rendered.endswith(">"):
+        return _MEMORY_ADDRESS_SUFFIX_RE.sub("", rendered)
+
+    return rendered
+
+
+
 def _param_info(param: inspect.Parameter, type_hint: Any = None) -> Dict[str, Any]:
     info = {"name": param.name, "kind": param.kind.name}
     if param.default is not inspect.Parameter.empty:
-        info["default"] = repr(param.default)
+        info["default"] = _stable_repr(param.default)
     if param.annotation is not inspect.Parameter.empty:
         info["annotation"] = _format_annotation(param.annotation)
 
@@ -1324,7 +1353,7 @@ def _signature_from_text_signature(obj: Any) -> Optional[Dict[str, Any]]:
             "type": {"type": "any"},
         }
         if param.default is not inspect.Parameter.empty:
-            entry["default"] = repr(param.default)
+            entry["default"] = _stable_repr(param.default)
         params.append(entry)
 
     return {
@@ -1921,7 +1950,7 @@ def introspect_parameter(param: inspect.Parameter, type_hint: Any = None) -> Dic
             elif isinstance(param.default, (list, tuple, dict, set)):
                 param_info["default"] = str(param.default)
             else:
-                param_info["default"] = repr(param.default)
+                param_info["default"] = _stable_repr(param.default)
         except Exception:
             param_info["default"] = "<non-serializable>"
 

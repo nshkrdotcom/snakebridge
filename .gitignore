@@ -70,3 +70,6 @@ examples/*/pythonLibs/
 /logs/
 repomix*.xml
 snakebridge-*/
+
+# SnakeBridge generated stubgen cache
+/.snakebridge/stubgen_cache/

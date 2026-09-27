@@ -36,11 +36,11 @@ defmodule Mix.Tasks.Snakebridge.PythonTest do
 
     {python, env, project_root} = resolve_python_env()
 
-    tests = [
-      Path.join(project_root, "priv/python/test_snakebridge_adapter.py"),
-      Path.join(project_root, "priv/python/test_bridge_client_streaming.py"),
-      Path.join(project_root, "priv/python/test_snakebridge_types.py")
-    ]
+    tests =
+      project_root
+      |> Path.join("priv/python/test_*.py")
+      |> Path.wildcard()
+      |> Enum.sort()
 
     cmd_args = ["-m", "pytest"] ++ tests ++ pytest_args
 

@@ -178,8 +178,18 @@ defmodule SnakeBridge.MaxCoverageSignatureTest do
     {:ok, result} = Introspector.introspect(library, ["typed_func"])
     info = find_function(result, "typed_func")
 
-    assert info["signature_source"] == "stub"
+    # inspect.signature remains authoritative for call structure; the installed
+    # types- package enriches only the type metadata.
+    assert info["signature_source"] == "runtime"
+    assert info["signature_detail"] =~ "inspect.signature"
     assert info["signature_detail"] =~ "types-"
+
+    assert Enum.map(info["parameters"], & &1["type"]) == [
+             %{"type" => "int"},
+             %{"type" => "int"}
+           ]
+
+    assert info["return_type"] == %{"type" => "int"}
   end
 
   test "typeshed lookup provides stubs when enabled" do

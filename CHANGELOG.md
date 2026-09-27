@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Python signature fidelity**: Runtime type-hint fallback no longer replaces a valid `inspect.signature`/text signature and thereby loses Python defaults, positional-only/keyword-only kinds, `*args`, or `**kwargs`. Type-only metadata now enriches the structural signature without changing its call contract.
+- **Merged signature provenance**: When runtime or text-signature introspection provides the callable structure and a stub later enriches its types, the live structural source remains `signature_source`; `signature_detail` records the additional stub provenance instead of misclassifying the callable structure as stub-derived.
+- **Deterministic runtime default rendering**: Process-local memory addresses are removed from angle-bracket Python object reprs before defaults are written to manifests or generated documentation, preventing generation drift across otherwise identical runs.
+- **Python 3.14 stub parsing**: Upgrade LibCST from 1.1.0 to 1.9.0; LibCST 1.1.0's native parser crashed under Python 3.14 while parsing `.pyi` files used by local stubs, types packages, typeshed, and stubgen.
 - **Class constructor default arities**: Generated class constructors now expose every legal positional prefix for defaulted Python parameters, plus guarded keyword-option variants, so constructors such as `RLM(signature, max_iters=20, ...)` can be called naturally as `new(signature)` while Python remains authoritative for omitted defaults.
 - **Class method default arities**: Generated instance methods now use the same positional-prefix arity model as module functions instead of collapsing defaulted positional parameters into a synthetic `args` list.
 - **Keyword-only validation in positional-prefix overloads**: No-options clauses validate required keyword-only parameters against an explicit empty keyword list instead of referencing an undefined `opts` variable.

@@ -7,62 +7,23 @@ defmodule SnakeBridge.Generator.Class do
 
   @spec render_class(map(), SnakeBridge.Config.Library.t()) :: String.t()
   def render_class(class_info, library) do
-    class_name = Generator.class_name(class_info)
-    python_module = Generator.class_python_module(class_info, library)
+    parts = class_render_parts(class_info, library)
     module_name = Generator.class_module_name(class_info, library)
     relative_module = Generator.relative_module_name(library, module_name)
-    moduledoc = render_class_moduledoc(class_info["docstring"], class_name)
-
-    methods = class_info["methods"] || []
-    attrs = class_info["attributes"] || []
-
-    init_method = Enum.find(methods, fn method -> method["name"] == "__init__" end)
-    init_docstring = if init_method, do: init_method["docstring"], else: nil
-    init_params = if init_method, do: init_method["parameters"] || [], else: []
-    init_params = drop_self_param(init_params)
-    plan = Generator.build_params(init_params, init_method || %{})
-    param_names = Enum.map(plan.required, & &1.name)
-    args_name = Generator.extra_args_name(param_names)
-
-    constructor =
-      cond do
-        plan.is_variadic ->
-          render_variadic_constructor(plan, args_name, init_docstring, class_name)
-
-        plan.optional_positional != [] and not plan.has_varargs ->
-          render_optional_positional_constructor(plan, init_params, init_docstring, class_name)
-
-        true ->
-          render_constructor(plan, args_name, init_params, init_docstring, class_name)
-      end
-
-    methods =
-      methods
-      |> Enum.reject(fn method -> method["name"] == "__init__" end)
-      |> rename_new_method_if_collision(init_method)
-      |> deduplicate_methods()
-
-    methods_source = Enum.map_join(methods, "\n\n", &render_method(&1, class_name))
-    method_names = resolved_method_names(methods)
-
-    attrs_source =
-      attrs
-      |> resolve_attribute_names(method_names)
-      |> Enum.map_join("\n\n", &render_attribute/1)
 
     """
       defmodule #{relative_module} do
-    #{Generator.indent(moduledoc, 4)}
-        def __snakebridge_python_name__, do: "#{python_module}"
-        def __snakebridge_python_class__, do: "#{class_name}"
+    #{Generator.indent(parts.moduledoc, 4)}
+        def __snakebridge_python_name__, do: "#{parts.python_module}"
+        def __snakebridge_python_class__, do: "#{parts.class_name}"
         def __snakebridge_library__, do: "#{library.python_name}"
         @opaque t :: SnakeBridge.Ref.t()
 
-    #{Generator.indent(constructor, 4)}
+    #{Generator.indent(parts.constructor, 4)}
 
-    #{Generator.indent(methods_source, 4)}
+    #{Generator.indent(parts.methods_source, 4)}
 
-    #{Generator.indent(attrs_source, 4)}
+    #{Generator.indent(parts.attrs_source, 4)}
       end
     """
   end
@@ -76,41 +37,57 @@ defmodule SnakeBridge.Generator.Class do
   @spec render_class_standalone(map(), SnakeBridge.Config.Library.t(), module() | String.t()) ::
           String.t()
   def render_class_standalone(class_info, library, elixir_module) do
+    parts = class_render_parts(class_info, library)
+    module_name = module_to_string(elixir_module)
+
+    """
+    defmodule #{module_name} do
+    #{Generator.indent(parts.moduledoc, 2)}
+      def __snakebridge_python_name__, do: "#{parts.python_module}"
+      def __snakebridge_python_class__, do: "#{parts.class_name}"
+      def __snakebridge_library__, do: "#{library.python_name}"
+      @opaque t :: SnakeBridge.Ref.t()
+
+    #{Generator.indent(parts.constructor, 2)}
+
+    #{Generator.indent(parts.methods_source, 2)}
+
+    #{Generator.indent(parts.attrs_source, 2)}
+    end
+    """
+  end
+
+  defp class_render_parts(class_info, library) do
     class_name = Generator.class_name(class_info)
     python_module = Generator.class_python_module(class_info, library)
-    module_name = module_to_string(elixir_module)
     moduledoc = render_class_moduledoc(class_info["docstring"], class_name)
 
     methods = class_info["methods"] || []
     attrs = class_info["attributes"] || []
 
-    init_method = Enum.find(methods, fn method -> method["name"] == "__init__" end)
-    init_docstring = if init_method, do: init_method["docstring"], else: nil
-    init_params = if init_method, do: init_method["parameters"] || [], else: []
-    init_params = drop_self_param(init_params)
+    init_method = Enum.find(methods, &(&1["name"] == "__init__"))
+    init_params = constructor_params(init_method)
+    init_docstring = constructor_docstring(init_method)
+
     plan = Generator.build_params(init_params, init_method || %{})
-    param_names = Enum.map(plan.required, & &1.name)
-    args_name = Generator.extra_args_name(param_names)
 
     constructor =
-      cond do
-        plan.is_variadic ->
-          render_variadic_constructor(plan, args_name, init_docstring, class_name)
-
-        plan.optional_positional != [] and not plan.has_varargs ->
-          render_optional_positional_constructor(plan, init_params, init_docstring, class_name)
-
-        true ->
-          render_constructor(plan, args_name, init_params, init_docstring, class_name)
-      end
+      render_constructor_for_plan(
+        plan,
+        init_params,
+        init_docstring,
+        class_name
+      )
 
     methods =
       methods
-      |> Enum.reject(fn method -> method["name"] == "__init__" end)
+      |> Enum.reject(&(&1["name"] == "__init__"))
       |> rename_new_method_if_collision(init_method)
       |> deduplicate_methods()
 
-    methods_source = Enum.map_join(methods, "\n\n", &render_method(&1, class_name))
+    methods_source =
+      Enum.map_join(methods, "\n\n", &render_method(&1, class_name))
+
     method_names = resolved_method_names(methods)
 
     attrs_source =
@@ -118,21 +95,63 @@ defmodule SnakeBridge.Generator.Class do
       |> resolve_attribute_names(method_names)
       |> Enum.map_join("\n\n", &render_attribute/1)
 
-    """
-    defmodule #{module_name} do
-    #{Generator.indent(moduledoc, 2)}
-      def __snakebridge_python_name__, do: "#{python_module}"
-      def __snakebridge_python_class__, do: "#{class_name}"
-      def __snakebridge_library__, do: "#{library.python_name}"
-      @opaque t :: SnakeBridge.Ref.t()
+    %{
+      class_name: class_name,
+      python_module: python_module,
+      moduledoc: moduledoc,
+      constructor: constructor,
+      methods_source: methods_source,
+      attrs_source: attrs_source
+    }
+  end
 
-    #{Generator.indent(constructor, 2)}
+  defp constructor_params(nil), do: []
 
-    #{Generator.indent(methods_source, 2)}
+  defp constructor_params(init_method) do
+    init_method
+    |> Map.get("parameters", [])
+    |> List.wrap()
+    |> drop_self_param()
+  end
 
-    #{Generator.indent(attrs_source, 2)}
+  defp constructor_docstring(nil), do: nil
+  defp constructor_docstring(init_method), do: init_method["docstring"]
+
+  defp render_constructor_for_plan(
+         plan,
+         init_params,
+         init_docstring,
+         class_name
+       ) do
+    param_names = Enum.map(plan.required, & &1.name)
+    args_name = Generator.extra_args_name(param_names)
+
+    cond do
+      plan.is_variadic ->
+        render_variadic_constructor(
+          plan,
+          args_name,
+          init_docstring,
+          class_name
+        )
+
+      plan.optional_positional != [] and not plan.has_varargs ->
+        render_optional_positional_constructor(
+          plan,
+          init_params,
+          init_docstring,
+          class_name
+        )
+
+      true ->
+        render_constructor(
+          plan,
+          args_name,
+          init_params,
+          init_docstring,
+          class_name
+        )
     end
-    """
   end
 
   defp module_to_string(module) when is_atom(module) do

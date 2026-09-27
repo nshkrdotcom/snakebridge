@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-27
+
+### Fixed
+- **Python signature fidelity**: Runtime type-hint fallback no longer replaces a valid `inspect.signature`/text signature and thereby loses Python defaults, positional-only/keyword-only kinds, `*args`, or `**kwargs`. Type-only metadata now enriches the structural signature without changing its call contract.
+- **Class constructor default arities**: Generated class constructors now expose every legal positional prefix for defaulted Python parameters, plus guarded keyword-option variants, so constructors such as `RLM(signature, max_iters=20, ...)` can be called naturally as `new(signature)` while Python remains authoritative for omitted defaults.
+- **Class method default arities**: Generated instance methods now use the same positional-prefix arity model as module functions instead of collapsing defaulted positional parameters into a synthetic `args` list.
+- **Keyword-only validation in positional-prefix overloads**: No-options clauses validate required keyword-only parameters against an explicit empty keyword list instead of referencing an undefined `opts` variable.
+
+### Added
+- Regression coverage for preserving defaults and parameter kinds when runtime annotations cannot be resolved.
+- RLM-shaped constructor coverage with one required argument and seven defaulted positional-or-keyword arguments.
+
 ## [0.17.1] - 2026-09-25
 
 ### Fixed
@@ -882,7 +894,8 @@ Numpy.compute(data, __runtime__: [timeout: 600_000])
 - Type system mapper
 - Basic code generation
 
-[Unreleased]: https://github.com/nshkrdotcom/snakebridge/compare/v0.17.1...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/snakebridge/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/nshkrdotcom/snakebridge/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/nshkrdotcom/snakebridge/compare/v0.15.1...v0.16.0

@@ -1101,7 +1101,6 @@ def _resolve_signature(
     sources = _normalize_signature_sources(config.get("signature_sources"))
     failures: List[str] = []
     fallback: Optional[Dict[str, Any]] = None
-    fallback_has_types = False
 
     for source in sources:
         if source == "runtime":
@@ -1117,7 +1116,6 @@ def _resolve_signature(
                     return result
                 if fallback is None:
                     fallback = result
-                    fallback_has_types = False
                 failures.append("runtime: no type info")
                 continue
             failures.append("runtime: signature unavailable")
@@ -1135,7 +1133,6 @@ def _resolve_signature(
                     return result
                 if fallback is None:
                     fallback = result
-                    fallback_has_types = False
                 failures.append("text_signature: no type info")
                 continue
             failures.append("text_signature: unavailable")
@@ -1146,6 +1143,22 @@ def _resolve_signature(
                 continue
             result = _signature_from_runtime_hints(obj, module_name)
             if result:
+                if fallback is not None:
+                    # Runtime annotations can improve types, but they do not carry
+                    # inspect.Parameter structure (defaults, positional-only /
+                    # keyword-only kinds, *args, **kwargs). Never replace a valid
+                    # inspect.signature/text-signature fallback with the flatter
+                    # runtime-hints shape; enrich the fallback instead.
+                    merged = _merge_signature_type_info(fallback, result)
+                    if _signature_has_type_info(merged):
+                        merged["signature_detail"] = (
+                            f"{fallback.get('signature_detail') or 'signature'} + annotations"
+                        )
+                        merged["signature_missing_reason"] = failures
+                        return merged
+                    failures.append("runtime_hints: no additional type info")
+                    continue
+
                 result["signature_source"] = "runtime_hints"
                 result["signature_detail"] = "annotations"
                 result["signature_missing_reason"] = failures
@@ -1159,8 +1172,21 @@ def _resolve_signature(
                 result["signature_missing_reason"] = failures
                 if fallback is None:
                     return result
-                if not fallback_has_types and _signature_has_type_info(result):
-                    return result
+
+                # A stub can improve annotations, but once inspect.signature or
+                # __text_signature__ has given us the live callable structure,
+                # keep that structure authoritative. Replacing it with a stub
+                # can change defaults or positional/keyword-only semantics.
+                merged = _merge_signature_type_info(fallback, result)
+                if _signature_has_type_info(merged):
+                    stub_detail = result.get("signature_detail") or "stub"
+                    merged["signature_detail"] = (
+                        f"{fallback.get('signature_detail') or 'signature'} + {stub_detail}"
+                    )
+                    merged["signature_missing_reason"] = failures
+                    if result.get("overload_count") is not None:
+                        merged["overload_count"] = result.get("overload_count")
+                    return merged
                 failures.append("stub: no type info")
                 continue
             failures.append("stub: not found")
@@ -1203,6 +1229,39 @@ def _resolve_signature(
         "signature_detail": None,
         "signature_missing_reason": failures or ["no signature sources succeeded"],
     }
+
+
+def _merge_signature_type_info(
+    structure: Dict[str, Any],
+    typed: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Enrich a structural signature without changing its call semantics."""
+    merged = dict(structure)
+    typed_params = {
+        param.get("name"): param
+        for param in typed.get("parameters", [])
+        if param.get("name")
+    }
+
+    merged_params: List[Dict[str, Any]] = []
+    for param in structure.get("parameters", []):
+        enriched = dict(param)
+        typed_param = typed_params.get(param.get("name"))
+        if typed_param:
+            typed_type = typed_param.get("type")
+            if _type_is_specific(typed_type):
+                enriched["type"] = typed_type
+            if typed_param.get("annotation") is not None:
+                enriched["annotation"] = typed_param.get("annotation")
+        merged_params.append(enriched)
+
+    merged["parameters"] = merged_params
+
+    typed_return = typed.get("return_type")
+    if _type_is_specific(typed_return):
+        merged["return_type"] = typed_return
+
+    return merged
 
 
 def _signature_has_type_info(signature: Optional[Dict[str, Any]]) -> bool:

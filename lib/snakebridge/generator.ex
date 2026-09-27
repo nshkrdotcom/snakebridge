@@ -1289,7 +1289,7 @@ defmodule SnakeBridge.Generator do
 
   @doc false
 
-  def keyword_only_validation(required_keyword_only, indent) do
+  def keyword_only_validation(required_keyword_only, indent, opts_expr \\ "opts") do
     names =
       required_keyword_only
       |> Enum.map(&param_name/1)
@@ -1301,7 +1301,7 @@ defmodule SnakeBridge.Generator do
       padding = String.duplicate(" ", indent)
 
       """
-      #{padding}kw_keys = opts |> Keyword.keys() |> Enum.map(&to_string/1)
+      #{padding}kw_keys = #{opts_expr} |> Keyword.keys() |> Enum.map(&to_string/1)
       #{padding}missing_kw = #{inspect(names)} |> Enum.reject(&(&1 in kw_keys))
       #{padding}if missing_kw != [] do
       #{padding}  raise ArgumentError,

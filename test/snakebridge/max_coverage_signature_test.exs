@@ -98,6 +98,46 @@ defmodule SnakeBridge.MaxCoverageSignatureTest do
     assert Enum.map(info["parameters"], & &1["name"]) == ["a", "b"]
   end
 
+  test "runtime hints never erase defaults or parameter kinds from inspect.signature" do
+    library = %SnakeBridge.Config.Library{
+      name: :fixture_runtime_hints,
+      python_name: "fixture_runtime_hints",
+      module_name: FixtureRuntimeHints
+    }
+
+    {:ok, result} = Introspector.introspect(library, ["structured_defaults"])
+    info = find_function(result, "structured_defaults")
+    params = Map.new(info["parameters"], &{&1["name"], &1})
+
+    assert info["signature_source"] == "runtime"
+    assert params["required"]["kind"] == "POSITIONAL_OR_KEYWORD"
+    refute Map.has_key?(params["required"], "default")
+    assert params["optional"]["kind"] == "POSITIONAL_OR_KEYWORD"
+    assert params["optional"]["default"] == "None"
+    assert params["mode"]["kind"] == "KEYWORD_ONLY"
+    assert params["mode"]["default"] == "None"
+  end
+
+  test "class constructor introspection preserves Python defaults and keyword-only kinds" do
+    library = %SnakeBridge.Config.Library{
+      name: :fixture_runtime_hints,
+      python_name: "fixture_runtime_hints",
+      module_name: FixtureRuntimeHints
+    }
+
+    {:ok, result} = Introspector.introspect(library, ["StructuredDefaultsClass"])
+    class_info = Enum.find(result["classes"], &(&1["name"] == "StructuredDefaultsClass"))
+    init = Enum.find(class_info["methods"], &(&1["name"] == "__init__"))
+    params = Map.new(init["parameters"], &{&1["name"], &1})
+
+    assert init["signature_source"] == "runtime"
+    assert params["signature"]["kind"] == "POSITIONAL_OR_KEYWORD"
+    refute Map.has_key?(params["signature"], "default")
+    assert params["max_iters"]["default"] == "20"
+    assert params["mode"]["kind"] == "KEYWORD_ONLY"
+    assert params["mode"]["default"] == "None"
+  end
+
   test "local stub files provide signatures and docs" do
     library = %SnakeBridge.Config.Library{
       name: :fixture_stubonly,

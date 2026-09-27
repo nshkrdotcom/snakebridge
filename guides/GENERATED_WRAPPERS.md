@@ -237,7 +237,18 @@ Pandas.DataFrame.new(...)  # Class instantiation
 ### 3. Introspection
 
 For detected symbols, Python introspection gathers signatures, types, and docstrings
-using Python's `inspect` module.
+using Python's `inspect` module. SnakeBridge preserves the structural call signature
+(default presence, positional-only/keyword-only kinds, variadics) as the authority and
+uses lower-fidelity annotation sources only to enrich types; type hints never replace a
+valid structural signature.
+
+For defaulted positional parameters, generated functions, constructors, and instance
+methods expose each legal positional prefix as an Elixir arity. Omitted arguments are
+not materialized as Elixir defaults: SnakeBridge simply omits them from the Python call,
+so the installed Python library remains authoritative for its default values. Keyword
+options remain available through the guarded `opts` form. For example, a Python
+constructor shaped like `RLM(signature, max_iters=20, ...)` generates a usable
+`new(signature)` entry point as well as progressively fuller positional arities.
 
 Docstrings are converted to ExDoc-friendly Markdown and sanitized to repair common
 upstream issues (for example: unclosed fenced code blocks or manpage-style quotes

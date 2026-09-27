@@ -160,6 +160,10 @@ defmodule SnakeBridge.Generator.Function do
       Generator.format_docstring_with_fallback(doc, params, return_type, fallback_doc)
 
     kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 8)
+
+    no_opts_kw_validation =
+      Generator.keyword_only_validation(plan.required_keyword_only, 8, "[]")
+
     return_spec = Generator.type_spec_string(return_type)
 
     required_names = Enum.map(plan.required, & &1.name)
@@ -180,7 +184,7 @@ defmodule SnakeBridge.Generator.Function do
 
             """
             def #{name}() do
-            #{kw_validation}        #{call}
+            #{no_opts_kw_validation}        #{call}
               end
             """
           else
@@ -188,7 +192,7 @@ defmodule SnakeBridge.Generator.Function do
 
             """
             def #{name}(#{Enum.join(all_params, ", ")}) do
-            #{kw_validation}        #{call}
+            #{no_opts_kw_validation}        #{call}
               end
             """
           end

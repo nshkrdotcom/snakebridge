@@ -78,5 +78,30 @@ defmodule SnakeBridge.Generator.WrapperArgsTest do
       assert source =~ "SnakeBridge.Runtime.call(__MODULE__, :mean, [a], [])"
       assert source =~ "SnakeBridge.Runtime.call(__MODULE__, :mean, [a, axis], opts)"
     end
+
+    test "no-opts overload validates required keyword-only params without an undefined opts variable" do
+      info = %{
+        "name" => "transform",
+        "parameters" => [
+          %{"name" => "value", "kind" => "POSITIONAL_OR_KEYWORD"},
+          %{"name" => "limit", "kind" => "POSITIONAL_OR_KEYWORD", "default" => "10"},
+          %{"name" => "mode", "kind" => "KEYWORD_ONLY"}
+        ]
+      }
+
+      library = %SnakeBridge.Config.Library{
+        name: :fixture,
+        python_name: "fixture",
+        module_name: Fixture,
+        streaming: []
+      }
+
+      source = Generator.render_function(info, library)
+
+      assert source =~ "def transform(value) do"
+      assert source =~ "kw_keys = [] |> Keyword.keys()"
+      assert source =~ "def transform(value, opts) when"
+      assert source =~ "kw_keys = opts |> Keyword.keys()"
+    end
   end
 end

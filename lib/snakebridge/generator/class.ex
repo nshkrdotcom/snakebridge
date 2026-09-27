@@ -25,10 +25,15 @@ defmodule SnakeBridge.Generator.Class do
     args_name = Generator.extra_args_name(param_names)
 
     constructor =
-      if plan.is_variadic do
-        render_variadic_constructor(plan, args_name, init_docstring, class_name)
-      else
-        render_constructor(plan, args_name, init_params, init_docstring, class_name)
+      cond do
+        plan.is_variadic ->
+          render_variadic_constructor(plan, args_name, init_docstring, class_name)
+
+        plan.optional_positional != [] and not plan.has_varargs ->
+          render_optional_positional_constructor(plan, init_params, init_docstring, class_name)
+
+        true ->
+          render_constructor(plan, args_name, init_params, init_docstring, class_name)
       end
 
     methods =
@@ -88,10 +93,15 @@ defmodule SnakeBridge.Generator.Class do
     args_name = Generator.extra_args_name(param_names)
 
     constructor =
-      if plan.is_variadic do
-        render_variadic_constructor(plan, args_name, init_docstring, class_name)
-      else
-        render_constructor(plan, args_name, init_params, init_docstring, class_name)
+      cond do
+        plan.is_variadic ->
+          render_variadic_constructor(plan, args_name, init_docstring, class_name)
+
+        plan.optional_positional != [] and not plan.has_varargs ->
+          render_optional_positional_constructor(plan, init_params, init_docstring, class_name)
+
+        true ->
+          render_constructor(plan, args_name, init_params, init_docstring, class_name)
       end
 
     methods =
@@ -200,6 +210,163 @@ defmodule SnakeBridge.Generator.Class do
     """
   end
 
+  defp render_optional_positional_constructor(plan, init_params, init_docstring, class_name) do
+    doc_block =
+      render_doc_attribute(
+        init_docstring,
+        init_params,
+        nil,
+        8,
+        fallback_constructor_doc(class_name)
+      )
+
+    doc_block = if doc_block == "", do: "", else: doc_block <> "\n"
+
+    specs = optional_constructor_specs(plan)
+    clauses = optional_constructor_clauses(plan)
+
+    """
+    #{doc_block}        #{specs}
+    #{Generator.indent(clauses, 8)}
+    """
+  end
+
+  defp optional_constructor_specs(plan) do
+    0..length(plan.optional_positional)
+    |> Enum.flat_map(fn optional_count ->
+      entries = plan.required ++ Enum.take(plan.optional_positional, optional_count)
+      specs = Enum.map(entries, &Generator.param_type_spec/1)
+
+      [
+        "@spec new(#{Enum.join(specs, ", ")}) :: {:ok, SnakeBridge.Ref.t()} | {:error, Snakepit.Error.t()}",
+        "@spec new(#{Enum.join(specs ++ ["keyword()"], ", ")}) :: {:ok, SnakeBridge.Ref.t()} | {:error, Snakepit.Error.t()}"
+      ]
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp optional_constructor_clauses(plan) do
+    required_names = Enum.map(plan.required, & &1.name)
+    optional_names = Enum.map(plan.optional_positional, & &1.name)
+    kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 4)
+
+    no_opts_kw_validation =
+      Generator.keyword_only_validation(plan.required_keyword_only, 4, "[]")
+
+    0..length(optional_names)
+    |> Enum.flat_map(fn optional_count ->
+      names = required_names ++ Enum.take(optional_names, optional_count)
+      args = "[#{Enum.join(names, ", ")}]"
+      params = Enum.join(names, ", ")
+
+      no_opts =
+        if names == [] do
+          """
+          def new() do
+          #{no_opts_kw_validation}  SnakeBridge.Runtime.call_class(__MODULE__, :__init__, #{args}, [])
+          end
+          """
+        else
+          """
+          def new(#{params}) do
+          #{no_opts_kw_validation}  SnakeBridge.Runtime.call_class(__MODULE__, :__init__, #{args}, [])
+          end
+          """
+        end
+
+      opts_params = Enum.join(names ++ ["opts"], ", ")
+
+      with_opts =
+        """
+        def new(#{opts_params}) when #{Generator.opts_guard()} do
+        #{kw_validation}  SnakeBridge.Runtime.call_class(__MODULE__, :__init__, #{args}, opts)
+        end
+        """
+
+      [no_opts, with_opts]
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp render_optional_positional_method(
+         name,
+         python_name,
+         plan,
+         return_type,
+         docstring,
+         params,
+         class_name
+       ) do
+    doc_block =
+      render_doc_attribute(
+        docstring,
+        params,
+        return_type,
+        8,
+        fallback_method_doc(class_name, python_name)
+      )
+
+    doc_block = if doc_block == "", do: "", else: doc_block <> "\n"
+    specs = optional_method_specs(name, plan, return_type)
+    clauses = optional_method_clauses(name, python_name, plan)
+
+    """
+    #{doc_block}        #{specs}
+    #{Generator.indent(clauses, 8)}
+    """
+  end
+
+  defp optional_method_specs(name, plan, return_type) do
+    return_spec = Generator.type_spec_string(return_type)
+
+    0..length(plan.optional_positional)
+    |> Enum.flat_map(fn optional_count ->
+      entries = plan.required ++ Enum.take(plan.optional_positional, optional_count)
+      specs = ["SnakeBridge.Ref.t()" | Enum.map(entries, &Generator.param_type_spec/1)]
+
+      [
+        "@spec #{name}(#{Enum.join(specs, ", ")}) :: {:ok, #{return_spec}} | {:error, Snakepit.Error.t()}",
+        "@spec #{name}(#{Enum.join(specs ++ ["keyword()"], ", ")}) :: {:ok, #{return_spec}} | {:error, Snakepit.Error.t()}"
+      ]
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp optional_method_clauses(name, python_name, plan) do
+    required_names = Enum.map(plan.required, & &1.name)
+    optional_names = Enum.map(plan.optional_positional, & &1.name)
+    kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 4)
+
+    no_opts_kw_validation =
+      Generator.keyword_only_validation(plan.required_keyword_only, 4, "[]")
+
+    call_ref = Generator.function_ref(name, python_name)
+
+    0..length(optional_names)
+    |> Enum.flat_map(fn optional_count ->
+      names = required_names ++ Enum.take(optional_names, optional_count)
+      args = "[#{Enum.join(names, ", ")}]"
+      positional_params = ["ref" | names]
+
+      no_opts =
+        """
+        def #{name}(#{Enum.join(positional_params, ", ")}) do
+        #{no_opts_kw_validation}  SnakeBridge.Runtime.call_method(ref, #{call_ref}, #{args}, [])
+        end
+        """
+
+      with_opts =
+        """
+        def #{name}(#{Enum.join(positional_params ++ ["opts"], ", ")}) when #{Generator.opts_guard()} do
+        #{kw_validation}  SnakeBridge.Runtime.call_method(ref, #{call_ref}, #{args}, opts)
+        end
+        """
+
+      [no_opts, with_opts]
+    end)
+    |> Enum.join("\n")
+  end
+
   defp render_method(%{"name" => "__init__"}, _class_name), do: ""
   defp render_method(%{name: "__init__"}, _class_name), do: ""
 
@@ -243,30 +410,45 @@ defmodule SnakeBridge.Generator.Class do
   end
 
   defp render_method_body(name, python_name, plan, return_type, docstring, params, class_name) do
-    param_names = Enum.map(plan.required, & &1.name)
-    args_name = Generator.extra_args_name(param_names)
-    spec = Generator.method_spec(name, plan.required, plan.has_args, return_type)
-    call = Generator.runtime_method_call(name, python_name, param_names, plan.has_args, args_name)
-    normalize = Generator.normalize_args_line(plan.has_args, args_name, 10)
-    kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 10)
-
-    doc_block =
-      render_doc_attribute(
+    if plan.optional_positional != [] and not plan.has_varargs do
+      render_optional_positional_method(
+        name,
+        python_name,
+        plan,
+        return_type,
         docstring,
         params,
-        return_type,
-        8,
-        fallback_method_doc(class_name, python_name)
+        class_name
       )
+    else
+      param_names = Enum.map(plan.required, & &1.name)
+      args_name = Generator.extra_args_name(param_names)
+      spec = Generator.method_spec(name, plan.required, plan.has_args, return_type)
 
-    doc_block = if doc_block == "", do: "", else: doc_block <> "\n"
+      call =
+        Generator.runtime_method_call(name, python_name, param_names, plan.has_args, args_name)
 
-    """
-    #{doc_block}        #{spec}
-        def #{name}(ref#{Generator.method_param_suffix(param_names, plan.has_args, plan.has_opts, args_name)}) do
-    #{normalize}#{kw_validation}          #{call}
-        end
-    """
+      normalize = Generator.normalize_args_line(plan.has_args, args_name, 10)
+      kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 10)
+
+      doc_block =
+        render_doc_attribute(
+          docstring,
+          params,
+          return_type,
+          8,
+          fallback_method_doc(class_name, python_name)
+        )
+
+      doc_block = if doc_block == "", do: "", else: doc_block <> "\n"
+
+      """
+      #{doc_block}        #{spec}
+          def #{name}(ref#{Generator.method_param_suffix(param_names, plan.has_args, plan.has_opts, args_name)}) do
+      #{normalize}#{kw_validation}          #{call}
+          end
+      """
+    end
   end
 
   defp render_attribute({elixir_name, python_name}) do

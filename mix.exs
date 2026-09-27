@@ -1,7 +1,7 @@
 defmodule SnakeBridge.MixProject do
   use Mix.Project
 
-  @version "0.17.1"
+  @version "0.18.0"
   @source_url "https://github.com/nshkrdotcom/snakebridge"
 
   def project do

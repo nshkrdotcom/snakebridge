@@ -413,7 +413,21 @@ defmodule SnakeBridge.Generator.Class do
     plan = Generator.build_params(params, info)
     return_type = info["return_type"] || %{"type" => "any"}
     docstring = info["docstring"]
-    render_method_body(name, python_name, plan, return_type, docstring, params, class_name)
+    method_kind = info["method_kind"] || info[:method_kind] || "instance"
+
+    if class_bound_method?(method_kind) do
+      render_class_bound_method_body(
+        name,
+        python_name,
+        plan,
+        return_type,
+        docstring,
+        params,
+        class_name
+      )
+    else
+      render_method_body(name, python_name, plan, return_type, docstring, params, class_name)
+    end
   end
 
   defp render_method_body(
@@ -468,6 +482,212 @@ defmodule SnakeBridge.Generator.Class do
           end
       """
     end
+  end
+
+  defp render_class_bound_method_body(
+         name,
+         python_name,
+         %{is_variadic: true},
+         return_type,
+         docstring,
+         _params,
+         class_name
+       ) do
+    render_variadic_class_bound_method(name, python_name, return_type, docstring, class_name)
+  end
+
+  defp render_class_bound_method_body(
+         name,
+         python_name,
+         plan,
+         return_type,
+         docstring,
+         params,
+         class_name
+       ) do
+    if plan.optional_positional != [] and not plan.has_varargs do
+      render_optional_class_bound_method(
+        name,
+        python_name,
+        plan,
+        return_type,
+        docstring,
+        params,
+        class_name
+      )
+    else
+      param_names = Enum.map(plan.required, & &1.name)
+      args_name = Generator.extra_args_name(param_names)
+      spec = Generator.function_spec(name, plan.required, plan.has_args, return_type)
+      args = Generator.args_expr(param_names, plan.has_args, args_name)
+      call_ref = Generator.function_ref(name, python_name)
+
+      call =
+        "SnakeBridge.Runtime.call_class_method(__MODULE__, #{call_ref}, #{args}, opts)"
+
+      param_list = Generator.param_list(param_names, plan.has_args, plan.has_opts, args_name)
+      normalize = Generator.normalize_args_line(plan.has_args, args_name, 10)
+      kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 10)
+
+      doc_block =
+        render_doc_attribute(
+          docstring,
+          params,
+          return_type,
+          8,
+          fallback_method_doc(class_name, python_name)
+        )
+
+      doc_block = if doc_block == "", do: "", else: doc_block <> "\n"
+
+      """
+      #{doc_block}        #{spec}
+          def #{name}(#{param_list}) do
+      #{normalize}#{kw_validation}          #{call}
+          end
+      """
+    end
+  end
+
+  defp render_optional_class_bound_method(
+         name,
+         python_name,
+         plan,
+         return_type,
+         docstring,
+         params,
+         class_name
+       ) do
+    doc_block =
+      render_doc_attribute(
+        docstring,
+        params,
+        return_type,
+        8,
+        fallback_method_doc(class_name, python_name)
+      )
+
+    doc_block = if doc_block == "", do: "", else: doc_block <> "\n"
+    specs = optional_class_bound_method_specs(name, plan, return_type)
+    clauses = optional_class_bound_method_clauses(name, python_name, plan)
+
+    """
+    #{doc_block}        #{specs}
+    #{Generator.indent(clauses, 8)}
+    """
+  end
+
+  defp optional_class_bound_method_specs(name, plan, return_type) do
+    return_spec = Generator.type_spec_string(return_type)
+
+    0..length(plan.optional_positional)
+    |> Enum.flat_map(fn optional_count ->
+      entries = plan.required ++ Enum.take(plan.optional_positional, optional_count)
+      specs = Enum.map(entries, &Generator.param_type_spec/1)
+
+      [
+        "@spec #{name}(#{Enum.join(specs, ", ")}) :: {:ok, #{return_spec}} | {:error, Snakepit.Error.t()}",
+        "@spec #{name}(#{Enum.join(specs ++ ["keyword()"], ", ")}) :: {:ok, #{return_spec}} | {:error, Snakepit.Error.t()}"
+      ]
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp optional_class_bound_method_clauses(name, python_name, plan) do
+    required_names = Enum.map(plan.required, & &1.name)
+    optional_names = Enum.map(plan.optional_positional, & &1.name)
+    kw_validation = Generator.keyword_only_validation(plan.required_keyword_only, 4)
+
+    no_opts_kw_validation =
+      Generator.keyword_only_validation(plan.required_keyword_only, 4, "[]")
+
+    call_ref = Generator.function_ref(name, python_name)
+
+    0..length(optional_names)
+    |> Enum.flat_map(fn optional_count ->
+      names = required_names ++ Enum.take(optional_names, optional_count)
+      args = "[#{Enum.join(names, ", ")}]"
+      params = Enum.join(names, ", ")
+
+      no_opts =
+        """
+        def #{name}(#{params}) do
+        #{no_opts_kw_validation}  SnakeBridge.Runtime.call_class_method(__MODULE__, #{call_ref}, #{args}, [])
+        end
+        """
+
+      opts_params = Enum.join(names ++ ["opts"], ", ")
+
+      with_opts =
+        """
+        def #{name}(#{opts_params}) when #{Generator.opts_guard()} do
+        #{kw_validation}  SnakeBridge.Runtime.call_class_method(__MODULE__, #{call_ref}, #{args}, opts)
+        end
+        """
+
+      [no_opts, with_opts]
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp render_variadic_class_bound_method(
+         name,
+         python_name,
+         return_type,
+         docstring,
+         class_name
+       ) do
+    max_arity = Generator.variadic_max_arity()
+    return_spec = Generator.type_spec_string(return_type)
+    specs = variadic_specs(name, max_arity, return_spec)
+    clauses = variadic_class_bound_method_clauses(name, python_name, max_arity)
+
+    doc_block =
+      render_doc_attribute(
+        docstring,
+        [],
+        return_type,
+        8,
+        fallback_method_doc(class_name, python_name)
+      )
+
+    doc_block = if doc_block == "", do: "", else: doc_block <> "\n"
+
+    """
+    #{doc_block}        #{specs}
+    #{Generator.indent(clauses, 8)}
+    """
+  end
+
+  defp variadic_class_bound_method_clauses(name, python_name, max_arity) do
+    call_ref = Generator.function_ref(name, python_name)
+
+    Enum.map_join(0..max_arity, "\n\n", fn arity ->
+      args = variadic_args(arity)
+      args_list = variadic_args_list(args)
+      params = variadic_param_list(args)
+      opts_params = variadic_param_list_with_opts(args)
+
+      no_opts =
+        """
+        def #{name}(#{params}) do
+          SnakeBridge.Runtime.call_class_method(__MODULE__, #{call_ref}, #{args_list}, [])
+        end
+        """
+
+      with_opts =
+        """
+        def #{name}(#{opts_params}) when #{Generator.opts_guard()} do
+          SnakeBridge.Runtime.call_class_method(__MODULE__, #{call_ref}, #{args_list}, opts)
+        end
+        """
+
+      no_opts <> "\n\n" <> with_opts
+    end)
+  end
+
+  defp class_bound_method?(kind) do
+    kind in ["classmethod", "staticmethod", :classmethod, :staticmethod]
   end
 
   defp render_attribute({elixir_name, python_name}) do

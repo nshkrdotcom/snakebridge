@@ -242,13 +242,18 @@ using Python's `inspect` module. SnakeBridge preserves the structural call signa
 uses lower-fidelity annotation sources only to enrich types; type hints never replace a
 valid structural signature.
 
-For defaulted positional parameters, generated functions, constructors, and instance
-methods expose each legal positional prefix as an Elixir arity. Omitted arguments are
-not materialized as Elixir defaults: SnakeBridge simply omits them from the Python call,
-so the installed Python library remains authoritative for its default values. Keyword
-options remain available through the guarded `opts` form. For example, a Python
+For defaulted positional parameters, generated functions, constructors, and instance,
+class, and static methods expose each legal positional prefix as an Elixir arity. Omitted
+arguments are not materialized as Elixir defaults: SnakeBridge simply omits them from the
+Python call, so the installed Python library remains authoritative for its default values.
+Keyword options remain available through the guarded `opts` form. For example, a Python
 constructor shaped like `RLM(signature, max_iters=20, ...)` generates a usable
 `new(signature)` entry point as well as progressively fuller positional arities.
+
+Python descriptor binding is preserved. Instance methods take a `SnakeBridge.Ref` first
+argument, while `@classmethod` and `@staticmethod` wrappers are invoked directly on the
+generated Elixir class module and dispatch through `SnakeBridge.Runtime.call_class_method/4`.
+Properties remain instance attribute reads and continue to take a `SnakeBridge.Ref`.
 
 Docstrings are converted to ExDoc-friendly Markdown and sanitized to repair common
 upstream issues (for example: unclosed fenced code blocks or manpage-style quotes

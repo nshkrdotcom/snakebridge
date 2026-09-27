@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-09-27
+
+### Fixed
+- **Class/static descriptor fidelity**: Python `@classmethod` and `@staticmethod` descriptors are now recorded during runtime and stub introspection instead of being flattened into ordinary instance methods.
+- **Class-bound dispatch**: Generated class and static methods no longer require a `SnakeBridge.Ref`; they dispatch against the Python class through `SnakeBridge.Runtime.call_class_method/4`, while instance methods and properties keep their existing receiver semantics.
+- **Descriptor-aware arities**: Class and static methods preserve the same positional-prefix, guarded keyword-option, variadic, and required keyword-only behavior as the corresponding Python callable.
+
 ## [0.18.0] - 2026-09-27
 
 ### Fixed

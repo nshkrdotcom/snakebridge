@@ -336,6 +336,42 @@ defmodule SnakeBridge.Runtime do
     |> decode_result(runtime_opts)
   end
 
+  @doc """
+  Calls a class-bound Python method without constructing or requiring an instance.
+
+  This is used by generated wrappers for both Python `@classmethod` and
+  `@staticmethod` descriptors. The Python descriptor protocol remains authoritative:
+  `getattr(cls, function)` performs the appropriate class binding before invocation.
+  """
+  @spec call_class_method(module_ref(), function_name(), args(), opts()) ::
+          {:ok, term()} | {:error, error_reason()}
+  def call_class_method(module, function, args \\ [], opts \\ []) do
+    {kwargs, idempotent, extra_args, runtime_opts} = split_opts(opts)
+    encoded_args = encode_args(args ++ extra_args)
+    encoded_kwargs = encode_kwargs(kwargs)
+    session_id = resolve_session_id(runtime_opts)
+
+    payload =
+      module
+      |> Payload.base_payload(function, encoded_args, encoded_kwargs, idempotent)
+      |> Map.put("call_type", "class_method")
+      |> Map.put("class", Payload.python_class_name(module))
+      |> Map.put("session_id", session_id)
+
+    runtime_opts =
+      runtime_opts
+      |> apply_runtime_defaults(payload, :call)
+      |> ensure_session_opt(session_id)
+
+    metadata = call_metadata(payload, module, function, "class_method")
+
+    execute_with_telemetry(metadata, fn ->
+      runtime_client().execute("snakebridge.call", payload, runtime_opts)
+    end)
+    |> apply_error_mode()
+    |> decode_result(runtime_opts)
+  end
+
   @spec call_method(SnakeBridge.Ref.t() | map(), function_name(), args(), opts()) ::
           {:ok, term()} | {:error, error_reason()}
   def call_method(ref, function, args \\ [], opts \\ []) do

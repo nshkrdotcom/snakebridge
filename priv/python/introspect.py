@@ -135,6 +135,25 @@ def _parse_config(config_json: Optional[str]) -> Dict[str, Any]:
     }
 
 
+def _class_member_kind(cls: type, name: str) -> str:
+    """Return the unbound descriptor kind without triggering descriptor binding."""
+    try:
+        descriptor = inspect.getattr_static(cls, name)
+    except Exception:
+        return "instance"
+
+    classmethod_descriptor = getattr(types, "ClassMethodDescriptorType", None)
+
+    if isinstance(descriptor, classmethod) or (
+        classmethod_descriptor is not None
+        and isinstance(descriptor, classmethod_descriptor)
+    ):
+        return "classmethod"
+    if isinstance(descriptor, staticmethod):
+        return "staticmethod"
+    return "instance"
+
+
 def _iter_class_method_pairs(
     cls: type,
     scope: str,
@@ -636,6 +655,15 @@ def _collect_stub_function(stub_info: Dict[str, Any], node: "cst.FunctionDef", m
         entry["impl"] = func_info
 
 
+def _cst_method_kind(node: "cst.FunctionDef") -> str:
+    names = [_decorator_name(decorator.decorator) for decorator in node.decorators]
+    if any(name == "classmethod" or name.endswith(".classmethod") for name in names):
+        return "classmethod"
+    if any(name == "staticmethod" or name.endswith(".staticmethod") for name in names):
+        return "staticmethod"
+    return "instance"
+
+
 def _collect_stub_class(stub_info: Dict[str, Any], node: "cst.ClassDef", module: "cst.Module", module_name: str) -> None:
     name = node.name.value
     class_info = {
@@ -647,9 +675,16 @@ def _collect_stub_class(stub_info: Dict[str, Any], node: "cst.ClassDef", module:
     for stmt in node.body.body:
         if isinstance(stmt, cst.FunctionDef):
             method_info = _parse_stub_function(stmt, module, module_name, drop_first_param=True)
+            method_kind = _cst_method_kind(stmt)
+            method_info["method_kind"] = method_kind
             is_overload = _has_overload_decorator(stmt)
 
-            entry = class_info["methods"].setdefault(stmt.name.value, {"overloads": [], "impl": None})
+            entry = class_info["methods"].setdefault(
+                stmt.name.value,
+                {"overloads": [], "impl": None, "method_kind": method_kind},
+            )
+            if method_kind != "instance":
+                entry["method_kind"] = method_kind
             if is_overload:
                 entry["overloads"].append(method_info)
             else:
@@ -692,6 +727,15 @@ def _collect_stub_function_ast(stub_info: Dict[str, Any], node: ast.AST, module_
         entry["impl"] = func_info
 
 
+def _ast_method_kind(node: ast.AST) -> str:
+    names = [_ast_decorator_name(decorator) for decorator in getattr(node, "decorator_list", [])]
+    if any(name == "classmethod" or name.endswith(".classmethod") for name in names):
+        return "classmethod"
+    if any(name == "staticmethod" or name.endswith(".staticmethod") for name in names):
+        return "staticmethod"
+    return "instance"
+
+
 def _collect_stub_class_ast(stub_info: Dict[str, Any], node: ast.ClassDef, module_name: str) -> None:
     name = node.name
     class_info = {
@@ -703,9 +747,16 @@ def _collect_stub_class_ast(stub_info: Dict[str, Any], node: ast.ClassDef, modul
     for stmt in node.body:
         if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
             method_info = _parse_stub_function_ast(stmt, module_name, drop_first_param=True)
+            method_kind = _ast_method_kind(stmt)
+            method_info["method_kind"] = method_kind
             is_overload = _ast_has_overload_decorator(stmt)
 
-            entry = class_info["methods"].setdefault(stmt.name, {"overloads": [], "impl": None})
+            entry = class_info["methods"].setdefault(
+                stmt.name,
+                {"overloads": [], "impl": None, "method_kind": method_kind},
+            )
+            if method_kind != "instance":
+                entry["method_kind"] = method_kind
             if is_overload:
                 entry["overloads"].append(method_info)
             else:
@@ -890,6 +941,8 @@ def _decorator_name(node: "cst.CSTNode") -> str:
         return node.value
     if isinstance(node, cst.Attribute):
         return _decorator_name(node.value) + "." + node.attr.value
+    if isinstance(node, cst.Call):
+        return _decorator_name(node.func)
     return ""
 
 
@@ -1497,6 +1550,18 @@ def _stub_method_doc(
     return None
 
 
+def _stub_method_kind(
+    class_name: str,
+    method_name: str,
+    stub_info: Optional[Dict[str, Any]],
+) -> str:
+    if not stub_info or stub_info.get("error"):
+        return "instance"
+    class_entry = stub_info.get("classes", {}).get(class_name) or {}
+    method_entry = class_entry.get("methods", {}).get(method_name) or {}
+    return method_entry.get("method_kind") or "instance"
+
+
 def _resolve_docstring(obj: Optional[Any], stub_doc: Optional[str], module_doc: Optional[str]) -> Dict[str, Any]:
     runtime_doc = _docstring_text(obj) if obj is not None else ""
     if runtime_doc:
@@ -1619,6 +1684,7 @@ def _build_class_info(
                 "doc_source": doc_info.get("doc_source"),
                 "doc_missing_reason": doc_info.get("doc_missing_reason"),
                 "overload_count": signature.get("overload_count"),
+                "method_kind": _class_member_kind(cls, method_name),
             })
     else:
         class_entry = (stub_info or {}).get("classes", {}).get(name, {})
@@ -1641,6 +1707,7 @@ def _build_class_info(
                     "doc_source": doc_info.get("doc_source"),
                     "doc_missing_reason": doc_info.get("doc_missing_reason"),
                     "overload_count": signature.get("overload_count"),
+                    "method_kind": _stub_method_kind(name, method_name, stub_info),
                 })
 
     attributes: List[str] = []
@@ -1760,6 +1827,7 @@ def _introspect_class_symbol(name: str, cls: type) -> Dict[str, Any]:
             "docstring": _docstring_text(method),
             "return_type": return_type,
             "signature_available": signature_available,
+            "method_kind": _class_member_kind(cls, method_name),
         })
 
     attributes: List[str] = []

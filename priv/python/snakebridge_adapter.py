@@ -1353,6 +1353,14 @@ class SnakeBridgeAdapter:
                 instance = cls(*decoded_args, **decoded_kwargs)
                 return encode_result(instance, session_id, python_module, library)
 
+            if call_type == "class_method":
+                class_name = arguments.get("class") or arguments.get("class_name")
+                mod = _import_module(python_module)
+                cls = getattr(mod, class_name)
+                method = getattr(cls, function)
+                result = method(*decoded_args, **decoded_kwargs)
+                return encode_result(result, session_id, python_module, library)
+
             if call_type == "method":
                 instance_payload = arguments.get("instance")
                 instance = _resolve_ref(decode(instance_payload), session_id)
